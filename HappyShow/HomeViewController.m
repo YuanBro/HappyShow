@@ -125,12 +125,16 @@ CGFloat H;
             break;
         case 1:
         {
-            
+            UINavigationController* nav=[[RotateNavigationController alloc]initWithRootViewController:[VideoEditController new]];
+            nav.modalPresentationStyle = UIModalPresentationFullScreen;
+            [self presentViewController:nav animated:YES completion:nil];
         }
             break;
         case 2:
         {
-            
+            UINavigationController* nav=[[RotateNavigationController alloc]initWithRootViewController:[VideoEditController new]];
+            nav.modalPresentationStyle = UIModalPresentationFullScreen;
+            [self presentViewController:nav animated:YES completion:nil];
         }
             break;
         case 3:

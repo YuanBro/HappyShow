@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="9531" systemVersion="15C50" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES">
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="9529"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner"/>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <tableViewCell contentMode="scaleToFill" selectionStyle="none" indentationWidth="10" reuseIdentifier="StickerAccessCell" rowHeight="70" id="pDn-VP-WFv" customClass="StickerAccessCell">
+            <rect key="frame" x="0.0" y="0.0" width="320" height="70"/>
+            <autoresizingMask key="autoresizingMask"/>
+            <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" tableViewCell="pDn-VP-WFv" id="nkj-KJ-fw0">
+                <rect key="frame" x="0.0" y="0.0" width="320" height="69"/>
+                <autoresizingMask key="autoresizingMask"/>
+                <subviews>
+                    <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="k1q-PB-hWV">
+                        <rect key="frame" x="8" y="5" width="60" height="60"/>
+                        <constraints>
+                            <constraint firstAttribute="width" constant="60" id="WDa-he-91n"/>
+                            <constraint firstAttribute="height" constant="60" id="xVZ-qc-JVj"/>
+                        </constraints>
+                    </imageView>
+                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Hhc-Wa-MwT">
+                        <rect key="frame" x="76" y="15" width="36" height="17"/>
+                        <fontDescription key="fontDescription" type="system" pointSize="14"/>
+                        <color key="textColor" red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="calibratedRGB"/>
+                        <nil key="highlightedColor"/>
+                    </label>
+                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="LZz-01-xOA">
+                        <rect key="frame" x="76" y="41" width="31" height="15"/>
+                        <fontDescription key="fontDescription" type="system" pointSize="12"/>
+                        <color key="textColor" white="0.66666666666666663" alpha="1" colorSpace="calibratedWhite"/>
+                        <nil key="highlightedColor"/>
+                    </label>
+                    <button opaque="NO" contentMode="scaleToFill" selected="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="FvG-kX-972">
+                        <rect key="frame" x="260" y="24" width="20" height="20"/>
+                        <constraints>
+                            <constraint firstAttribute="width" constant="20" id="0j5-tK-vpn"/>
+                            <constraint firstAttribute="height" constant="20" id="1KM-TS-2f5"/>
+                        </constraints>
+                        <state key="normal">
+                            <color key="titleShadowColor" white="0.5" alpha="1" colorSpace="calibratedWhite"/>
+                        </state>
+                        <state key="selected" backgroundImage="ic_success_marker.png"/>
+                    </button>
+                    <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="ic_discover.png" translatesAutoresizingMaskIntoConstraints="NO" id="xf3-Yi-eci">
+                        <rect key="frame" x="0.0" y="0.0" width="34" height="33"/>
+                    </imageView>
+                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="WMa-Tx-Neh">
+                        <rect key="frame" x="288" y="24" width="16" height="22"/>
+                        <constraints>
+                            <constraint firstAttribute="height" constant="22" id="4M3-B9-jLY"/>
+                            <constraint firstAttribute="width" constant="16" id="dHV-5K-0y6"/>
+                        </constraints>
+                        <state key="normal" image="ic_entry_arrow.png">
+                            <color key="titleShadowColor" white="0.5" alpha="1" colorSpace="calibratedWhite"/>
+                        </state>
+                    </button>
+                </subviews>
+                <constraints>
+                    <constraint firstItem="k1q-PB-hWV" firstAttribute="top" secondItem="Hhc-Wa-MwT" secondAttribute="top" constant="-10" id="0mA-pb-3qc"/>
+                    <constraint firstItem="Hhc-Wa-MwT" firstAttribute="leading" secondItem="LZz-01-xOA" secondAttribute="leading" id="1zx-Ky-Zcr"/>
+                    <constraint firstAttribute="centerY" secondItem="WMa-Tx-Neh" secondAttribute="centerY" id="2fH-Y4-THy"/>
+                    <constraint firstItem="LZz-01-xOA" firstAttribute="top" secondItem="Hhc-Wa-MwT" secondAttribute="bottom" constant="9" id="M23-a7-TcL"/>
+                    <constraint firstItem="xf3-Yi-eci" firstAttribute="leading" secondItem="nkj-KJ-fw0" secondAttribute="leading" id="NTy-PV-Ewe"/>
+                    <constraint firstItem="Hhc-Wa-MwT" firstAttribute="leading" secondItem="k1q-PB-hWV" secondAttribute="trailing" constant="8" id="eDm-7S-pRL"/>
+                    <constraint firstAttribute="trailing" secondItem="FvG-kX-972" secondAttribute="trailing" constant="40" id="jOf-ur-jcq"/>
+                    <constraint firstAttribute="centerY" secondItem="FvG-kX-972" secondAttribute="centerY" id="nPu-aO-9Ns"/>
+                    <constraint firstAttribute="centerY" secondItem="k1q-PB-hWV" secondAttribute="centerY" id="qco-6G-fHC"/>
+                    <constraint firstItem="k1q-PB-hWV" firstAttribute="leading" secondItem="nkj-KJ-fw0" secondAttribute="leading" constant="8" id="uMc-zz-xh3"/>
+                    <constraint firstItem="xf3-Yi-eci" firstAttribute="top" secondItem="nkj-KJ-fw0" secondAttribute="top" id="x0e-X4-RtZ"/>
+                    <constraint firstAttribute="trailing" secondItem="WMa-Tx-Neh" secondAttribute="trailing" constant="16" id="zs3-d8-YGn"/>
+                </constraints>
+            </tableViewCellContentView>
+            <color key="backgroundColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+            <connections>
+                <outlet property="btnAccess" destination="WMa-Tx-Neh" id="Oiu-jq-nXr"/>
+                <outlet property="detailLabel" destination="LZz-01-xOA" id="VPh-4C-tAw"/>
+                <outlet property="finishedStatus" destination="FvG-kX-972" id="fIH-FF-aT0"/>
+                <outlet property="statusIcon" destination="xf3-Yi-eci" id="Iey-zg-tLR"/>
+                <outlet property="stickerIcon" destination="k1q-PB-hWV" id="puD-8M-x53"/>
+                <outlet property="titleLabel" destination="Hhc-Wa-MwT" id="g6R-g3-292"/>
+            </connections>
+            <point key="canvasLocation" x="265" y="198"/>
+        </tableViewCell>
+    </objects>
+    <resources>
+        <image name="ic_discover.png" width="34" height="33"/>
+        <image name="ic_entry_arrow.png" width="16" height="16"/>
+        <image name="ic_success_marker.png" width="18" height="18"/>
+    </resources>
+</document>

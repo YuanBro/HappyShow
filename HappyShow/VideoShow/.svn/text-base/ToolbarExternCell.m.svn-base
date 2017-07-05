@@ -1,0 +1,58 @@
+//
+//  ToolbarExternCell.m
+//  VideoShow
+//
+//  Created by Mac on 16/2/26.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "ToolbarExternCell.h"
+
+@implementation ToolbarExternModel
+
+@end
+
+@implementation ToolbarExternCell
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    self=[super initWithFrame:frame];
+    if (self) {
+        NSArray * nibs = [[NSBundle mainBundle] loadNibNamed:toolbarExternCellID owner:self options:nil];
+        for (id obj in nibs) {
+            if ([obj isKindOfClass:[ToolbarExternCell class]]) {
+                self = obj;
+                break;
+            }
+        }
+    }
+    return self;
+}
+
+- (void)setBorderOfIconIV:(BOOL)hasBorder color:(UIColor *)color {
+    
+    if (hasBorder) {
+        
+        self.iconIV.layer.borderWidth  = 3;
+        self.iconIV.layer.cornerRadius = 2;
+        self.iconIV.clipsToBounds = YES;
+        if (color) {
+            self.iconIV.layer.borderColor = color.CGColor;
+        } else {
+            self.iconIV.layer.borderColor = [UIColor colorWithRed:227/255. green:39/255. blue:78/255. alpha:1].CGColor;
+        }
+    } else {
+        self.iconIV.layer.borderWidth  = 0;
+        self.iconIV.layer.cornerRadius = 0;
+    }
+}
+
+- (ToolbarExternCell *)setCellWithData:(ToolbarExternModel *)model {
+    
+    self.titleLB.text = model.title;
+    self.iconIV.image = model.iconImage;
+    [self setBorderOfIconIV:model.hasBorder color:model.borderColor];
+    
+    return self;
+}
+
+@end

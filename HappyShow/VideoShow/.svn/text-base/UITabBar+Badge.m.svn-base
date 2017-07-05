@@ -1,0 +1,47 @@
+//
+//  UITabBar+Badge.m
+//  VideoShow
+//
+//  Created by lance on 15/5/19.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "UITabBar+Badge.h"
+
+#define TabbarItemNums 3   //tabbar的数量
+
+static int badgeTagOffset = 888;
+
+@implementation UITabBar (Badge)
+
+- (void)showBadgeOnItemIndex:(NSUInteger)index tabCount:(NSUInteger)count
+{
+    [self removeBadgeOnItemIndex:index];
+    float badgeSize = 10;
+    UIView *badgeView = [[UIView alloc]init];
+    badgeView.tag = badgeTagOffset + index;
+    badgeView.layer.cornerRadius = badgeSize/2;
+    badgeView.backgroundColor = [UIColor redColor];
+    CGRect tabFrame = self.frame;
+    float percentX = (index +0.6) / count;
+    CGFloat x = ceilf(percentX * tabFrame.size.width);
+    CGFloat y = ceilf(0.1 * tabFrame.size.height);
+    badgeView.frame = CGRectMake(x, y, badgeSize, badgeSize);
+    [self addSubview:badgeView];
+}
+
+- (void)hideBadgeOnItemIndex:(NSUInteger)index
+{
+    [self removeBadgeOnItemIndex:index];
+}
+
+- (void)removeBadgeOnItemIndex:(NSUInteger)index
+{
+    for (UIView *subView in self.subviews) {
+        if (subView.tag == badgeTagOffset+index) {
+            [subView removeFromSuperview];
+        }
+    }
+}
+
+@end

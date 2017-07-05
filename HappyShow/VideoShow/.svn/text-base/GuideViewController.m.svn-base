@@ -1,0 +1,130 @@
+//
+//  GuideViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/5/9.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "GuideViewController.h"
+#import "GuideFragment.h"
+#import "RotateNavigationController.h"
+#import "Prefs.h"
+
+@interface GuideViewController ()<UIPageViewControllerDataSource,UIPageViewControllerDelegate,GuideViewControllerDelegate>
+
+@property (strong, nonatomic) UIPageControl *pageControl;
+@property (strong, nonatomic) UIPageViewController *pageController;
+@property (strong,nonatomic) NSMutableArray * controllers;
+@property (nonatomic,strong) NSArray * pageData;
+
+@end
+
+@implementation GuideViewController
+
+@synthesize pageControl;
+@synthesize pageController;
+@synthesize controllers;
+@synthesize pageData;
+
+- (instancetype)init
+{
+    self = [super init];
+    if (self) {
+        [Prefs saveGuideFlag:YES];
+    }
+    return self;
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    if(self.navigationController.navigationBar!=nil){
+        self.navigationController.navigationBar.hidden=YES;
+    }
+    controllers=[NSMutableArray array];
+
+    self.pageData=@[@"guide_0.png",@"guide_1.png",@"guide_2.png"];
+    
+    for (int i=0; i<self.pageData.count; i++) {
+        NSString * imageName = self.pageData[i];
+        GuideFragment *frag = [[GuideFragment alloc] init];
+        frag.guideControl=self;
+        frag.imageName=imageName;
+        if (i==pageData.count-1) {
+            frag.entryFlag=YES;
+        }
+        [controllers addObject:frag];
+    }
+    self.pageControl = [[UIPageControl alloc] init];
+    self.pageControl.pageIndicatorTintColor=[UIColor blueColor];
+    self.pageControl.currentPageIndicatorTintColor=[UIColor redColor];
+    self.pageControl.numberOfPages = self.pageData.count;
+    
+    self.pageControl.center=CGPointMake((self.view.frame.size.width-self.pageControl.frame.size.width)/2, self.view.frame.size.height-self.pageControl.frame.size.height-20);
+    [self.view addSubview:self.pageControl];
+    
+    self.pageController = [[UIPageViewController alloc] initWithTransitionStyle:UIPageViewControllerTransitionStyleScroll navigationOrientation:UIPageViewControllerNavigationOrientationHorizontal options:nil];
+    [self.pageController setDelegate:self];
+    [self.pageController setDataSource:self];
+    
+    [self.pageController.view setFrame:[self.view bounds]];
+    NSArray *viewControllers = [NSArray arrayWithObject:[self.controllers objectAtIndex:0]];
+    [self.pageControl setCurrentPage:0];
+    //[self.pageControl addTarget:self action:@selector(changePage:) forControlEvents:UIControlEventValueChanged];
+    
+    [self.pageController setViewControllers:viewControllers direction:UIPageViewControllerNavigationDirectionForward animated:YES completion:nil];
+    
+    [self addChildViewController:self.pageController];
+    
+    [self.view addSubview:self.pageControl];
+    [self.view addSubview:self.pageController.view];
+    [self.pageController didMoveToParentViewController:self];
+    
+    [self.view sendSubviewToBack:[self.pageController view]];
+    // Do any additional setup after loading the view.
+}
+
+- (UIViewController *)pageViewController:(UIPageViewController *)pageViewController viewControllerAfterViewController:(UIViewController *)viewController {
+    
+    NSUInteger currentIndex = [self.controllers indexOfObject:viewController];    // get the index of the current view controller on display
+    [self.pageControl setCurrentPage:self.pageControl.currentPage+1];                   // move the pageControl indicator to the next page
+    
+    // check if we are at the end and decide if we need to present the next viewcontroller
+    if ( currentIndex < [self.controllers count]-1) {
+        return [self.controllers objectAtIndex:currentIndex+1];                   // return the next view controller
+    } else {
+        return nil;                                                         // do nothing
+    }
+}
+
+
+- (UIViewController *) pageViewController:(UIPageViewController *)pageViewController viewControllerBeforeViewController:(UIViewController *)viewController {
+    
+    NSUInteger currentIndex = [self.controllers indexOfObject:viewController];    // get the index of the current view controller on display
+    [self.pageControl setCurrentPage:self.pageControl.currentPage-1];                   // move the pageControl indicator to the next page
+    
+    // check if we are at the beginning and decide if we need to present the previous viewcontroller
+    if ( currentIndex > 0) {
+        return [self.controllers objectAtIndex:currentIndex-1];                   // return the previous viewcontroller
+    } else {
+        return nil;                                                         // do nothing
+    }
+}
+
+//这里得到当前控制器的索引
+- (void)controllerDidAppear:(UIViewController *)controller
+{
+    NSUInteger selectIndex=[self.controllers indexOfObject:controller];
+    [self.pageControl setCurrentPage:selectIndex];
+}
+
+- (void)controllerDidDisappear:(UIViewController *)controller
+{
+    
+}
+
+- (void)dealloc {
+    
+}
+
+@end

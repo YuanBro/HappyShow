@@ -1,0 +1,14 @@
+//
+//  VideoPlayerViewController.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-7-22.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <MediaPlayer/MediaPlayer.h>
+
+/** 定制化的视频播放器---主要处理了旋转操作 */
+@interface VideoPlayerViewController : MPMoviePlayerViewController
+
+@end

@@ -1,0 +1,19 @@
+//
+//  ExportVideo.h
+//  VideoShow  用于保存视频指向的地址和导出时间
+//
+//  Created by chengkai.gan on 14-10-22.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+#import <CoreData/CoreData.h>
+
+
+@interface ExportVideo : NSManagedObject
+
+@property (nonatomic, strong) NSNumber * id;
+@property (nonatomic, strong) NSString * asseturl;
+@property (nonatomic, strong) NSDate * savetime;
+
+@end

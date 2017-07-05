@@ -1,0 +1,20 @@
+//
+//  AudioViewController.h
+//  VideoShow
+//
+//  Created by lance on 15/6/4.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+#import "PlayerViewController.h"
+
+/** 添加配音相关代码 */
+@interface AudioViewController : BaseViewController
+
+//0 : video track,  1 : music track,  2 : audio track,  3 : overlay track
+@property (strong,nonatomic) qxTimeline *timeline;
+@property (assign,nonatomic) CGRect videoViewRect;
+@property (nonatomic,weak) id<PlayerViewControllerDelegate> delegate;
+
+@end

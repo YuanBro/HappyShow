@@ -1,0 +1,62 @@
+//
+//  MaterialCell.m
+//  VideoShow
+//
+//  Created by Mac on 16/1/12.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "MaterialCell.h"
+
+@implementation MaterialCell
+@synthesize cellDelegate;
+- (void)awakeFromNib
+{
+    self.downbutton.hidden=NO;
+//    self.progressView.hidden=YES;
+    
+    self.Sound.hidden=YES;
+    
+    self.titleLabel.frame=CGRectMake(5, 5, 0, 0);
+    
+    self.downbutton.layer.masksToBounds=YES;
+    
+    self.downbutton.layer.cornerRadius=5;
+    
+//    [self.downbutton setTitle:@"下载" forState:0];
+    
+    CGFloat r =245.0/255.0;
+    CGFloat g = 72.0/255.0;
+    CGFloat b = 105.0/255.0;
+    CGFloat a = 1;
+    CGFloat components[4] = {r,g,b,a};
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+ 
+    [self.downbutton.layer setBorderColor:CGColorCreate(colorSpace, components)];
+  
+    self.downbutton.layer.borderWidth=1.5;
+    
+    [self.downbutton setTintColor:[UIColor colorWithCGColor:CGColorCreate(colorSpace, components)]];
+  
+}
+
+
+- (IBAction)downMaterialAction:(UIButton *)sender
+{
+  
+    
+    [cellDelegate downAction:sender];
+  
+    
+}
+- (void)layoutSubviews 
+{
+    [super layoutSubviews];
+//    if (_isChecked) {
+//        [_downbutton setTitle:@"下载中" forState:UIControlStateNormal];
+//    } else {
+//        [_downbutton setTitle:@"下载" forState:UIControlStateNormal];
+//    }
+}
+
+@end

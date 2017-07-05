@@ -1,0 +1,33 @@
+//
+//  ExportVideo+CoreData.h
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-10-22.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "ExportVideo.h"
+
+@interface ExportVideo (CoreData)
+
+/** 保存导出的视频路径及时间到数据库 */
++(ExportVideo *)saveExport:(NSString *)assetUrl;
+
+/** 删除指定地址的数据 */
++(BOOL)deleteWithAsseturl:(NSString *)asseturl;
+
+/** 是否存在该记录 */
++(BOOL) isExistAsset:(NSString *)assetUrl;
+
+/** 查询所有记录 */
++(NSArray*)queryAll;
+
++(NSArray*)queryWithLimit:(NSUInteger)count page:(NSUInteger)page;
+
+/** 根据属性和值查询 */
++(NSArray*)queryWithAttr:(NSString*)attr value:(NSString*)value limit:(int)count;
+
+/** 根据属性值模糊查询 */
++(NSArray*)queryObscureWithAttr:(NSString*)attr value:(NSString*)value limit:(int)count;
+
+@end

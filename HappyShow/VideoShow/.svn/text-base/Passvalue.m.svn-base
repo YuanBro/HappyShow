@@ -1,0 +1,29 @@
+//
+//  Passvalue.m
+//  VideoShow
+//
+//  Created by admin on 16/2/3.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "Passvalue.h"
+
+@implementation Passvalue
+
+
++(instancetype)share
+{
+    static Passvalue * values=nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        
+        values = [[Passvalue alloc]init];
+        
+        
+    });
+    
+    
+    return values;
+    
+}
+@end

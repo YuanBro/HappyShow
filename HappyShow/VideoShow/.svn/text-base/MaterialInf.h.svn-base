@@ -1,0 +1,35 @@
+//
+//  StickerInf.h
+//  VideoShow
+//
+//  Created by lance on 15/4/20.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+
+@interface MaterialInf : NSObject
+
+@property (assign,nonatomic) int id;
+@property (strong,nonatomic) NSString * material_name;
+//@property (strong,nonatomic) NSString * soundTrack_name;
+@property (strong,nonatomic) NSString * material_paper;
+@property (assign,nonatomic) BOOL is_new;
+@property (strong,nonatomic) NSString * pub_time;
+@property (assign,nonatomic) float price;
+@property (strong,nonatomic) NSString * material_detail;
+@property (assign,nonatomic) BOOL is_pro;
+@property (assign,nonatomic) int material_type;
+@property (strong,nonatomic) NSString * material_icon;
+//@property (strong,nonatomic) NSString * icon_url;
+@property (strong,nonatomic) NSString * material_pic;
+@property (assign,nonatomic) int ver_code;
+@property (assign,nonatomic) int status;
+
+@property (strong,nonatomic) NSMutableArray * itemlist;//sticker列表
+
++(NSMutableArray *) initFromArr:(NSArray *)arr;
+
++(MaterialInf *) initFromDict:(NSDictionary *)dictp;
+
+@end

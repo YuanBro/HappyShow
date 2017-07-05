@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="9531" systemVersion="15C50" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES">
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="9529"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner"/>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <tableViewCell contentMode="scaleToFill" selectionStyle="none" indentationWidth="10" reuseIdentifier="StickerItemCell" rowHeight="70" id="LeM-Ml-arG" customClass="StickerItemCell">
+            <rect key="frame" x="0.0" y="0.0" width="320" height="70"/>
+            <autoresizingMask key="autoresizingMask"/>
+            <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" tableViewCell="LeM-Ml-arG" id="ROY-1S-7AR">
+                <rect key="frame" x="0.0" y="0.0" width="320" height="69"/>
+                <autoresizingMask key="autoresizingMask"/>
+                <subviews>
+                    <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="LMg-zD-y7t">
+                        <rect key="frame" x="5" y="5" width="60" height="60"/>
+                    </imageView>
+                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" text="Label" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="PEE-9d-7Lu">
+                        <rect key="frame" x="76" y="12" width="123" height="21"/>
+                        <fontDescription key="fontDescription" type="system" pointSize="14"/>
+                        <color key="textColor" red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="calibratedRGB"/>
+                        <nil key="highlightedColor"/>
+                    </label>
+                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" text="Label" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="1mA-jk-DLI">
+                        <rect key="frame" x="76" y="38" width="123" height="21"/>
+                        <fontDescription key="fontDescription" type="system" pointSize="12"/>
+                        <color key="textColor" white="0.66666666666666663" alpha="1" colorSpace="calibratedWhite"/>
+                        <nil key="highlightedColor"/>
+                    </label>
+                    <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" image="download_finished.png" translatesAutoresizingMaskIntoConstraints="NO" id="t0g-sX-iQm">
+                        <rect key="frame" x="242" y="19" width="50" height="30"/>
+                    </imageView>
+                    <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" image="ic_discover.png" translatesAutoresizingMaskIntoConstraints="NO" id="jXN-Kz-JZv">
+                        <rect key="frame" x="0.0" y="0.0" width="30" height="30"/>
+                    </imageView>
+                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" text="Label" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Kwa-Wp-vfo">
+                        <rect key="frame" x="222" y="16" width="90" height="35"/>
+                        <color key="backgroundColor" red="0.94901967050000002" green="0.10588236149999999" blue="0.15294118230000001" alpha="0.92000000000000004" colorSpace="deviceRGB"/>
+                        <fontDescription key="fontDescription" type="system" pointSize="15"/>
+                        <color key="textColor" red="1" green="1" blue="1" alpha="1" colorSpace="calibratedRGB"/>
+                        <nil key="highlightedColor"/>
+                    </label>
+                    <progressView opaque="NO" contentMode="scaleToFill" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="m7O-f0-JSc">
+                        <rect key="frame" x="222" y="34" width="90" height="2"/>
+                        <color key="progressTintColor" red="1" green="1" blue="1" alpha="0.59999999999999998" colorSpace="calibratedRGB"/>
+                        <color key="trackTintColor" white="0.66666666666666663" alpha="1" colorSpace="calibratedWhite"/>
+                    </progressView>
+                </subviews>
+            </tableViewCellContentView>
+            <connections>
+                <outlet property="button" destination="Kwa-Wp-vfo" id="iEv-QN-TOz"/>
+                <outlet property="detailLabel" destination="1mA-jk-DLI" id="DQK-sk-lgW"/>
+                <outlet property="finishedStatusIcon" destination="t0g-sX-iQm" id="jaa-2r-ZEy"/>
+                <outlet property="progressView" destination="m7O-f0-JSc" id="L0Q-Fw-0KP"/>
+                <outlet property="statusIcon" destination="jXN-Kz-JZv" id="zlV-vU-EBj"/>
+                <outlet property="stickerIcon" destination="LMg-zD-y7t" id="jr6-v9-fF8"/>
+                <outlet property="titleLabel" destination="PEE-9d-7Lu" id="iRt-s5-blt"/>
+            </connections>
+            <point key="canvasLocation" x="321" y="353"/>
+        </tableViewCell>
+    </objects>
+    <resources>
+        <image name="download_finished.png" width="34" height="33"/>
+        <image name="ic_discover.png" width="34" height="33"/>
+    </resources>
+</document>

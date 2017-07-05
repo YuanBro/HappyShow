@@ -7,7 +7,8 @@
 //
 
 #import "AppDelegate.h"
-
+#import "RotateNavigationController.h"
+#import "MainViewController.h"
 @interface AppDelegate ()
 
 @end
@@ -15,8 +16,13 @@
 @implementation AppDelegate
 
 
-- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-    // Override point for customization after application launch.
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
+{
+    RotateNavigationController* nav=[[RotateNavigationController alloc]initWithRootViewController:[MainViewController new]];
+    self.window.rootViewController=nav;
+    
+    [self.window makeKeyAndVisible];
+    
     return YES;
 }
 

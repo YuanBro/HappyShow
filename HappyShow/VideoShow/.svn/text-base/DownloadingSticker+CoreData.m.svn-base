@@ -1,0 +1,99 @@
+//
+//  DownloadingSticker+CoreData.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/15.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "DownloadingSticker+CoreData.h"
+#import "AppDelegate.h"
+#import "Util.h"
+
+#define MODEL @"DownloadingSticker"
+#define SORT_BY_TIME @"create_time"
+
+@implementation DownloadingSticker (CoreData)
+
++ (void)addDownloadingSticker:(DownloadingSticker*)sticker
+{
+    if(sticker){
+        DownloadingSticker *tmp =[NSEntityDescription insertNewObjectForEntityForName:MODEL
+                                                              inManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+        tmp.create_time = sticker.create_time;
+        tmp.material_id = sticker.material_id;
+        tmp.url = sticker.url;
+        tmp.download_progress = sticker.download_progress;
+        // tmp.type=sticker.type;
+        [[AppDelegate shareInstance].managedObjectContext performSelectorOnMainThread:@selector(save:) withObject:nil waitUntilDone:YES];
+    }
+}
+
++ (void)deleteDownloadingSticker:(int)materialID
+{
+    NSManagedObjectContext * context  = [[AppDelegate shareInstance] managedObjectContext];
+    NSArray *results = [DownloadingSticker queryWithPredicate:[NSPredicate predicateWithFormat:@"material_id = %d",materialID] limit:0];
+    if (results.count>0){
+        for(NSManagedObject *obj in results){
+            [context deleteObject:obj];
+        }
+    }
+    [[AppDelegate shareInstance].managedObjectContext performSelectorOnMainThread:@selector(save:) withObject:nil waitUntilDone:YES];
+}
+
++ (void)deleteAll
+{
+    NSManagedObjectContext * context  = [[AppDelegate shareInstance] managedObjectContext];
+    NSArray *list = [DownloadingSticker queryAll];
+    if(list.count > 0){
+        for(NSManagedObject *obj in list)
+        {
+            [context deleteObject:obj];
+        }
+}
+    [[AppDelegate shareInstance].managedObjectContext performSelectorOnMainThread:@selector(save:) withObject:nil waitUntilDone:YES];
+}
+
++ (NSArray*)queryAll
+{
+    return [DownloadingSticker queryWithPredicate:nil limit:0];
+}
++ (NSArray*)queryWithType:(NSString*)type;
+{
+    return [DownloadingSticker queryWithPredicate:[NSPredicate predicateWithFormat:@"type=%@",type] limit:0];
+}
+
++ (DownloadingSticker *) queryWithMaterialID:(int)materialID
+{
+    NSArray *results = [DownloadingSticker queryWithPredicate:[NSPredicate predicateWithFormat:@"material_id = %d",materialID] limit:0];
+    if (results.count>0)
+    {
+        return results[0];
+    }
+    return nil;
+}
+
++ (NSArray*)queryWithPredicate:(NSPredicate*)predicate limit:(int)limit
+{
+    NSManagedObjectContext * context=[[AppDelegate shareInstance] managedObjectContext];
+    NSManagedObjectModel * model=[[AppDelegate shareInstance] managedObjectModel];
+    NSDictionary * entities=[model entitiesByName];
+    NSEntityDescription *entity=[entities valueForKey:MODEL];
+    
+    NSSortDescriptor * sort=[[NSSortDescriptor alloc] initWithKey:SORT_BY_TIME ascending:YES];
+    NSArray * sortDescriptors=[NSArray arrayWithObject:sort];
+    
+    NSFetchRequest * req=[[NSFetchRequest alloc] init];
+    [req setEntity:entity];
+    [req setSortDescriptors:sortDescriptors];
+    if(predicate)
+    {
+        [req setPredicate:predicate];
+    }
+    if(limit > 0)
+    {
+        [req setFetchLimit:limit];
+    }
+    return [context executeFetchRequest:req error:nil];
+}
+@end

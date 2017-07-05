@@ -1,0 +1,47 @@
+//
+//  AdItem.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-7-17.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "AdObject.h"
+
+@implementation AdObject
+
+- (id)init
+{
+    if(self = [super init]){
+        
+    }
+    return self;
+}
+
+
++(NSMutableArray *)parseData:(NSArray*)jsonArr
+{
+    NSMutableArray *results = [[NSMutableArray alloc] init];
+    for (int i=0;i<jsonArr.count; i++) {
+        NSDictionary * dict = jsonArr[i];
+        AdObject *obj = [[AdObject alloc] init];
+        
+        obj.advertActivity = dict[@"advert_activity"];
+        obj.advertUrl = dict[@"advert_url"];
+        obj.id = dict[@"id"];
+        obj.name = dict[@"name"];
+        obj.picUrl = dict[@"pic_url"];
+        obj.type = dict[@"type"];
+
+        [results addObject:obj];
+    }
+    return results;
+}
+
+- (NSString *)description
+{
+    NSString *desc = [NSString stringWithFormat:@"id = %@, type = %@, name = %@, activity = %@, adurl = %@, pic = %@",self.id,self.type,self.name,self.advertActivity,self.advertUrl,self.picUrl];
+    return desc;
+}
+
+@end

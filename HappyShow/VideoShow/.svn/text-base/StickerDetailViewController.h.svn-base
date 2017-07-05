@@ -1,0 +1,19 @@
+//
+//  StickerDetailViewController.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/18.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "BaseViewController.h"
+
+@class MaterialInf;
+/** sticker详情界面 */
+@interface StickerDetailViewController : BaseViewController
+
+@property (nonatomic,strong) NSString * resource_url;
+@property (nonatomic, strong) MaterialInf *materialInf;//
+
+@end

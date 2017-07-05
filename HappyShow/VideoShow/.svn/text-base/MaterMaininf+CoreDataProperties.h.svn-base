@@ -1,0 +1,26 @@
+//
+//  MaterMaininf+CoreDataProperties.h
+//  VideoShow
+//
+//  Created by admin on 16/2/1.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+//  Choose "Create NSManagedObject Subclass…" from the Core Data editor menu
+//  to delete and recreate this implementation file for your updated model.
+//
+
+#import "MaterMaininf.h"
+
+NS_ASSUME_NONNULL_BEGIN
+
+@interface MaterMainInf (CoreDataProperties)
+
+@property (nullable, nonatomic, retain) NSNumber *retCode;
+@property (nullable, nonatomic, retain) NSNumber *themeVerCode;
+@property (nullable, nonatomic, retain) NSNumber *soundVerCode;
+@property (nullable, nonatomic, retain) NSNumber *musicVerCode;
+@property (nullable, nonatomic, retain) NSString *retMsg;
+
+@end
+
+NS_ASSUME_NONNULL_END

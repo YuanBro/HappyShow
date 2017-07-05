@@ -1,0 +1,30 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>VideoShow - Make awesome video and share with your friends</title>
+</head>
+<body>
+<div style="width: 100%;word-break:break-all;font-size: 14px;">
+<h4>1) How can i create video quickly?</h4>
+Currently, 'quick mode' is supported in 2 cases:<br/>
+&nbsp;&nbsp;- Make music video.  First, select one video; Second, select one music(optional, you can record a voice at the same time); Third, save video. It's very quick, try it!<br/>
+&nbsp;&nbsp;- Trim video:   Use the "Fast trim" in Toolbox.<br/>  
+<h4>2) Is my video safe? Will anyone see my private video?</h4>
+&nbsp;&nbsp;Come on..Videoshow is just a video editing tool, you can do anything without internet.  Only when you share video to Instagram and hashtag #videoshowapp,   your video will get a chance to be featured and shown in the "Feature list".<br/>
+
+<h4>3) Exporting video is so slow...</h4>
+&nbsp;&nbsp;Video transcoding is a CPU-consuming work. In general, the longer the video is, the longer exporting time needs.  We are still trying to optimize the performance of exporting.  <br/>
+
+<h4>4) I can not save video</h4>
+&nbsp;&nbsp;It is the most common bug which we are tring to fix.  If you see such problem, please send the detail(repro steps, phone model,android version) to <a href="mailto:support@enjoy-mobi.com" target="_blank">support@enjoy-mobi.com</a>.     Btw, try some other video/music, try reboot the app or even the phone, the bug may dissapear.<br/> 
+
+<h4>5) I can not share video.</h4>
+&nbsp;&nbsp;- If the video is deleted by Facebook,  please check the copyright of the music you add. <br/>
+&nbsp;&nbsp;- If you can not upload the video, please send the detail(the social platform you share, phone model, android version) to  <a href="mailto:support@enjoy-mobi.com" target="_blank">support@enjoy-mobi.com</a> .<br/>
+
+ Thank you.<br/>
+<br/>
+<br/>
+</div>
+</body>

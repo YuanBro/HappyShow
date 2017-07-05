@@ -1,0 +1,21 @@
+//
+//  DownloadingSticker.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/15.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+#import <CoreData/CoreData.h>
+
+/** 下载中的表情 */
+@interface DownloadingSticker : NSManagedObject
+
+@property (nonatomic, strong) NSNumber * material_id;
+@property (nonatomic, strong) NSString * url;
+@property (nonatomic, strong) NSDate   * create_time;
+@property (nonatomic, strong) NSNumber * download_progress;
+//@property(nonatomic,strong)   NSString * type;
+
+@end

@@ -1,0 +1,143 @@
+//
+//  PlayMusicView.m
+//  VideoShow
+//
+//  Created by admin on 16/2/1.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "PlayMusicView.h"
+#import "AFNetworking.h"
+#import "MaterialDownloadViewController.h"
+
+@implementation PlayMusicView
+- (IBAction)Back:(UIButton *)sender
+{
+    [_player stop];
+    self.backView.hidden=YES;
+    self.hidden=YES;
+
+    
+}
+- (IBAction)sender:(UIButton *)sender
+{
+    if (isplay)
+    {
+        [self playmusic];
+        
+    [self.playBtn setBackgroundImage:[UIImage imageNamed:@"ic_circle.png"] forState:UIControlStateNormal];
+        isplay = NO;
+    } else {
+         [self.playBtn setBackgroundImage:[UIImage imageNamed:@"ic_play.png"] forState:UIControlStateNormal];
+        [_player pause];
+       
+        isplay = YES;
+    }
+    _player.volume = 0.5;//重置音量,(每次播放的默认音量0.5)
+    
+}
+
+-(void)play
+{
+   
+
+     [_player play];
+    
+  
+
+}
+
+- (void)drawRect:(CGRect)rect
+{
+    
+    self.playBtn.layer.masksToBounds=YES;
+    
+    self.playBtn.layer.cornerRadius=20;
+
+    self.layer.masksToBounds=YES;
+    self.layer.cornerRadius=5;
+    
+    //设置滑杆
+    [self.slider setThumbImage:[UIImage imageNamed:@"ic_bg.png"] forState:UIControlStateNormal];
+    [self.slider setThumbImage:[UIImage imageNamed:@"ic_bg.png"] forState:UIControlStateHighlighted];
+    //返回按钮
+    [self.backBtn setImage:[UIImage imageNamed:@"ic_close.png"] forState:UIControlStateNormal];
+    
+    [self playmusic];
+    [self showTime];
+    
+    //设置监控 每秒刷新一次时间
+    [NSTimer scheduledTimerWithTimeInterval:0.1f
+                                     target:self
+                                   selector:@selector(showTime)
+                                   userInfo:nil
+                                    repeats:YES];
+    
+    [self play];
+    
+}
+-(void)playmusic
+{
+        // 显示“请等待”提示
+    
+        self.Load.hidden=NO;
+        
+        // 以下两行将任务排程到一个后台线程执行。dispatch_get_global_queue会取得一个系统分配的后台任务队列。
+        dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+        dispatch_async(queue, ^{
+            
+            NSURL* url=[NSURL URLWithString:_musicType];
+            
+            NSURLRequest* request=[NSURLRequest requestWithURL:url];
+    
+            _data=[NSURLConnection sendSynchronousRequest:request returningResponse:nil error:nil];
+            
+            _player=[[AVAudioPlayer alloc]initWithData:_data error:nil];
+            _player.numberOfLoops = 0.5;
+            
+            [_player prepareToPlay];
+            
+            // 因为有UI操作，所以需要切换回主线程。一般原则：
+            // 1. UI操作必须在主线程上完成。2. 耗时的同步网络、同步IO、运算等操作不在主线程上跑，以避免阻塞
+            // dispatch_get_main_queue()会返回关联到主线程的那个任务队列。
+            
+            dispatch_async(dispatch_get_main_queue(), ^{
+                
+                // 显示结果
+                
+                [self.playBtn setBackgroundImage:[UIImage imageNamed:@"ic_circle.png"] forState:UIControlStateNormal];
+                
+                
+                [self play];
+                
+                 // 关闭“请等待”提示
+                
+                self.Load.hidden=YES;
+
+               	
+            });
+        });
+    
+}
+
+#pragma mark 0.1秒一次更新 播放时间 播放进度条 歌词 歌曲 自动播放下一首
+- (void)showTime {
+    //动态更新进度条时间
+    if ((int)_player.currentTime % 60 < 10)
+    {
+        _currentTime.text = [NSString stringWithFormat:@"%d:0%d",(int)_player.currentTime / 60, (int)_player.currentTime % 60];
+    } else
+    {
+        _currentTime.text = [NSString stringWithFormat:@"%d:%d",(int)_player.currentTime / 60, (int)_player.currentTime % 60];
+    }
+    //
+    if ((int)_player.duration % 60 < 10)
+    {
+        _endTime.text = [NSString stringWithFormat:@"%d:0%d",(int)_player.duration / 60, (int)_player.duration % 60];
+    } else {
+        _endTime.text = [NSString stringWithFormat:@"%d:%d",(int)_player.duration / 60, (int)_player.duration % 60];
+    }
+    _slider.value = _player.currentTime / _player.duration;
+    
+}
+@end

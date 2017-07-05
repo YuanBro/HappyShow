@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model userDefinedModelVersionIdentifier="" type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="9525" systemVersion="15C50" minimumToolsVersion="Xcode 4.3">
+    <entity name="DownloadedSticker" representedClassName="DownloadedSticker" syncable="YES">
+        <attribute name="download_time" optional="YES" attributeType="Date" syncable="YES"/>
+        <attribute name="material_icon" optional="YES" attributeType="String" syncable="YES"/>
+        <attribute name="material_id" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+        <attribute name="material_name" optional="YES" attributeType="String" syncable="YES"/>
+        <attribute name="material_paper" optional="YES" attributeType="String" syncable="YES"/>
+        <attribute name="sort_id" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+        <attribute name="type" optional="YES" attributeType="String" syncable="YES"/>
+        <attribute name="version_code" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+    </entity>
+    <entity name="DownloadingSticker" representedClassName="DownloadingSticker" syncable="YES">
+        <attribute name="create_time" optional="YES" attributeType="Date" syncable="YES"/>
+        <attribute name="download_progress" optional="YES" attributeType="Float" defaultValueString="0.0" syncable="YES"/>
+        <attribute name="material_id" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+        <attribute name="url" optional="YES" attributeType="String" syncable="YES"/>
+    </entity>
+    <entity name="DraftVideo" representedClassName="DraftVideo" syncable="YES">
+        <attribute name="asseturl" optional="YES" attributeType="String" syncable="YES"/>
+        <attribute name="clips" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+        <attribute name="draftpath" optional="YES" attributeType="String" syncable="YES"/>
+        <attribute name="duration" optional="YES" attributeType="Float" defaultValueString="0.0" syncable="YES"/>
+        <attribute name="id" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+        <attribute name="savetime" optional="YES" attributeType="Date" syncable="YES"/>
+    </entity>
+    <entity name="ExportVideo" representedClassName="ExportVideo" syncable="YES">
+        <attribute name="asseturl" optional="YES" attributeType="String" syncable="YES"/>
+        <attribute name="id" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+        <attribute name="savetime" optional="YES" attributeType="Date" syncable="YES"/>
+    </entity>
+    <entity name="MaterMaininf" representedClassName="MaterMaininf" syncable="YES">
+        <attribute name="musicVerCode" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+        <attribute name="retCode" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+        <attribute name="retMsg" optional="YES" attributeType="String" syncable="YES"/>
+        <attribute name="soundVerCode" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+        <attribute name="themeVerCode" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+    </entity>
+    <entity name="StickerItem" representedClassName="StickerItem" syncable="YES">
+        <attribute name="image" optional="YES" attributeType="String" syncable="YES"/>
+        <attribute name="lastUsedTime" optional="YES" attributeType="Date" syncable="YES"/>
+        <attribute name="stickerID" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+        <attribute name="type" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+    </entity>
+    <entity name="VideoLike" representedClassName="VideoLike" syncable="YES">
+        <attribute name="id" optional="YES" attributeType="Integer 32" defaultValueString="0" syncable="YES"/>
+        <attribute name="likeState" optional="YES" attributeType="Boolean" syncable="YES"/>
+        <attribute name="userId" optional="YES" attributeType="String" syncable="YES"/>
+        <attribute name="videoOwner" optional="YES" attributeType="String" syncable="YES"/>
+        <attribute name="videoUrl" optional="YES" attributeType="String" syncable="YES"/>
+    </entity>
+    <elements>
+        <element name="DownloadedSticker" positionX="0" positionY="54" width="128" height="165"/>
+        <element name="DownloadingSticker" positionX="0" positionY="63" width="128" height="103"/>
+        <element name="DraftVideo" positionX="18" positionY="99" width="128" height="135"/>
+        <element name="ExportVideo" positionX="0" positionY="36" width="128" height="90"/>
+        <element name="StickerItem" positionX="0" positionY="72" width="128" height="105"/>
+        <element name="VideoLike" positionX="0" positionY="0" width="128" height="120"/>
+        <element name="MaterMaininf" positionX="9" positionY="99" width="128" height="120"/>
+    </elements>
+</model>

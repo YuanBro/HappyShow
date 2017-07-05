@@ -1,0 +1,24 @@
+//
+//  MaterMainInf.h
+//  VideoShow
+//
+//  Created by admin on 16/1/27.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+
+@interface MaterMainInf : NSObject
+
+@property (assign,nonatomic) NSNumber* retCode;
+@property (assign,nonatomic) NSNumber* themeVerCode;
+@property (assign,nonatomic) NSNumber* soundVerCode;
+@property (assign,nonatomic) NSNumber* musicVerCode;
+
+@property (strong,nonatomic) NSString* retMsg;
+
+- (instancetype) initWithDictionary:(NSDictionary *)dict;
++ (instancetype) materWithDictionary:(NSDictionary *)dict;
+
+
+@end

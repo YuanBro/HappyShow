@@ -1,0 +1,1179 @@
+//
+//  StickerViewController.m
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-10-30.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "StickerViewController.h"
+
+#import "StickerCell.h"
+#import "NSString+Util.h"
+#import "UIColor+Util.h"
+#import "ZDStickerView.h"
+#import "UIImage+Rotation.h"
+#import "AppMacros.h"
+#import "MBProgressHUD.h"
+#import "qxTimeline+Util.h"
+#import "qxFxPlaybackHelper.h"
+#import "Util.h"
+#import "OverlayScrollView.h"
+#import "MyLabel.h"
+#import "FileHandle.h"
+#import "qxStickerObject.h"
+#import "qxGifObject+Util.h"
+#import "StickerDownloadViewController.h"
+#import "StickerManagementController.h"
+#import "DownloadedSticker+CoreData.h"
+#import "StickerItem+CoreData.h"
+#import "AppDelegate.h"
+#import "UIImage+Util.h"
+#import "RotateNavigationController.h"
+#import "qxGifHelper.h"
+#import "qxMediaObject+Util.h"
+#import "qxPlaybackView+Util.h"
+#import "StickerPickerViewController.h"
+
+#import "StickerView.h"
+
+#define stickerStartWidth 100
+#define stickerStartHeight 100
+
+// 默认添加sticker时间为3秒
+#define DefaultStickerAddDuration 3
+
+static NSString *observerPlaying = @"playing";
+
+@interface StickerViewController ()<ZDStickerViewDelegate,qxFxPlaybackDelegate,OverlayScrollViewDelegate,StickerPickerViewControllerDelegate, StickerViewDelegate>
+{
+    
+}
+
+@property (nonatomic,strong) StickerPickerViewController *stickerPicker;
+@property (nonatomic,strong) UIView * stickerPanel;
+
+@property (nonatomic,assign) float lastPlayerProgress;
+@property (nonatomic,strong) qxFxPlaybackHelper *playbackHelper;
+
+@property (nonatomic,assign) BOOL playing;
+@property (nonatomic,assign) BOOL applicationActive;
+
+@property (nonatomic,assign) CGFloat currentPosOnTrack;
+@property (nonatomic,strong) qxMediaObject *currentOverlayObj;
+
+@property (nonatomic,assign) CMTime duration;
+
+@property (nonatomic,strong) NSTimer *previewControlTimer;
+
+@property (nonatomic,strong) IBOutlet UIButton * btPlay;//播放按钮
+
+@property (nonatomic,strong) IBOutlet UIView * bottomPanel;//底部工具面板
+@property (nonatomic,strong) IBOutlet UIButton * btAddSticker;//添加表情
+
+@property (nonatomic, strong) IBOutlet UIView *videoBgView;
+@property (nonatomic,strong) IBOutlet UIView *videoView;
+@property (nonatomic, strong) IBOutlet UIView *overlayView;
+
+@property (nonatomic,strong) IBOutlet MyLabel * labelCurrent;
+@property (nonatomic,strong) IBOutlet MyLabel * labelTotal;
+
+@property (nonatomic,strong) IBOutlet UIView * toolView;
+@property (nonatomic,strong) IBOutlet UIImageView * spliteImageView;
+@property (nonatomic,strong) IBOutlet UIView * frameView;//添加时间轴组件
+@property (nonatomic,strong) OverlayScrollView *mTimelineView;
+
+//可调整图片的容器---这个需要手动创建
+//@property (nonatomic,strong) UIView * stickerContainer;
+@property (nonatomic,strong) ZDStickerView * stickerResizeableView;
+@property (nonatomic,strong) UIImageView * stickerImageView;
+@property (nonatomic,strong) UIView * noStickerView;//无视图提示
+
+@property (nonatomic, strong) StickerView *stickerOverlayView;// 贴图容器
+
+@property (nonatomic, strong) NSMutableArray * backupPaths;
+// 是否需要先刷新预览---操作过sticker之后需要先准备预览---删除不需要,可以即时预览
+@property (nonatomic,assign) BOOL needRefreshVideoBeforePreview;
+@property (nonatomic, assign) BOOL isLoadDone;// 是否加载完成
+
+@property (atomic, assign) NSUInteger loadCount;
+
+- (IBAction) playViewAction:(id)sender;
+
+- (IBAction) triggerStickerPanel:(id)sender;
+
+- (void) cancelAction:(id)sender;
+- (void) confirmAction:(id)sender;
+
+@end
+
+@implementation StickerViewController
+
+@synthesize currentPosOnTrack;
+
+@synthesize bottomPanel;
+@synthesize stickerPicker;
+@synthesize stickerPanel;
+@synthesize lastPlayerProgress;
+
+@synthesize toolView;
+@synthesize spliteImageView;
+
+@synthesize videoBgView;
+@synthesize videoView;
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor colorWithHexString:homeColor];
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"Sticker", nil)];
+    [self.navigationController.navigationBar initWithViewController:self leftText:NSLocalizedString(@"Back", nil) leftImageName:@"ic_back_arrow.png" action:@selector(cancelAction:)];
+    [self.navigationController.navigationBar initWithViewController:self rightImageName:@"bt_ok.png" action:@selector(confirmAction:)];
+    
+    toolView.backgroundColor=[UIColor colorWithHexString:bottomViewColor];
+    spliteImageView.backgroundColor=[UIColor colorWithHexString:bottomViewSpliteColor];
+    
+    self.overlayView.frame = self.videoViewRect;
+    self.stickerOverlayView = [[StickerView alloc] initWithFrame:CGRectMake(0, 0, self.videoViewRect.size.width, self.videoViewRect.size.height)];
+    self.stickerOverlayView.delegate = self;
+    [self.overlayView addSubview:self.stickerOverlayView];
+    
+    [self initStickerView];//添加sticker编辑图层
+    
+    // 同view一样高
+    CGRect panelFrame=CGRectMake(0, self.view.frame.size.height, self.view.frame.size.width, self.view.frame.size.height);
+    self.stickerPanel=[[UIView alloc] initWithFrame:panelFrame];
+    [self.view addSubview:stickerPanel];
+    
+    UIView *dismissPanel = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height / 2)];
+    UITapGestureRecognizer *dismissGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismissStickerPanel:)];
+    [dismissPanel addGestureRecognizer:dismissGesture];
+    [self.stickerPanel addSubview:dismissPanel];
+    
+    stickerPicker = [StickerPickerViewController initFromStoryboard:[StickerPickerViewController class]];
+    [stickerPicker addTarget:self downloadAction:@selector(downloadStickerAction:)];
+    [stickerPicker addTarget:self manageAction:@selector(manageStickerAction:)];
+    stickerPicker.delegate=self;
+    CGRect pickerFrame=CGRectMake(0, self.stickerPanel.frame.size.height / 2, self.view.frame.size.width, self.stickerPanel.frame.size.height / 2);
+    stickerPicker.view.frame=pickerFrame;
+    stickerPicker.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleBottomMargin;
+    
+    [stickerPicker attachToController:self superview:self.stickerPanel];
+    
+    lastPlayerProgress = 0.0;
+    CGSize size=CGSizeMake(self.view.frame.size.width, self.frameView.frame.size.height);
+    self.mTimelineView = [[OverlayScrollView alloc] initWithFrame:CGRectMake(0, 0, size.width, size.height) contentSize:size timeline:self.timeline fillRectWithSticker:YES];
+    self.mTimelineView.delegate = self;
+    self.mTimelineView.backgroundColor = [UIColor clearColor];
+    [self.frameView addSubview:self.mTimelineView];
+    
+    self.backupPaths = [NSMutableArray array];
+    NSMutableArray * array = [self.timeline getAllStickers];
+    for(qxMediaObject * obj in array){
+        [self.backupPaths addObject:obj.strFilePath];
+    }
+    
+    [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+
+    __weak StickerViewController * weakSelf = self;
+//    [[self.timeline getTrackFromTimeline:0] initUsableForSize:[UIScreen mainScreen].bounds.size block:^{
+//        [weakSelf prepareForPreview];
+//        
+//        [weakSelf enableEditing];
+//    }];
+    [[self.timeline getTrackFromTimeline:0] reloadPhoto:self.screenRect.size block:^{
+        [weakSelf prepareForPreview];
+        [weakSelf enableEditing];
+    }];
+
+}
+
+/** 打开编辑 当执行完预览和加载图片帧---两个都加载完成之后才开启---速度不一定 */
+- (void) enableEditing {
+    
+    self.loadCount += 1;
+    if (self.loadCount < 2) {
+        return;
+    }
+    
+    [MBProgressHUD hideAllHUDsForView:self.view animated:YES];
+    
+    self.isLoadDone = YES;
+    self.btAddSticker.enabled = YES;
+    [self.mTimelineView refreshSubtitleView];
+    
+    qxTrack *overlayTrack = [self.timeline getTrackForOverlay];
+    [self.stickerOverlayView setMediaObjects:[overlayTrack findStickerObjects]];
+    
+    [self showMediaObject:currentPosOnTrack];
+    [self showOverlayAtTime:0 forceDraw:NO];
+    
+    if([self.timeline getAllStickers].count == 0){
+        [self triggerSticker:1];
+    }
+}
+
+- (void)applicationBecomeActive:(NSNotification *)notify
+{
+    self.applicationActive = YES;
+}
+
+- (void)applicationWillResignActive:(NSNotification *)notify
+{
+    self.applicationActive = NO;
+    if(self.playing){
+        [self stopPreview:NO];
+    }
+    self.needRefreshVideoBeforePreview = YES;
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    
+    [self addObserver:self forKeyPath:observerPlaying options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld context:nil];
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    self.applicationActive = NO;
+    [self stopPreview:NO];
+
+    [self removeObserver:self forKeyPath:observerPlaying];
+}
+
+- (void)dealloc
+{
+    [self cleanMemory];
+}
+
+- (void)cleanMemory
+{
+    [self.stickerPicker cancelAttachToController];
+    self.stickerPicker = nil;
+    self.timeline = nil;
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSString *,id> *)change context:(void *)context {
+    
+    if ([observerPlaying isEqualToString:keyPath]) {
+        
+        if(self.isLoadDone == false) {
+            return;
+        }
+        BOOL newPlaying = [change[NSKeyValueChangeNewKey] boolValue];
+        if (newPlaying) {
+            self.stickerResizeableView.hidden = YES;
+            
+            self.stickerOverlayView.userInteractionEnabled = NO;
+            self.btAddSticker.enabled = NO;
+        }else{
+            [self showOverlayAtTime:currentPosOnTrack forceDraw:NO];
+            
+            self.stickerOverlayView.userInteractionEnabled = YES;
+            self.btAddSticker.enabled = YES;
+        }
+        
+    }
+    
+}
+
+// 强制隐藏
+-(void) dismissStickerPanel:(UITapGestureRecognizer *)recognizer {
+
+    [self triggerSticker:2];
+}
+
+-(void) replaceStickerTap:(UITapGestureRecognizer*) tap
+{
+    [self triggerSticker:0];
+}
+
+//初始化sticker编辑视图
+-(void) initStickerView {
+    
+    self.stickerImageView = [[UIImageView alloc] initWithImage:nil];
+    self.stickerImageView.contentMode=UIViewContentModeScaleAspectFit;
+    UITapGestureRecognizer *stickerImageTap=[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(replaceStickerTap:)];
+    stickerImageTap.numberOfTapsRequired=2;
+    CGRect gripFrame = CGRectMake(0, 0, stickerStartWidth,stickerStartHeight);
+    self.stickerResizeableView = [[ZDStickerView alloc] initWithFrame:gripFrame];
+    [self.stickerResizeableView addGestureRecognizer:stickerImageTap];
+    
+    self.stickerResizeableView.delegate=self;
+    self.stickerResizeableView.tag=0;
+    self.stickerResizeableView.contentView = self.stickerImageView;
+    self.stickerResizeableView.preventsPositionOutsideSuperview = NO;
+    [self.stickerResizeableView showEditingHandles];
+    self.stickerResizeableView.center=self.videoView.center;
+    self.stickerResizeableView.hidden = YES;
+    
+    [self.overlayView addSubview:self.self.stickerResizeableView];
+    self.overlayView.layer.masksToBounds = YES;
+    
+}
+
+- (void) cancelAction:(UIButton*)sender
+{
+    [self.stickerOverlayView clearAll];
+    
+    [self stopPreview:NO];
+    [self.playbackHelper destroy];
+    self.playbackHelper = nil;
+    if ([self.delegate respondsToSelector:@selector(videoEdit:type:editFlag:)]) {
+        [self.delegate videoEdit:self type:EditTypeSticker editFlag:NO];
+    }
+    //是否设置委托
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void) confirmAction:(UIButton*)sender
+{
+    [self.stickerOverlayView clearAll];
+    
+    [Util clearPhotoTrack:[self.timeline getTrackForOverlay]];
+    [self stopPreview:NO];
+    [self.playbackHelper destroy];
+    self.playbackHelper = nil;
+    //是否设置了委托
+    if ([self.delegate respondsToSelector:@selector(videoEdit:type:editFlag:)]) {
+        [self.delegate videoEdit:self type:EditTypeSticker editFlag:YES];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)playbackViewTap:(UITapGestureRecognizer*)gesture
+{
+    if(self.playing){
+        [self pausePreview];
+    }
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    self.applicationActive = YES;
+    [self.stickerPicker refreshStickerPicker];
+}
+
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
+{
+    return UIInterfaceOrientationMaskPortrait;
+}
+
+- (void)stickerUpdate:(NSNotification*)notification
+{
+    [self.stickerPicker refreshStickerPicker];
+}
+
+//准备预览
+-(void) prepareForPreview
+{
+    [Util clearPhotoTrack:[self.timeline getTrackForOverlay]];
+    if (self.playbackHelper) {
+        self.playbackHelper.delegate=nil;
+        [self.playbackHelper stop];
+        [self.playbackHelper destroy];
+        self.playbackHelper=nil;
+    }
+    self.videoView.frame=self.videoViewRect;
+    self.overlayView.frame = self.videoViewRect;
+    
+    self.playbackHelper=[[qxFxPlaybackHelper alloc] init];
+    self.playbackHelper.delegate=self;
+    float scale = [UIScreen mainScreen].scale;
+    self.timeline.timelineSize = CGSizeMake(self.videoView.frame.size.width*scale, self.videoView.frame.size.height*scale);
+    self.playbackHelper.mpTimeline=self.timeline;
+    [self.playbackHelper initWithUIView:self.videoView];
+    
+//    self.duration=self.playbackHelper.playerItem.duration;
+     self.duration = self.playbackHelper.mpTimeline.timelineDuration;
+    self.labelCurrent.text=[Util stringWithSeconds:0];
+    self.labelTotal.text=[Util stringWithSeconds:round(CMTimeGetSeconds(self.duration))];
+    
+//    [qxPlaybackView bringFromVideoView:videoView];
+}
+
+#pragma mark - OverlayScrollViewDelegate
+- (void)videoScrollView:(OverlayScrollView*)view didScrollTo:(CGFloat)second tapFlag:(BOOL)tapFlag
+{
+    self.currentPosOnTrack = second;
+    if ((!self.playing)) {
+        [self seekTo:second];
+    }
+    
+    if (tapFlag == NO) {
+        [self.stickerOverlayView scrollToSecond:self.currentPosOnTrack];
+    }else{
+        [self.stickerOverlayView hideAllStickerExcludeMediaObject:nil];
+        
+        NSMutableArray *resultArray = [self.timeline getStickerObjectsAtTime:currentPosOnTrack];
+        for (qxMediaObject *obj in resultArray) {
+            if (obj == self.currentOverlayObj) {
+                [self.stickerOverlayView hideMediaObject:obj flag:YES];
+            }else{
+                [self.stickerOverlayView hideMediaObject:obj flag:NO];
+            }
+        }
+    }
+}
+
+// 传出点击的区域
+- (void)videoScrollView:(OverlayScrollView*)view tapSubtitleRectView:(SubtitleRectView *)rectView didToSecond:(CGFloat)second {
+    
+    [self pausePreview];
+    currentPosOnTrack = second;
+    
+    qxMediaObject *mediaObject = rectView.mediaObject;
+    if (mediaObject) {// 这里与点击字幕激活编辑有冲突---点击时间轴中字幕区间
+        [self.stickerOverlayView hideAllStickerExcludeMediaObject:nil];
+        
+        [self showMediaObject:currentPosOnTrack];
+        self.currentOverlayObj = mediaObject;
+        [self parseMediaObj:self.currentOverlayObj];
+        [self.stickerOverlayView hideMediaObject:self.currentOverlayObj flag:YES];
+    }
+    
+}
+
+// 开始拖动
+- (void)scrubbingDidStart:(OverlayScrollView*)view {
+    [self pausePreview];
+    
+    [self showOrHiddenStickerView:YES];
+    
+}
+
+// 松手
+- (void)scrubbingDidEnd:(OverlayScrollView*)view {
+    [self showOverlayAtTime:self.currentPosOnTrack forceDraw:NO];
+    
+}
+
+/** 显示或者隐藏sticker编辑视图 */
+- (void)showOrHiddenStickerView:(BOOL)flag {
+    
+    self.stickerResizeableView.hidden = flag;
+    
+    if (flag) {
+       
+        [self showMediaObject:currentPosOnTrack];
+    }else{
+        
+    }
+    
+}
+
+
+/** 显示当前时间在时间轴上的字幕 */
+- (void)showMediaObject:(CGFloat)timeInTimeline {
+    NSMutableArray *resultArray = [self.timeline getStickerObjectsAtTime:timeInTimeline];
+    if (resultArray.count == 0) {
+        return;
+    }
+    
+    for(qxMediaObject *overlayObj in resultArray){
+        [self.stickerOverlayView hideMediaObject:overlayObj flag:NO];
+    }
+}
+
+// 松手后显示指定的overlay
+- (void)showOverlayAtTime:(Float64)second forceDraw:(BOOL)forceFlag {
+    
+    NSMutableArray *resultArray = [self.timeline getStickerObjectsAtTime:self.currentPosOnTrack];
+
+    if (resultArray.count == 0) {
+        self.currentOverlayObj = nil;
+        [self.stickerOverlayView hideAllStickerExcludeMediaObject:nil];
+        [self showOrHiddenStickerView:YES];
+        [self.mTimelineView hiddenEditingView];
+        return;
+    }
+    
+    qxMediaObject *editingMediaObject = [self.mTimelineView getEditingMediaObject];
+    
+    if (editingMediaObject == nil) {
+        
+    } else {// 已经处于编辑中
+        if([resultArray containsObject:editingMediaObject]) {
+            [self.stickerOverlayView hideMediaObject:editingMediaObject flag:YES];
+            [self parseMediaObj:editingMediaObject];
+            return;
+        }else{// 如果包含已经在编辑中的的字幕return,如果不包含取消编辑---重新指向
+            [self.mTimelineView hiddenEditingView];
+        }
+    }
+    
+    qxMediaObject *overlayObj = [resultArray lastObject];
+    
+    [self parseMediaObj:overlayObj];
+    
+    for (qxMediaObject *mediaObj in resultArray) {// 这里还没有为当前对象赋值
+        if (mediaObj == overlayObj) {
+            [self.stickerOverlayView hideMediaObject:mediaObj flag:YES];
+        }else{
+            [self.stickerOverlayView hideMediaObject:mediaObj flag:NO];
+        }
+    }
+    
+    if ((self.currentOverlayObj==nil && overlayObj==nil) || self.playing) {//没有sticker或者播放中
+        return;
+    }
+    
+    if(overlayObj==nil){//编辑框已经隐藏了不需要继续处理了
+        self.currentOverlayObj = overlayObj;
+        return;
+    }
+    
+    if([overlayObj isEqual:self.currentOverlayObj] && forceFlag == NO){
+        return;//纯图片的sticker
+    }
+    
+    //sticker不同的情况需要处理
+    self.currentOverlayObj = overlayObj;
+    [self parseMediaObj:overlayObj];
+    
+}
+
+- (void)videoScrollViewPaned
+{
+    [self pausePreview];
+}
+
+#pragma mark StickerViewDelegate 点击贴图回调
+- (void)stickerView:(StickerView *)stickerView withMediaObject:(qxMediaObject *)mediaObject {
+    if (mediaObject == nil) {
+        return;
+    }
+    self.currentOverlayObj = mediaObject;
+    
+    [self parseMediaObj:self.currentOverlayObj];
+    [self.mTimelineView showEditingViewWithMediaObject:mediaObject scrollFlag:YES];
+    
+}
+
+- (void)needRefreshVideo
+{
+    self.needRefreshVideoBeforePreview = YES;
+}
+
+#pragma mark OverlayScrollDelegate 裁剪时间点
+// 裁剪时间点---剪切后松手事件
+- (void)videoScrollView:(OverlayScrollView *)view start:(CGFloat)leftSecond end:(CGFloat)rightSecond index:(NSUInteger)index {
+    
+    NSMutableArray *resultArray = [self.timeline getStickerObjectsAtTime:currentPosOnTrack];
+    
+    if (resultArray.count == 0) {
+        [self showOrHiddenStickerView:YES];
+        return;
+    }
+    
+    if ([resultArray containsObject:self.currentOverlayObj] == false) {
+        [self showOrHiddenStickerView:YES];
+    }else{
+        [self showOrHiddenStickerView:NO];
+    }
+    
+}
+
+- (void)framesLoadDone
+{
+    [self enableEditing];
+}
+
+#pragma mark 获取指定时间对应的媒体对象
+-(qxMediaObject*) getStickerObjectAtTime:(CGFloat)timeInSecond
+{
+    qxMediaObject *stickerObj = nil;
+    if (self.timeline) {
+        NSMutableArray *resultArray = [self.timeline getStickerObjectsAtTime:timeInSecond];
+        if (resultArray.count >= 1) {
+            stickerObj = resultArray.lastObject;
+        }
+    }
+    return stickerObj;
+}
+
+#pragma mark - qxPlaybackDelegate
+//准备预览
+-(void)readyForPlayback
+{
+    if (!self.playing) {
+        if (self.needRefreshVideoBeforePreview) {
+            self.needRefreshVideoBeforePreview=NO;
+            if(self.applicationActive){
+                [self startPreview];
+            }
+        }else{
+            self.playing=NO;
+            self.btPlay.selected=NO;
+            [self pausePreview];
+        }
+    }
+}
+
+-(void)playViewAction:(id)sender
+{
+    if (!self.playing) {
+        if (self.needRefreshVideoBeforePreview) {
+            [self prepareForPreview];
+        }else{
+            [self startPreview];
+        }
+    }else{
+        [self pausePreview];
+    }
+}
+
+//完成播放
+-(void)FinishPlayback
+{
+    [self stopUpdatePlayStatus];
+//    [self.playbackHelper rebuildForTextEdit:NO];
+    
+    [self seekTo:0.0];//必须在设置playing之前---因为设置了观察者
+    [self.mTimelineView scrollToSecond:0];
+    self.playing=NO;
+    self.btPlay.selected=NO;
+    
+}
+
+/** 显示sticker */
+- (void) parseMediaObj:(qxMediaObject *)overlayObj
+{
+    if(overlayObj == nil) {
+        return;
+    }
+    
+    UIImage * simg = nil;
+    qxStickerObject * customObj=overlayObj.overlayCustomObj;
+    if(overlayObj.eType==eMT_OverlayDynamic){
+        qxGifObject * gifObj = customObj.gifObj;
+        float startTime = CMTimeGetSeconds(overlayObj.startTimeOfTrack);
+        int index=[gifObj getImageIndexFromTime:self.currentPosOnTrack-startTime];
+        NSString * framePath = gifObj.mpImageArray[index];
+        simg = [UIImage imageWithContentsOfFile:framePath];
+    }else{//纯图片的情况
+        if (customObj.stickerType==0) {//内置表情
+            simg = [UIImage imageResource:customObj.stickerName];
+        }else{
+            simg = [UIImage imageWithContentsOfFile:customObj.stickerName];
+        }
+        
+    }
+    
+    self.stickerResizeableView.transform = CGAffineTransformMakeRotation(0.0f);//先还原到原始角度
+    
+    UIImageView *imgView=(UIImageView *)self.stickerResizeableView.contentView;
+    imgView.image = simg;
+    float rotatef = customObj.rotatef;
+    
+    CGRect tmpRect=overlayObj.textDisplayRect;//这个时候是旋转之后的矩形区域
+    
+    float step = self.stickerResizeableView.contentView.frame.origin.x/cos([Util ABSConvertTo45:rotatef]);//计算出结果区域
+    
+    CGRect stickerRect=CGRectMake(self.videoViewRect.size.width*tmpRect.origin.x, self.videoViewRect.size.height*tmpRect.origin.y, self.videoViewRect.size.width*tmpRect.size.width, self.videoViewRect.size.width*tmpRect.size.width);//这里还原了图片相对视频区域的frame
+    
+    CGRect rect=CGRectMake(stickerRect.origin.x-step, stickerRect.origin.y - step, stickerRect.size.width+step*2, stickerRect.size.height+step*2);
+    
+    self.stickerResizeableView.frame=rect;
+    
+    if (rotatef!=0) {
+        //得到当前sticker容器边长的一半
+        float side=(stickerRect.size.width+step*2)/2;
+        float ranf=0.0;
+        if (ABS(rotatef)>M_PI/2) {
+            ranf=ABS(rotatef)-M_PI/2;
+        }else{
+            ranf=ABS(rotatef);
+        }
+        
+        float nf=[Util ABSConvertTo45:M_PI/4-ranf];
+        //正方形对角线的一半
+        float len=side/cos(nf);
+        //得到原始正方形边长的一半
+        float newSide=sqrtf(len*len/2);
+        
+        rect.size=CGSizeMake(newSide*2, newSide*2);
+        self.stickerResizeableView.frame=rect;
+        self.stickerResizeableView.center=customObj.centerPoint;
+        self.stickerResizeableView.transform = CGAffineTransformMakeRotation(rotatef);
+    }
+    
+    if (self.stickerResizeableView.hidden) {
+        self.stickerResizeableView.hidden = NO;
+    }
+}
+
+#pragma mark 这一步根据区域创建sticker的位置参数---用于预览显示-非常重要
+-(qxMediaObject*) confStickerDisplayRect:(qxMediaObject*)stickerObj rotatef:(float)rotatef addFlag:(BOOL)flag
+{
+    if ([stickerObj isStickerObj]) {
+        
+        float step = self.stickerResizeableView.contentView.frame.origin.x;// 图片的边距
+        
+        NSLog(@"viewRect = %@", NSStringFromCGRect(self.videoViewRect));
+        CGRect containerRect=CGRectZero;
+        if (flag) {// 是否是添加操作
+            CGPoint centerPoint = CGPointMake(self.videoViewRect.size.width / 2, self.videoViewRect.size.height / 2);
+            float startx = (self.videoViewRect.size.width - stickerStartWidth) / 2;
+            float starty = (self.videoViewRect.size.height - stickerStartHeight) / 2;
+            //containerRect=CGRectMake(centerPoint.x-stickerStartWidth/2, centerPoint.y-stickerStartHeight/2, stickerStartWidth, stickerStartHeight);
+            containerRect=CGRectMake(startx, starty, stickerStartWidth, stickerStartHeight);
+        }else{
+            step = self.stickerResizeableView.contentView.frame.origin.x/cos([Util ABSConvertTo45:rotatef]);
+            containerRect=self.stickerResizeableView.frame;
+        }
+        
+        //计算出sticker内容图片的边框信息
+        CGRect stickerRect = CGRectMake(0, 0, containerRect.size.width - step * 2, containerRect.size.height - step * 2);
+        
+        stickerRect.origin.x = containerRect.origin.x+step;
+        
+        stickerRect.origin.y = containerRect.origin.y+step;
+        
+        CGSize viewSize = self.videoView.frame.size;
+        
+        float stickerX = stickerRect.origin.x;
+        float stickerY = stickerRect.origin.y;
+        
+        //这里计算的是比例
+        CGRect rect = CGRectMake(stickerX/viewSize.width, stickerY/viewSize.height, stickerRect.size.width/viewSize.width, stickerRect.size.height/viewSize.height);
+        
+        [stickerObj setDisplayRect:rect];// 这里是生成的图片的映射矩形
+        qxStickerObject *customObj=stickerObj.overlayCustomObj;
+        
+        customObj.rotatef = rotatef;
+        customObj.centerPoint = self.stickerResizeableView.center;
+        
+        [self.stickerOverlayView updateMediaObject:stickerObj hidden:YES];
+        
+        self.needRefreshVideoBeforePreview = YES;
+    }
+    return stickerObj;
+}
+
+//添加创建sticker obj---imgPath临时创建的图片路径---用于静态sticker传值   resName---本地图片路径,如果是内置sticker则只有文件名
+- (void)addStickerObj:(NSString*)imgPath withRes:(NSString *)resName stickerSize:(CGSize)size withType:(int)type
+{
+    
+    CGFloat tmpDuration = (CMTimeGetSeconds(self.duration) - self.currentPosOnTrack) > DefaultStickerAddDuration ?
+    DefaultStickerAddDuration : (CMTimeGetSeconds(self.duration) - self.currentPosOnTrack);
+    //
+    qxTrack *overlayTrack = [self.timeline getTrackForOverlay];
+    
+    qxMediaObject *stickerObj = nil;
+    
+    NSString * stickerName = [[resName lastPathComponent] componentsSeparatedByString:@"."][0];
+    NSString * extension = [resName pathExtension];
+    qxStickerObject *customObj=[[qxStickerObject alloc] init];
+    if ([@"gif" isEqualToString:extension]) {//解析文件
+        NSString * dir = [FileHandle pathWithGifForName:stickerName];
+        NSURL * fileUrl = [NSURL fileURLWithPath:resName];
+        qxGifObject * obj = [qxGifHelper getGifObjectFromFile:fileUrl withDir:dir];
+        
+        int fps = 4;
+        if (obj.mpImageTimeArray.count>0) {
+            fps=1/[obj.mpImageTimeArray[0] floatValue];
+        }
+        //NSLog(@"fps------->%d",fps);
+        stickerObj = [[qxMediaObject alloc] initOverlayWithPhotoArray:obj.mpImageArray withFPS:fps];
+        customObj.gifObj=obj;//引用当前解压的对象
+    }else{
+        stickerObj = [[qxMediaObject alloc] init];
+        [stickerObj setFilePath:imgPath withType:eMT_Overlay fromAssetLibrary:NO];//gif动态不需要设置这个
+    }
+    
+    customObj.stickerName=resName;
+    customObj.stickerType=type;
+    customObj.rotatef=0.0;
+    customObj.stickerSize=size;
+    stickerObj.overlayCustomObj=customObj;
+    
+    stickerObj=[self confStickerDisplayRect:stickerObj rotatef:0.0 addFlag:YES];//设置显示区域
+    stickerObj.zorder = 1;
+    
+    [overlayTrack addMediaObject:stickerObj];
+    
+    [overlayTrack updateTimeAtIndex:(int)(overlayTrack.mpMediaObjArray.count - 1) startTime:CMTimeMakeWithSeconds(self.currentPosOnTrack, self.duration.timescale) duration:CMTimeMakeWithSeconds(tmpDuration, self.duration.timescale)];
+    self.currentOverlayObj = stickerObj;
+    self.stickerResizeableView.transform = CGAffineTransformMakeRotation(0.0);
+    self.stickerResizeableView.frame = CGRectMake(0 , 0, stickerStartWidth,stickerStartHeight);
+    self.stickerResizeableView.center = CGPointMake(self.videoViewRect.size.width / 2, self.videoViewRect.size.height / 2);
+    [self.mTimelineView refreshSubtitleView];
+    
+    ///////////////////////////////
+    [self.stickerOverlayView addMediaObject:self.currentOverlayObj];
+    //////////////////////////////
+    
+}
+
+//开始预览
+-(void) startPreview
+{
+    if (!self.playing && self.playbackHelper) {
+//        [self.playbackHelper rebuildForTextEdit:YES];
+        self.playing=YES;
+        [self startUpdatePlayStatus];
+        [self.playbackHelper playPause:YES];
+    }
+    self.btPlay.selected=YES;
+    if (self.mTimelineView) {
+        [self.mTimelineView hiddenEditingView];
+        [self.mTimelineView refreshSubtitleView];
+    }
+}
+
+-(void) pausePreview
+{
+    if (self.playing && self.playbackHelper) {
+        self.playing=NO;
+        [self.playbackHelper playPause:NO];
+        [self stopUpdatePlayStatus];
+    }
+//    [self.playbackHelper rebuildForTextEdit:NO];
+    self.btPlay.selected=NO;
+}
+
+#pragma mark - Preview control
+-(void)stopPreview:(BOOL)toFirst
+{
+    self.labelCurrent.text = [Util stringWithSeconds:0];
+    if (toFirst) {
+        [self.mTimelineView scrollToSecond:0];
+    }
+    [self stopUpdatePlayStatus];
+    [self.playbackHelper stop];
+    self.playing = NO;
+    self.btPlay.selected=NO;
+}
+
+-(void)startUpdatePlayStatus
+{
+    if (![self.previewControlTimer isValid]) {
+        self.previewControlTimer = [NSTimer scheduledTimerWithTimeInterval:0.05 target:self selector:@selector(updatePlayStatusTask)
+                                                                  userInfo:nil repeats:YES];
+    }
+}
+
+//停止预览
+-(void)stopUpdatePlayStatus
+{
+    if ([self.previewControlTimer isValid]) {
+        [self.previewControlTimer invalidate];
+    }
+}
+
+-(void) updatePlayStatusTask
+{
+    NSTimeInterval tm=[self.playbackHelper playbackProgress];
+    self.labelCurrent.text=[Util stringWithSeconds:round(tm/1000)];
+    [self.mTimelineView scrollToSecond:tm/1000];
+}
+
+//指向某个时间点的帧
+-(void) seekTo:(float)second
+{
+//    [self.playbackHelper.player seekToTime:CMTimeMakeWithSeconds(second, self.duration.timescale) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
+     [self.playbackHelper seekToTime:second];
+    self.labelCurrent.text=[Util stringWithSeconds:round(second)];
+    currentPosOnTrack = second;
+}
+
+-(IBAction) triggerStickerPanel:(UIButton*)sender
+{
+    [self.mTimelineView hiddenEditingView];
+    [self pausePreview];
+    [self triggerSticker:1];
+}
+
+//是否隐藏 --- 0自然判断 1始终显示 2始终隐藏
+-(void) triggerSticker:(int)tag {
+    __weak StickerViewController * weakSelf = self;
+    BOOL flag = [self isActiveForStickerPanel];//是否处于活动中
+    
+    CGFloat height = self.view.frame.size.height;
+    [UIView animateWithDuration:0.3f animations:^{
+        CGRect rect = weakSelf.stickerPanel.frame;
+        float starty=0;
+        switch (tag) {
+            case 0:
+                if (flag) {
+                    starty = height;
+                }else{
+                    starty = 0;
+                }
+                break;
+            case 1://显示
+                starty = 0;
+                break;
+            case 2://隐藏
+                starty = height;
+                break;
+                
+            default:
+                break;
+        }
+        rect=CGRectMake(0, starty, rect.size.width, rect.size.height);
+        weakSelf.stickerPanel.frame=rect;
+        
+    } completion:^(BOOL finished){
+        
+    }];
+}
+
+/** 判断sticker面板是否显示 true active */
+-(BOOL) isActiveForStickerPanel
+{
+    float offset = self.stickerPanel.frame.origin.y - self.view.frame.size.height/2;
+    BOOL flag=ABS(offset)<0.001;
+    return flag;
+}
+
+- (void)downloadStickerAction:(UIButton*)sender
+{
+    lastPlayerProgress = self.playbackHelper.playbackProgress/1000;
+    StickerDownloadViewController *viewController = [[StickerDownloadViewController alloc] initWithStyle:UITableViewStylePlain];
+    RotateNavigationController *nav = [[RotateNavigationController alloc] initWithRootViewController:viewController];
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+- (void)manageStickerAction:(UIButton*)sender
+{
+    lastPlayerProgress = self.playbackHelper.playbackProgress/1000;
+    StickerManagementController *controller = [[StickerManagementController alloc] initWithStyle:UITableViewStylePlain];
+    RotateNavigationController *nav = [[RotateNavigationController alloc] initWithRootViewController:controller];
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+#pragma mark --- StickerPickerViewControllerDelegate  添加sticker
+- (void) stickerDidSelected:(StickerItem *)item
+{
+    UIImage *stickerImage = nil;
+    if ([item.type intValue]==0) {
+        stickerImage = [UIImage imageResource:item.image];
+    }else{
+        stickerImage = [UIImage imageWithContentsOfFile:item.image];
+    }
+    
+    self.stickerImageView.image=stickerImage;
+    self.stickerResizeableView.hidden=NO;
+    
+    if(self.currentOverlayObj != nil){
+        [self.stickerOverlayView hideMediaObject:self.currentOverlayObj flag:NO];
+    }
+    
+    [self triggerSticker:2];
+    
+    NSString * filePath=[self pathFromImage:stickerImage];
+    [self addStickerObj:filePath withRes:item.image stickerSize:stickerImage.size withType:[item.type intValue]];
+    
+}
+
+//开始操作---平移,缩放
+- (void)stickerViewDidBeginEditing:(ZDStickerView *)sticker
+{
+    
+}
+
+//移动结束---这里要删除和替换之前的sticker文件
+- (void)stickerViewDidEndEditing:(ZDStickerView *)sticker
+{
+    float rotatef = [sticker stickerRotatef];
+    
+    UIImage *tmpImage=[self imageFromZDStickerView:sticker];
+    NSString * filePath=[self pathFromImage:tmpImage];
+    if (filePath == nil){// 图片创建失败不删除原文件
+        return;
+    }
+    
+    if (self.currentOverlayObj) {
+        if (self.currentOverlayObj.strFilePath) {
+            [self deletePath:self.currentOverlayObj.strFilePath];
+        }
+        [self.currentOverlayObj setFilePath:filePath withType:eMT_Overlay fromAssetLibrary:NO];
+    }
+    [self confStickerDisplayRect:self.currentOverlayObj rotatef:rotatef addFlag:NO];
+}
+
+//按下第一次移动时执行---回调该方法会不好判断是缩放还是平移
+- (void)stickerViewDidMoveEditing:(ZDStickerView *)sticker
+{
+    
+}
+
+//按下第一次移动时执行
+- (void)stickerViewDidCancelEditing:(ZDStickerView *)sticker
+{
+    
+}
+
+/** 开始缩放操作 */
+- (void)stickerViewDidBeganResizeTranslating:(ZDStickerView *)sticker
+{
+}
+
+/** 缩放操作结束 */
+- (void)stickerViewDidEndResizeTranslating:(ZDStickerView *)sticker
+{
+    float rotatef = [sticker stickerRotatef];
+    [self confStickerDisplayRect:self.currentOverlayObj rotatef:rotatef addFlag:NO];
+    
+    UIImage *tmpImage=[self imageFromZDStickerView:sticker];
+    NSString * filePath=[self pathFromImage:tmpImage];
+    if(filePath == nil){
+        return;
+    }
+    
+    if (self.currentOverlayObj) {
+        if (self.currentOverlayObj.eType == eMT_Overlay) {//静态sticker的情况
+            if (self.currentOverlayObj.strFilePath) {
+                [self deletePath:self.currentOverlayObj.strFilePath];
+            }
+            [self.currentOverlayObj setFilePath:filePath withType:eMT_Overlay fromAssetLibrary:NO];
+        }else if(self.currentOverlayObj.eType == eMT_OverlayDynamic){
+            qxStickerObject * stickerObj = (qxStickerObject *)self.currentOverlayObj.overlayCustomObj;
+            NSMutableArray* arr=[stickerObj.gifObj createGifPathsForSize:stickerObj.stickerSize rotatef:stickerObj.rotatef];
+            [self.currentOverlayObj replaceOverlayFilePathArray:arr];
+            
+        }
+        [self.stickerOverlayView updateMediaObject:self.currentOverlayObj hidden:YES];
+    }
+    
+}
+
+/** 返回一个创建了图片文件的数组 */
+-(UIImage *) imageFromZDStickerView:(ZDStickerView*)stickerView path:(NSString *)path
+{
+    //得到旋转的弧度
+    float rotatef = [stickerView stickerRotatef];
+    
+    UIImageView * imgView=(UIImageView*)stickerView.contentView;
+    CGRect sizeRect=CGRectMake(0, 0, imgView.image.size.width, imgView.image.size.height);
+    UIImage *rotInputImage = [[UIImage imageWithContentsOfFile:path] imageRotatedByRadians:rotatef];
+    
+    UIGraphicsBeginImageContext(sizeRect.size);//设置当前绘制的区域
+    // draw in context
+    [rotInputImage drawInRect:sizeRect];    // transfer image
+    UIImage *resultImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    
+    return resultImage;
+}
+
+/** 从sticker视图中获取图片---创建旋转后的图片 */
+-(UIImage *) imageFromZDStickerView:(ZDStickerView*)stickerView
+{
+    
+    //得到旋转的弧度
+    float rotatef = [stickerView stickerRotatef];
+    
+    UIImageView * imgView=(UIImageView*)stickerView.contentView;
+    CGRect sizeRect=CGRectMake(0, 0, imgView.image.size.width, imgView.image.size.height);
+    UIImage *rotInputImage = [imgView.image imageRotatedByRadians:rotatef];
+    UIGraphicsBeginImageContext(sizeRect.size);//设置当前绘制的区域
+    // draw in context
+    [rotInputImage drawInRect:sizeRect];    // transfer image
+    UIImage *resultImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    
+    return resultImage;
+}
+
+/** 通过图片返回保存路径 */
+- (NSString*) pathFromImage:(UIImage *)image{
+    if (!image) {
+        return nil;
+    }
+    NSString * overlayDir = [Util overlayImgDir];
+    if (!overlayDir) {
+        return nil;
+    }
+    
+    long long time=[[NSDate date] timeIntervalSince1970]*1000;
+    NSString *overlayFile = [overlayDir stringByAppendingPathComponent:[NSString stringWithFormat:@"%lld.png",time]];
+    NSFileManager *fileManager=[NSFileManager defaultManager];
+    if (![fileManager fileExistsAtPath:overlayFile]) {
+        BOOL ret = [fileManager createFileAtPath:overlayFile contents:nil attributes:nil];
+        if (!ret) {
+            return nil;
+        }
+    }
+    
+    if (image) {
+        if(![UIImagePNGRepresentation(image) writeToFile:overlayFile atomically:YES]){
+            return nil;
+        }else{
+            return overlayFile;
+        }
+    }
+    return nil;
+}
+
+/** 缩放中 */
+- (void)stickerViewDidMoveResizeTranslating:(ZDStickerView *)sticker
+{
+}
+
+// 删除对应的sticker覆盖物
+- (void)stickerViewDidClose:(ZDStickerView *)sticker
+{
+    [self pausePreview];
+    
+    if (self.currentOverlayObj == nil) {
+        return;
+    }
+    
+    [self.stickerOverlayView deleteMediaObject:self.currentOverlayObj];
+    
+    if (self.currentOverlayObj.strFilePath) {
+        [self deletePath:self.currentOverlayObj.strFilePath];
+    }
+    qxTrack *stickerTrack = [self.timeline getTrackForOverlay];
+    int index = [stickerTrack findMediaObject:self.currentOverlayObj];
+    if (index >=0 && index < stickerTrack.mpMediaObjArray.count) {
+        [stickerTrack delMediaObject:index];
+        [self.mTimelineView refreshSubtitleView];
+    }
+    
+    [self.mTimelineView hiddenEditingView];
+    
+    self.currentOverlayObj =[self getStickerObjectAtTime:self.currentPosOnTrack];
+    
+    [self parseMediaObj:self.currentOverlayObj];
+    
+    [self showOverlayAtTime:currentPosOnTrack forceDraw:NO];
+    
+    self.needRefreshVideoBeforePreview = YES;
+    
+}
+
+/** 删除文件路径 --- 不允许删除预览界面传递过来的路径 */
+- (void)deletePath:(NSString *)path {
+    
+    if (path == nil) {
+        return;
+    }
+    
+    if (self.backupPaths.count != 0) {
+        for (NSString *tmpPath in self.backupPaths) {
+            if ([tmpPath isEqualToString:path]) {
+                return;
+            }
+        }
+    }
+    
+    [Util deleteFile:path];
+}
+
+@end

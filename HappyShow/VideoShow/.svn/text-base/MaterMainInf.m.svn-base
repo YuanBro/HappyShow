@@ -1,0 +1,29 @@
+//
+//  MaterMainInf.m
+//  VideoShow
+//
+//  Created by admin on 16/1/27.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "MaterMainInf.h"
+
+@implementation MaterMainInf
+
+- (instancetype) initWithDictionary:(NSDictionary *)dict
+{
+    if (self = [super init])
+    {
+        
+        [self setValuesForKeysWithDictionary:dict];
+    }
+    
+    return self;
+}
+
++ (instancetype) materWithDictionary:(NSDictionary *)dict
+{
+    return [[[self class]alloc]initWithDictionary:dict];
+}
+
+@end

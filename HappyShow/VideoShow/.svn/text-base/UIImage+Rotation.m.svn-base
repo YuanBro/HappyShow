@@ -1,0 +1,47 @@
+//
+//  UIImage+Rotation.m
+//  PerfectImageCropper
+//
+//  Created by Jin Huang on 5/29/13.
+//  Copyright (c) 2013 Jin Huang. All rights reserved.
+//
+
+#import "UIImage+Rotation.h"
+
+//角度转为弧度
+CGFloat DegreesToRadians(CGFloat degrees) {return degrees * M_PI / 180;};
+//弧度转为角度
+CGFloat RadiansToDegrees(CGFloat radians) {return radians * 180/M_PI;};
+
+@implementation UIImage (Rotation)
+
+- (UIImage *)imageRotatedByRadians:(CGFloat)radians
+{
+    return [self imageRotatedByDegrees:RadiansToDegrees(radians)];
+}
+
+- (UIImage *)imageRotatedByDegrees:(CGFloat)degrees
+{
+    //NSLog(@"rotatef size before   %f   %f",self.size.width, self.size.height);
+    UIView *rotatedViewBox = [[UIView alloc] initWithFrame:CGRectMake(0,0,self.size.width, self.size.height)];
+    CGAffineTransform t = CGAffineTransformMakeRotation(DegreesToRadians(degrees));
+    rotatedViewBox.transform = t;
+    CGSize rotatedSize = rotatedViewBox.frame.size;
+    //NSLog(@"rotatefing size   %f   %f",rotatedSize.width, rotatedSize.height);
+    UIGraphicsBeginImageContext(rotatedSize);
+    CGContextRef contextRef = UIGraphicsGetCurrentContext();
+    
+    CGContextTranslateCTM(contextRef, rotatedSize.width/2, rotatedSize.height/2);
+    
+    CGContextRotateCTM(contextRef, DegreesToRadians(degrees));
+    
+    CGContextScaleCTM(contextRef, 1.0, -1.0);
+    CGContextDrawImage(contextRef, CGRectMake(-self.size.width / 2, -self.size.height / 2, self.size.width, self.size.height), [self CGImage]);
+    
+    UIImage *resImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    //NSLog(@"rotatef size after   %f   %f",resImage.size.width,resImage.size.height);
+    return resImage;  
+}
+
+@end;

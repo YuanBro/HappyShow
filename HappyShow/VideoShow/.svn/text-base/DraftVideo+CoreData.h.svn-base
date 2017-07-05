@@ -1,0 +1,37 @@
+//
+//  DraftVideo+CoreData.h
+//  VideoShow
+//
+//  Created by lance on 15/6/2.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "DraftVideo.h"
+
+@class VideoDraft;
+@interface DraftVideo (CoreData)
+
+/** 保存导出的视频路径及时间到数据库 */
++(DraftVideo *)saveDraft:(NSString *)assetUrl path:(NSString *)draftpath clips:(NSUInteger)count duration:(float)duration;
+
+/** 删除指定地址的数据 */
++(BOOL)deleteWithPath:(NSString *)path;
+
+/** 是否存在该记录 */
++(BOOL) isExistPath:(NSString *)path;
+
+/** 查询所有记录 */
++(NSArray*)queryAll;
+
++(NSArray*)queryWithLimit:(NSUInteger)count page:(NSUInteger)page;
+
+/** 根据属性和值查询 */
++(NSArray*)queryWithAttr:(NSString*)attr value:(NSString*)value limit:(NSUInteger)count;
+
+/** 根据属性和值查询 */
++(NSArray*)queryWithAttr:(NSString*)attr value:(NSString*)value limit:(NSUInteger)count page:(NSUInteger)page;
+
+/** 根据属性值模糊查询 */
++(NSArray*)queryObscureWithAttr:(NSString*)attr value:(NSString*)value limit:(NSUInteger)count;
+
+@end

@@ -1,0 +1,367 @@
+//
+//  StickerPanel.m
+//  VideoShow
+//
+//  Created by lance on 15/6/15.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "StickerPickerViewController.h"
+#import "StickerItem+CoreData.h"
+#import "DownloadedSticker+CoreData.h"
+#import "AppDelegate.h"
+#import "Util.h"
+#import "NSString+Util.h"
+#import "StickerCell.h"
+#import "UIImage+Util.h"
+#import "UIColor+Util.h"
+
+//默认工具栏按钮宽度
+#define DefaultToolButtonWidth 40
+//默认工具栏高度
+#define DefaultToolBarHeight 40
+
+#define stickerCellSize 60
+
+//按钮选中的颜色
+#define press_color @"#dfdfdf"
+
+@interface StickerPickerViewController()<UICollectionViewDataSource,UICollectionViewDelegate>
+
+@property (nonatomic,strong) IBOutlet UIView * panelView;//面板视图
+@property(nonatomic,strong) NSMutableArray *stickerTabList;
+@property(nonatomic,strong) NSMutableArray *stickerList;
+@property(nonatomic,strong) IBOutlet UICollectionView *stickerCollection;
+
+@property (nonatomic,strong) IBOutlet UIScrollView * stickerToolBar;
+@property (nonatomic,strong) IBOutlet UIButton * btDownloadSticker;
+@property (nonatomic,strong) UIButton * btStickerMgr;
+@property (nonatomic,strong) IBOutlet UIImageView * spliteImageView;
+
+@property (nonatomic,strong) IBOutlet UIView * stickerContentView;
+@property (nonatomic,strong) IBOutlet UIView * noStickerView;
+@property (nonatomic,strong) IBOutlet UILabel * labelStickerHint;
+
+@property (nonatomic,weak) id actionTarget;
+@property (nonatomic,assign) SEL downloadSelector;
+@property (nonatomic,assign) SEL manageSelector;
+
+-(IBAction) stickerDownloadAction:(id)sender;
+
+@end
+
+@implementation StickerPickerViewController
+
+@synthesize delegate;
+
+@synthesize panelView;
+
+@synthesize stickerTabList;
+@synthesize stickerList;
+@synthesize stickerCollection;
+
+@synthesize stickerToolBar;
+@synthesize btDownloadSticker;
+@synthesize btStickerMgr;
+@synthesize spliteImageView;
+
+@synthesize stickerContentView;
+@synthesize noStickerView;
+@synthesize labelStickerHint;
+
+@synthesize actionTarget;
+@synthesize downloadSelector;
+@synthesize manageSelector;
+
+-(void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor clearColor];
+    
+    [self initStickerPicker];
+}
+
+-(void)dealloc {
+    
+    [self cleanMemory];
+}
+
+/** 关联到父控制器 */
+-(void)attachToController:(UIViewController *)rootController superview:(UIView *)superview {
+    
+    [superview addSubview:self.view];
+    [rootController addChildViewController:self];
+    [self didMoveToParentViewController:rootController];
+    
+}
+
+/** 取消与父控制器的关联 */
+-(void)cancelAttachToController {
+    [self.view removeFromSuperview];
+    [self removeFromParentViewController];
+}
+
+-(void) cleanMemory
+{
+    stickerCollection.dataSource=nil;
+    stickerCollection.delegate=nil;
+    [stickerTabList removeAllObjects];
+    stickerTabList=nil;
+    [stickerList removeAllObjects];
+    stickerList=nil;
+}
+/** 初始化UI布局 */
+- (void)initStickerPicker
+{
+    [self initStickerTabs];
+    spliteImageView.backgroundColor=[UIColor colorWithHexString:press_color];
+    [stickerCollection registerClass:[StickerCell class] forCellWithReuseIdentifier:NSStringFromClass([StickerCell class])];
+    labelStickerHint.text = NSLocalizedString(@"No sticker record", nil);
+    [self loadStickers:0];
+    self.noStickerView.hidden = stickerList.count!=0;
+    float width = 0;
+    for(UIView *view in self.stickerToolBar.subviews){
+        width += view.frame.size.width;
+    }
+    self.stickerToolBar.contentSize = CGSizeMake(width, DefaultToolBarHeight);
+}
+
+/** 初始化sticker的tab栏 */
+-(void) initStickerTabs
+{
+    [self loadStickerTabs];
+    for(int i = 0; i < stickerTabList.count; i++){
+        NSDictionary *dict = stickerTabList[i];
+        UIButton *tabBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+        tabBtn.tag = [dict[@"id"] intValue];
+        NSString * resPath = dict[@"icon"];
+        UIImage * tabImage = [UIImage imageResource:resPath];
+        if(tabImage==nil){
+            tabImage=[UIImage imageWithContentsOfFile:resPath];
+        }
+        [tabBtn setImage:tabImage forState:UIControlStateNormal];
+        tabBtn.imageView.contentMode=UIViewContentModeScaleAspectFit;
+        tabBtn.imageEdgeInsets=UIEdgeInsetsMake(5, 5, 5, 5);
+        tabBtn.frame = CGRectMake(i*DefaultToolButtonWidth+i*1, 0, DefaultToolButtonWidth, DefaultToolBarHeight);
+        [tabBtn addTarget:self action:@selector(tabBarAction:) forControlEvents:UIControlEventTouchUpInside];
+        tabBtn.backgroundColor=[UIColor whiteColor];
+        if (i==0) {
+            tabBtn.backgroundColor=[UIColor colorWithHexString:press_color];
+        }
+        
+        UIView * verticalSplit=[[UIView alloc] initWithFrame:CGRectMake(tabBtn.frame.origin.x+tabBtn.frame.size.width, 0, 1, DefaultToolBarHeight)];
+        verticalSplit.backgroundColor=[UIColor colorWithHexString:press_color];
+        [self.stickerToolBar addSubview:tabBtn];
+        [self.stickerToolBar addSubview:verticalSplit];
+    }
+    // 管理sticker
+    btStickerMgr = [[UIButton alloc] initWithFrame:CGRectMake(stickerTabList.count*DefaultToolButtonWidth+stickerTabList.count*1, 0, DefaultToolButtonWidth, DefaultToolBarHeight)];
+    btStickerMgr.tag=999;
+    [btStickerMgr addTarget:self action:@selector(stickerMgrAction:) forControlEvents:UIControlEventTouchUpInside];
+    [btStickerMgr setImage:[UIImage imageResource:@"sticker_managment.png"] forState:UIControlStateNormal];
+    [self.stickerToolBar addSubview:btStickerMgr];
+}
+
+-(void) addTarget:(id)target downloadAction:(SEL)action
+{
+    self.actionTarget=target;
+    self.downloadSelector=action;
+}
+-(void) addTarget:(id)target manageAction:(SEL)action
+{
+    self.actionTarget=target;
+    self.manageSelector=action;
+}
+
+-(void) stickerMgrAction:(id)sender
+{
+    [self.actionTarget performSelector:self.manageSelector withObject:nil afterDelay:0];
+}
+
+-(IBAction) stickerDownloadAction:(id)sender
+{
+    [self.actionTarget performSelector:self.downloadSelector withObject:nil afterDelay:0];
+}
+
+-(void)tabBarAction:(UIButton*)sender
+{
+    [self loadStickers:(int)sender.tag];
+    [self checkButtonStatus:(int)sender.tag];
+
+    if(sender.tag == 0){//判断是否最近有使用表情
+        self.noStickerView.hidden = stickerList.count!=0;
+    }else{
+        self.noStickerView.hidden = YES;
+    }
+    [stickerCollection reloadData];
+}
+
+//标记按钮的选中状态
+-(void) checkButtonStatus:(int)tag
+{
+    NSArray * arr=[self.stickerToolBar subviews];
+    for (id sender in arr) {
+        if ([sender isKindOfClass:[UIButton class]]) {
+            UIButton *btn=((UIButton*)sender);
+            if (btn.tag==tag) {
+                btn.backgroundColor=[UIColor colorWithHexString:press_color];
+            }else{
+                btn.backgroundColor=[UIColor whiteColor];
+            }
+        }
+    }
+}
+
+//当有新下载的sticker时,或者有删除的sticker时需要执行刷新
+- (void)refreshStickerPicker
+{
+    NSArray *tabViews =[self.stickerToolBar subviews];
+    for(UIView *view in tabViews){
+        [view removeFromSuperview];
+    }
+    [self initStickerPicker];
+}
+
+- (void)loadStickers:(int)tabID
+{
+    if(stickerList==nil){
+        stickerList = [[NSMutableArray alloc] init];
+    }
+    [stickerList removeAllObjects];
+    NSEntityDescription *desc = [NSEntityDescription entityForName:NSStringFromClass([StickerItem class]) inManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+    StickerItem *item = nil;
+    //
+    switch (tabID) {
+        case 0://recent stickers
+            stickerList = [[StickerItem queryRecent] mutableCopy];
+            break;
+            
+        case -1://emoji_face
+            for(int i = 1; i <= 32; i++){
+                NSString *icon = [NSString stringWithFormat:@"emoji1f%@.png",[NSString stringWithInt:(int)i length:3]];
+                item = [[StickerItem alloc] initWithEntity:desc insertIntoManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+                item.stickerID = [NSNumber numberWithInt:-1];
+                item.type = [NSNumber numberWithInt:0];
+                item.image = icon;
+                item.lastUsedTime = [NSDate dateWithTimeIntervalSince1970:0];
+                [stickerList addObject:item];
+            }
+            break;
+            
+        case -2://emoji_decoration
+            for(int i = 1; i <= 32; i++){
+                NSString *icon = [NSString stringWithFormat:@"emoji2f%@.png",[NSString stringWithInt:(int)i length:3]];
+                item = [[StickerItem alloc] initWithEntity:desc insertIntoManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+                item.stickerID = [NSNumber numberWithInt:-2];
+                item.type = [NSNumber numberWithInt:0];
+                item.image = icon;
+                item.lastUsedTime = [NSDate dateWithTimeIntervalSince1970:0];
+                [stickerList addObject:item];
+            }
+            break;
+            
+        case -3://emoji_text
+            for(int i = 1; i <= 24; i++){
+                NSString *icon = [NSString stringWithFormat:@"emoji3f%@.png",[NSString stringWithInt:(int)i length:3]];
+                item = [[StickerItem alloc] initWithEntity:desc insertIntoManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+                item.stickerID = [NSNumber numberWithInt:-3];
+                item.type = [NSNumber numberWithInt:0];
+                item.image = icon;
+                item.lastUsedTime = [NSDate dateWithTimeIntervalSince1970:0];
+                [stickerList addObject:item];
+            }
+            break;
+            
+        default://downloaded stickers
+            [stickerList addObjectsFromArray:[self loadDownloadedStickers:tabID]];
+            break;
+    }
+}
+
+- (void)loadStickerTabs
+{
+    if(!stickerTabList){
+        stickerTabList = [[NSMutableArray alloc] init];
+    }
+    [stickerTabList removeAllObjects];
+    //recent used stickers
+    NSDictionary *dict = @{@"id":@"0", @"icon":@"ic_emoji_recent.png"};
+    [stickerTabList addObject:dict];
+    //preload stickers
+    //
+    dict = @{@"id":@"-1", @"icon":@"ic_emoji_face.png"};
+    [stickerTabList addObject:dict];
+    //
+    dict = @{@"id":@"-2", @"icon":@"ic_emoji_decoration.png"};
+    [stickerTabList addObject:dict];
+    //
+    dict = @{@"id":@"-3", @"icon":@"ic_emoji_text.png"};
+    [stickerTabList addObject:dict];
+    //downloaded stickers
+    NSArray *tmp = [DownloadedSticker queryAll];
+    for(DownloadedSticker *ts in tmp){
+        dict = @{@"id":ts.material_id, @"icon":[NSString stringWithFormat:@"%@/%@",[Util stickerPath:ts.material_id.intValue],ts.material_icon]};
+        [stickerTabList addObject:dict];
+    }
+}
+
+#pragma mark 提取下载的sticker列表---也是通过相对路径获取
+- (NSArray*)loadDownloadedStickers:(int)stickerID
+{
+    NSString *downloadedStickerPath = [Util stickerPath:stickerID];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSArray *array = [fileManager contentsOfDirectoryAtPath:downloadedStickerPath error:nil];
+    NSMutableArray *mutableArray = [[NSMutableArray alloc] init];
+    NSEntityDescription *desc = [NSEntityDescription entityForName:@"StickerItem" inManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+    StickerItem *item = nil;
+    if(array){
+        for(NSString *file in array){
+            if(![file hasSuffix:@"materialIcon.png"]){
+                item = [[StickerItem alloc] initWithEntity:desc insertIntoManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+                item.stickerID = [NSNumber numberWithInt:stickerID];
+                item.type = [NSNumber numberWithInt:1];;
+                item.image = [NSString stringWithFormat:@"%@/%@",downloadedStickerPath,file];
+                item.lastUsedTime = [NSDate dateWithTimeIntervalSince1970:0];
+                [mutableArray addObject:item];
+            }
+        }
+    }
+    return mutableArray;
+}
+
+- (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section
+{
+    return stickerList.count;
+}
+
+- (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath
+{
+    StickerCell *cell=[collectionView dequeueReusableCellWithReuseIdentifier:NSStringFromClass([StickerCell class]) forIndexPath:indexPath];
+    cell.backgroundColor=[UIColor whiteColor];
+    StickerItem * item = (StickerItem*)stickerList[indexPath.row];
+    UIImage * image=nil;
+    if (item.type.intValue==0) {// 直接获取内置图片
+        image = [UIImage imageResource:item.image];
+    }else{
+        image = [UIImage imageWithContentsOfFile:item.image];
+    }
+    cell.stickerImage.image=image;
+    return cell;
+}
+
+- (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath
+{
+    StickerItem * item = (StickerItem*)stickerList[indexPath.row];
+    if ([self.delegate respondsToSelector:@selector(stickerDidSelected:)]) {
+        [StickerItem saveRecentSticker:item];
+        [self.delegate stickerDidSelected:item];
+    }
+    
+}
+
+- (void)collectionView:(UICollectionView *)collectionView didDeselectItemAtIndexPath:(NSIndexPath *)indexPath
+{
+    
+}
+
+@end

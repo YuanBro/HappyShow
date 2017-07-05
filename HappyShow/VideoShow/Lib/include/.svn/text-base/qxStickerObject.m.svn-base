@@ -1,0 +1,83 @@
+//
+//  qxStickerObj.m
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-11-5.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "qxStickerObject.h"
+#import "Util.h"
+#import "FileHandle.h"
+#import "AppMacros.h"
+
+@implementation qxStickerObject
+
+@synthesize overlayCustomObj;
+
+@synthesize stickerSize;
+@synthesize gifObj;
+
+@synthesize stickerName;
+
+@synthesize stickerType;
+
+@synthesize rotatef;
+
+@synthesize centerPoint;
+
+- (id)copyWithZone:(nullable NSZone *)zone {
+    qxStickerObject *obj = [qxStickerObject allocWithZone:zone];
+    
+    obj.stickerSize = self.stickerSize;
+    obj.gifObj = self.gifObj;
+    obj.stickerName = [self.stickerName copy];
+    obj.stickerType = self.stickerType;
+    obj.rotatef = self.rotatef;
+    obj.centerPoint = self.centerPoint;
+    obj.codingId = self.codingId;
+    
+    // obj.overlayCustomObj = self.overlayCustomObj;
+    
+    return obj;
+}
+
+- (void)encodeWithCoder:(NSCoder *)aCoder
+{
+    [aCoder encodeObject:NSStringFromCGSize(self.stickerSize) forKey:[self getCodingKey:@"stickerSize" ]];
+    [aCoder encodeObject:self.gifObj forKey:[self getCodingKey:@"gifObj"]];
+    [aCoder encodeObject:self.stickerName forKey:[self getCodingKey:@"stickerName"]];
+    [aCoder encodeInt:self.stickerType forKey:[self getCodingKey:@"stickerType"]];
+    [aCoder encodeFloat:self.rotatef forKey:[self getCodingKey:@"rotatef"]];
+    [aCoder encodeCGPoint:self.centerPoint forKey:[self getCodingKey:@"centerPoint"]];
+}
+
+- (id)initWithCoder:(NSCoder *)aDecoder
+{
+    self.stickerSize = CGSizeFromString([aDecoder decodeObjectForKey:[self getCodingKey:@"stickerSize"]]);
+    self.gifObj = [aDecoder decodeObjectForKey:[self getCodingKey:@"gifObj"]];
+    self.stickerName = [aDecoder decodeObjectForKey:[self getCodingKey:@"stickerName"]];
+    self.stickerType = [aDecoder decodeIntForKey:[self getCodingKey:@"stickerType"]];
+    self.rotatef = [aDecoder decodeFloatForKey:[self getCodingKey:@"rotatef"]];
+    self.centerPoint = [aDecoder decodeCGPointForKey:[self getCodingKey:@"centerPoint"]];
+    
+    return self;
+}
+
+-(NSString*)getCodingKey:(NSString*)key
+{
+    if (_codingId == nil)
+        return key;
+    return [@"MO_" stringByAppendingString:[key stringByAppendingString:_codingId]];
+}
+
+-(id)initWithCoder:(NSCoder *)aDecoder withId:(NSString*)codingId;
+{
+    self.codingId=codingId;
+    self=[self initWithCoder:aDecoder];
+    
+    return self;
+}
+
+@end
+

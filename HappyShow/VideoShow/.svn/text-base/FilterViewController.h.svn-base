@@ -1,0 +1,21 @@
+//
+//  FilterViewController.h
+//  VideoShow
+//
+//  Created by Mac on 16/2/26.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "PlayerViewController.h"
+
+@interface FilterViewController : BaseViewController
+
+@property (strong, nonatomic) qxTimeline *timeline;
+/** 根据主编辑界面的预览框创建预览矩形 */
+@property (assign, nonatomic) CGRect videoViewRect;
+@property (weak,   nonatomic) id <PlayerViewControllerDelegate> delegate;
+
+@property (nonatomic, assign) BOOL isBefore; //表示是在对象前面还是后面添加转场
+
+@end

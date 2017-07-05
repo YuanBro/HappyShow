@@ -1,0 +1,31 @@
+//
+//  StudioViewController.h
+//  VideoShow
+//
+//  Created by lance on 15/5/13.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+#import "PagerViewControllerDelegate.h"
+#import <Social/Social.h>
+//#import "UMSocialControllerService.h"
+//#import "UMSocialShakeService.h"
+#import <MessageUI/MessageUI.h>
+//#import <FacebookSDK/FacebookSDK.h>
+#import <FBSDKShareKit/FBSDKShareKit.h>
+#import <FBSDKMessengerShareKit/FBSDKMessengerShareKit.h>
+typedef NS_ENUM(NSInteger, StudioMode) {
+    StudioModeVideo=0,
+    StudioModeDraft=1
+};
+
+/** 我的视频/草稿箱 */
+@interface StudioViewController : BaseViewController<UIActionSheetDelegate,MFMailComposeViewControllerDelegate,FBSDKSharingDelegate>{
+    
+    ACAccount * facebookAccount;
+}
+
+@property (nonatomic,assign) StudioMode studioMode;
+@property (nonatomic,assign) id<PagerViewControllerDelegate> pagerDelegate;
+@end

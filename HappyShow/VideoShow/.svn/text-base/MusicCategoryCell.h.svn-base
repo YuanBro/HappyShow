@@ -1,0 +1,17 @@
+//
+//  MusicCategoryCell.h
+//  VideoShow
+//
+//  Created by lance on 15/12/2.
+//  Copyright © 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+@interface MusicCategoryCell : UITableViewCell
+
+@property (nonatomic, weak) IBOutlet UIImageView *imageCover;// 分类封面
+
+@property (nonatomic, weak) IBOutlet UILabel *labelCategory;// 分类标题
+
+@end

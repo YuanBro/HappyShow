@@ -1,0 +1,18 @@
+//
+//  AdViewController.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-7-18.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "BaseViewController.h"
+
+// Ad广告
+@interface AdViewController : BaseViewController
+
+@property (nonatomic,strong) NSString *urlStr;
+@property (nonatomic,strong) NSString *titleStr;
+
+@end

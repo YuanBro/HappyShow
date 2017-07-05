@@ -1,0 +1,124 @@
+//
+//  SettingCell.m
+//  VideoShow
+//
+//  Created by lance on 15/5/5.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "SettingCell.h"
+#import "UIColor+Util.h"
+#import "UIImage+Util.h"
+#import "Util.h"
+
+@implementation SettingCell
+
+@synthesize delegate;
+@synthesize detailPanel;//详情面板
+@synthesize followPanel;//关注面板
+@synthesize labelText;
+@synthesize btArrow;
+@synthesize toggleSwitch;
+@synthesize subTitle;
+@synthesize subTitle2;
+
+-(IBAction)toogleAction:(id)sender
+{
+    UISwitch *switchButton = (UISwitch*)sender;
+    if ([self.delegate respondsToSelector:@selector(toggleSwitch:flag:)]) {
+        [self.delegate toggleSwitch:self flag:[switchButton isOn]];
+    }
+}
+
+//根据类型判断显示哪一个面板并初始化布局
+-(void) initSettingCell:(int) type
+{
+    self.toggleSwitch.hidden=YES;
+    self.subTitle.hidden=YES;
+    self.btArrow.hidden=YES;
+    self.subTitle2.hidden=YES;
+    if(type==0){
+        self.detailPanel.hidden=NO;
+        self.followPanel.hidden=YES;
+    }else{
+        self.detailPanel.hidden=YES;
+        self.followPanel.hidden=NO;
+    }
+    NSArray * snsIcons=nil;
+    if ([Util currentLanguageIszhCN]) {//中文的情况
+        snsIcons=@[@"ic_sina.png",@"ic_qq.png",@"ic_wechat.png",@"ic_youku.png"];
+    }else{
+        snsIcons=@[@"ic_facebook.png",@"ic_instagram.png",@"ic_twitter.png"];
+    }
+    //这里手动添加
+    if (self.followPanel.subviews.count==0) {
+        int iconSize=40;
+        int space=30;
+        for (int i=0; i<snsIcons.count; i++) {
+            UIButton * snsBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+            snsBtn.frame = CGRectMake((iconSize+space)*i+space, 10, iconSize, iconSize);
+            [snsBtn setImage:[UIImage imageResource:snsIcons[i]] forState:UIControlStateNormal];
+            snsBtn.tag = i;
+            [snsBtn addTarget:self action:@selector(snsAction:) forControlEvents:UIControlEventTouchUpInside];
+            [self.followPanel addSubview:snsBtn];
+        }
+    }
+}
+
+-(void) snsAction:(UIButton *)sender
+{
+    if ([self.delegate respondsToSelector:@selector(followSNS:followType:)]==NO) {
+        return;
+    }
+    FollowType type = 0;
+    
+    if ([Util currentLanguageIszhCN]) {
+        switch (sender.tag) {
+            case 0:
+                type = FollowTypeSina;
+                break;
+            case 1:
+                type = FollowTypeQQ;
+                break;
+            case 2:
+                type = FollowTypeWechat;
+                break;
+            case 3:
+                type = FollowTypeYouku;
+                break;
+            default:
+                break;
+        }
+    }else{
+        switch (sender.tag) {
+            case 0:
+                type = FollowTypeFacebook;
+                break;
+            case 1:
+                type = FollowTypeInstagram;
+                break;
+            case 2:
+                type = FollowTypeTwitter;
+                break;
+            default:
+                break;
+        }
+    }
+    
+    [self.delegate followSNS:self followType:type];
+}
+
+- (void)awakeFromNib {
+    self.selectedBackgroundView.backgroundColor = [UIColor colorWithHexString:@"#cecece"];
+    self.labelText.textColor = [UIColor colorWithHexString:@"#666666"];
+    self.toggleSwitch.onTintColor=[UIColor colorWithHexString:themeColor];
+    
+}
+
+- (void)setSelected:(BOOL)selected animated:(BOOL)animated {
+    [super setSelected:selected animated:animated];
+
+    // Configure the view for the selected state
+}
+
+@end

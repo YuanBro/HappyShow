@@ -1,0 +1,151 @@
+//
+//  PreviewViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/5/14.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "PreviewViewController.h"
+
+@implementation PreviewViewController
+
+@synthesize videoMode;
+@synthesize timeline;
+
+/** 创建预览区域---主要是计算最终需要的高度 */
+-(CGRect) createPreviewViewRect:(CGRect) viewRect {
+    CGRect previewRect = viewRect;
+    switch (self.videoMode) {
+        case VideoModeSmart:
+        {
+            float horiRatio=0.0f;
+            qxMediaObject * horiResultObj=nil;//横着的情况处理
+            float verticalRatio=0.0f;
+            qxMediaObject * verticalResultObj=nil;//横着的情况处理
+            
+            qxTrack * videoTrack = [self.timeline getTrackFromTimeline:0];
+            for (int i=0; i<videoTrack.mpMediaObjArray.count; i++) {
+                qxMediaObject * obj = videoTrack.mpMediaObjArray[i];
+                
+                if(obj.eType==eMT_Photo){
+                    float width=obj.photoImage.size.width;
+                    float height=obj.photoImage.size.height;
+                    if (width > height) {//横拍
+                        float tmpRatio=width / height;
+                        //NSLog(@"photo horizontal pre---->%f  %f   %f",tmpRatio,width,height);
+                        if (tmpRatio>horiRatio) {//遍历之后取出比例最大的
+                            horiRatio=tmpRatio;
+                            horiResultObj=obj;
+                            //NSLog(@"photo horizontal---->%f   %f   %f   %f",tmpRatio,horiRatio,width,height);
+                        }
+                    } else {
+                        float tmpRatio=height / width;
+                        //NSLog(@"photo vertical pre---->%f   %f   %f",tmpRatio,width,height);
+                        if (tmpRatio>verticalRatio) {//遍历之后取出比例最大的
+                            verticalRatio=tmpRatio;
+                            verticalResultObj=obj;
+                            //NSLog(@"photo vertical---->%f   %f   %f   %f",tmpRatio,verticalRatio,width,height);
+                        }
+                    }
+                }else{
+                    AVAsset * asset= obj.mpAsset;
+                    NSArray * tracks = [asset tracksWithMediaType:AVMediaTypeVideo];
+                    if ([tracks count] > 0){
+                        AVAssetTrack *assetTrack = tracks[0];
+                        float width=assetTrack.naturalSize.width;
+                        float height=assetTrack.naturalSize.height;
+                        float degree = obj.mOriginalRotationDegree;
+                        //NSLog(@"mOriginalRotationDegree = %f",degree);
+                        if (degree == 90 || degree == -90){//横拍的情况---矫正宽高
+                            height=assetTrack.naturalSize.width;
+                            width=assetTrack.naturalSize.height;
+                        }
+                        
+                        if (width > height) {
+                            float tmpRatio=width / height;
+                            //NSLog(@"horizontal pre---->%f  %f   %f",tmpRatio,width,height);
+                            if (tmpRatio>horiRatio) {//遍历之后取出比例最大的
+                                horiRatio=tmpRatio;
+                                horiResultObj=obj;
+                                //NSLog(@"horizontal---->%f   %f   %f   %f",tmpRatio,horiRatio,width,height);
+                            }
+                        } else {
+                            float tmpRatio=height / width;
+                            //NSLog(@"vertical pre---->%f   %f   %f",tmpRatio,width,height);
+                            if (tmpRatio>verticalRatio) {//遍历之后取出比例最大的
+                                verticalRatio=tmpRatio;
+                                verticalResultObj=obj;
+                                //NSLog(@"vertical---->%f   %f   %f   %f",tmpRatio,verticalRatio,width,height);
+                            }
+                        }
+                    }
+                }
+                
+            }
+            float height = 0;
+            if (horiResultObj!=nil) {//按横屏的方式处理
+                int width = 0;
+                if(horiResultObj.eType==eMT_Photo){
+                    width = horiResultObj.photoImage.size.width;
+                    if (width>viewRect.size.width) {
+                        width=viewRect.size.width;
+                    }
+                }else{
+                    NSArray * tracks = [horiResultObj.mpAsset tracksWithMediaType:AVMediaTypeVideo];
+                    AVAssetTrack *assetTrack = tracks[0];
+                    width=assetTrack.naturalSize.width;
+                    if (horiResultObj.mOriginalRotationDegree == 90 || horiResultObj.mOriginalRotationDegree == -90){//横拍的情况---矫正宽高
+                        width=assetTrack.naturalSize.height;
+                    }
+                    if (width>viewRect.size.width) {
+                        width=viewRect.size.width;
+                    }
+                }
+                
+                height=width/horiRatio;//计算出高度
+            }else{
+                if(verticalResultObj.eType==eMT_Photo){
+                    height = verticalResultObj.photoImage.size.height;
+                    if (height>viewRect.size.height) {
+                        height=viewRect.size.height;
+                    }
+                }else{
+                    NSArray * tracks = [verticalResultObj.mpAsset tracksWithMediaType:AVMediaTypeVideo];
+                    AVAssetTrack *assetTrack = tracks[0];
+                    height=assetTrack.naturalSize.height;
+                    if (verticalResultObj.mOriginalRotationDegree == 90 || verticalResultObj.mOriginalRotationDegree == -90){//横拍的情况---矫正宽高
+                        height=assetTrack.naturalSize.width;
+                    }
+                    if (height>viewRect.size.height) {
+                        height=viewRect.size.height;
+                    }
+                }
+                
+            }
+            
+            NSLog(@"result--->height=%f",height);
+            if(height==0){//如果计算得到的高度是0
+                height=viewRect.size.height;
+            }
+            float starty=(viewRect.size.height-height)/2;
+            previewRect = CGRectMake(0, starty, viewRect.size.width, height);
+            
+        }
+            
+            break;
+        case VideoModeSquare:
+        {
+            float starty=(viewRect.size.height-viewRect.size.width)/2;
+            previewRect = CGRectMake(0, starty, viewRect.size.width, viewRect.size.width);
+            
+        }
+            break;
+        default:
+            break;
+    }
+    
+    return previewRect;
+}
+
+@end

@@ -1,0 +1,19 @@
+//
+//  StickerViewController.h
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-10-30.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+#import "PlayerViewController.h"
+
+@class qxTimeline;
+@interface StickerViewController : BaseViewController
+
+@property (nonatomic,strong) qxTimeline * timeline;
+@property (nonatomic,assign) CGRect videoViewRect;
+@property (nonatomic,weak) id<PlayerViewControllerDelegate> delegate;
+
+@end

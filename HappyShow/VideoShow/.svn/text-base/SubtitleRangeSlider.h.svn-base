@@ -1,0 +1,32 @@
+//
+//  SubtitleRangeSlider.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-8-14.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+@class SubtitleRangeSlider;
+@protocol SubtitleRangeSliderDelegate <NSObject>
+
+@optional
+//lower min : 0 , upper max : 1
+- (void)subtitleRangeSliderValueChange:(SubtitleRangeSlider*)slider;
+
+// 0 left  1 right   滑块左右滑动事件
+- (void)subtitleRangeSlider:(SubtitleRangeSlider*)slider changeIndex:(NSUInteger)index;
+
+@end
+
+@interface SubtitleRangeSlider : UIView
+
+@property (nonatomic,weak) id<SubtitleRangeSliderDelegate> delegate;
+
+- (id)initWithFrame:(CGRect)frame;
+- (void)showWithFrame:(CGRect)frame maxRect:(CGRect)maxRect;
+- (void)hideSlider;
+- (float)handlerWidth;
+
+@end

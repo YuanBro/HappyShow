@@ -1,0 +1,18 @@
+//
+//  UIImage+Util.h
+//  VideoShow
+//
+//  Created by lance on 15/4/23.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+@interface UIImage (Util)
+
+/** 图片缩放到指定大小尺寸 */
+- (UIImage *)scaleToSize:(CGSize)size;
+
++ (UIImage *) imageResource:(NSString *)resName;
+
+@end

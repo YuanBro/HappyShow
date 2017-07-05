@@ -1,0 +1,42 @@
+//
+//  StickerInf.m
+//  VideoShow
+//
+//  Created by lance on 15/4/20.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "StickerInf.h"
+
+@implementation StickerInf
+
+@synthesize id;
+@synthesize sort;
+@synthesize item_name;
+@synthesize ver_code;
+@synthesize item_url;
+
++(NSMutableArray *)initFromArr:(NSArray *)arr
+{
+    NSMutableArray * results = [NSMutableArray array];
+    for (NSDictionary * dict in arr) {
+        StickerInf * inf=[StickerInf initFromDict:dict];
+        [results addObject:inf];
+    }
+    return results;
+}
+
++(StickerInf *)initFromDict:(NSDictionary *)dictp
+{
+    StickerInf * inf = [[StickerInf alloc] init];
+    inf.id=[dictp[@"id"] intValue];
+    inf.sort=[dictp[@"sort"] intValue];
+    inf.item_name=dictp[@"item_name"];
+    inf.ver_code=[dictp[@"ver_code"] intValue];
+    inf.item_url=dictp[@"item_url"];
+    
+    return inf;
+}
+
+
+@end

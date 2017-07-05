@@ -1,0 +1,15 @@
+//
+//  MyStudioViewController.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-7-16.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "BaseViewController.h"
+
+/** 我的工作室---包含制作的视频和草稿箱 */
+@interface MyStudioViewController : BaseViewController
+
+@end

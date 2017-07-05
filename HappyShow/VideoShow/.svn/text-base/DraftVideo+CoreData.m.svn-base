@@ -1,0 +1,162 @@
+//
+//  DraftVideo+CoreData.m
+//  VideoShow
+//
+//  Created by lance on 15/6/2.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "DraftVideo+CoreData.h"
+#import "AppDelegate.h"
+#import "VideoDraft.h"
+
+#define MODEL @"DraftVideo"
+#define SORT @"savetime"
+
+@implementation DraftVideo (CoreData)
+
+/** 保存导出的视频路径及时间到数据库 */
++(DraftVideo *)saveDraft:(NSString *)assetUrl path:(NSString *)draftpath clips:(NSUInteger)count duration:(float)duration
+{
+    DraftVideo * draft=[NSEntityDescription insertNewObjectForEntityForName:MODEL
+                                                       inManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+    draft.id=[NSNumber numberWithInt:0];//该字段基本没有用
+    draft.savetime=[NSDate date];
+    draft.asseturl=assetUrl;
+    draft.draftpath=draftpath;
+    draft.clips=[NSNumber numberWithInt:(int)count];
+    draft.duration=[NSNumber numberWithFloat:duration];
+    
+    [[AppDelegate shareInstance].managedObjectContext performSelectorOnMainThread:@selector(save:) withObject:nil waitUntilDone:YES];
+    
+    return draft;
+}
+
+/** 是否存在该记录 */
++(BOOL) isExistPath:(NSString *)path
+{
+    NSArray * results=[DraftVideo queryWithAttr:@"draftpath" value:path limit:0];
+    if (results.count>0) {
+        return YES;
+    }
+    return NO;
+}
+
+/** 删除指定地址的数据 */
++(BOOL)deleteWithPath:(NSString *)path
+{
+    NSManagedObjectContext * context  = [[AppDelegate shareInstance] managedObjectContext];
+    
+    NSArray * results=[DraftVideo queryWithAttr:@"draftpath" value:path limit:0];
+    if (results.count>0) {
+        for (NSManagedObject *obj in results){
+            [context deleteObject:obj];
+        }
+    }
+    [[AppDelegate shareInstance].managedObjectContext performSelectorOnMainThread:@selector(save:) withObject:nil waitUntilDone:YES];
+    
+    return YES;
+}
+
+/** 查询所有记录 */
++(NSArray*)queryAll
+{
+    NSManagedObjectContext * context  = [[AppDelegate shareInstance] managedObjectContext];
+    NSManagedObjectModel   * model    = [[AppDelegate shareInstance] managedObjectModel];
+    NSDictionary           * entities = [model entitiesByName];
+    NSEntityDescription    * entity   = [entities valueForKey:MODEL];
+    
+    NSSortDescriptor * sort = [[NSSortDescriptor alloc] initWithKey:SORT ascending:NO];
+    NSArray * sortDescriptors = [NSArray arrayWithObject: sort];
+    
+    NSFetchRequest * req = [[NSFetchRequest alloc] init];
+    [req setEntity: entity];
+    [req setSortDescriptors: sortDescriptors];
+    
+    NSArray * results = [context executeFetchRequest:req error:nil];
+    
+    return results;
+}
+
++(NSArray*)queryWithLimit:(NSUInteger)count page:(NSUInteger)page
+{
+    NSManagedObjectContext * context  = [[AppDelegate shareInstance] managedObjectContext];
+    NSManagedObjectModel   * model    = [[AppDelegate shareInstance] managedObjectModel];
+    NSDictionary           * entities = [model entitiesByName];
+    NSEntityDescription    * entity   = [entities valueForKey:MODEL];
+    
+    NSSortDescriptor * sort = [[NSSortDescriptor alloc] initWithKey:SORT ascending:NO];
+    NSArray * sortDescriptors = [NSArray arrayWithObject: sort];
+    
+    NSFetchRequest * req = [[NSFetchRequest alloc] init];
+    [req setEntity: entity];
+    [req setSortDescriptors: sortDescriptors];
+    [req setFetchLimit:count];
+    [req setFetchOffset:page*count];
+    
+    NSArray * results = [context executeFetchRequest:req error:nil];
+    return results;
+}
+
+/** 根据属性和值查询 */
++(NSArray*)queryWithAttr:(NSString*)attr value:(NSString*)value limit:(NSUInteger)count
+{
+    return [DraftVideo queryWithAttr:attr value:value limit:count page:0];
+}
+
+/** 根据属性和值查询 */
++(NSArray*)queryWithAttr:(NSString*)attr value:(NSString*)value limit:(NSUInteger)count page:(NSUInteger)page
+{
+    NSManagedObjectContext * context=[[AppDelegate shareInstance] managedObjectContext];
+    NSManagedObjectModel * model=[[AppDelegate shareInstance] managedObjectModel];
+    NSDictionary * entities=[model entitiesByName];
+    NSEntityDescription *entity=[entities valueForKey:MODEL];
+    
+    NSSortDescriptor * sort=[[NSSortDescriptor alloc] initWithKey:SORT ascending:NO];//倒序查询
+    NSArray * sortDescriptors=[NSArray arrayWithObject:sort];
+    
+    NSFetchRequest * req=[[NSFetchRequest alloc] init];
+    NSPredicate *predicate=[NSPredicate predicateWithFormat:[NSString stringWithFormat:@"%@=='%@'",attr,value]];
+    [req setEntity:entity];
+    [req setSortDescriptors:sortDescriptors];
+    [req setPredicate:predicate];
+    if (count>0) {
+        [req setFetchLimit:count];
+        [req setFetchOffset:page*count];
+    }
+    
+    NSError * error;
+    NSArray * results=[context executeFetchRequest:req error:&error];
+    
+    return results;
+}
+
+/** 根据属性值模糊查询 */
++(NSArray*)queryObscureWithAttr:(NSString*)attr value:(NSString*)value limit:(NSUInteger)count
+{
+    NSManagedObjectContext * context  = [[AppDelegate shareInstance] managedObjectContext];
+    NSManagedObjectModel   * model    = [[AppDelegate shareInstance] managedObjectModel];
+    NSDictionary           * entities = [model entitiesByName];
+    NSEntityDescription    * entity   = [entities valueForKey:MODEL];
+    
+    
+    NSSortDescriptor * sort = [[NSSortDescriptor alloc] initWithKey:SORT ascending:NO];
+    NSArray * sortDescriptors = [NSArray arrayWithObject: sort];
+    NSLog(@"%@ LIKE[c] '*%@*'",attr, value);
+    NSFetchRequest * req = [[NSFetchRequest alloc] init];
+    NSPredicate * predicate=[NSPredicate predicateWithFormat:[NSString stringWithFormat:@"%@ LIKE[c] '%@*'", attr, value]];
+    
+    [req setEntity: entity];
+    [req setSortDescriptors: sortDescriptors];
+    [req setPredicate:predicate];
+    if (count>0) {
+        [req setFetchLimit:count];
+        [req setFetchOffset:0];
+    }
+    
+    NSArray * results = [context executeFetchRequest:req error:nil];
+    
+    return results;
+}
+
+@end

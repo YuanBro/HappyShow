@@ -1,0 +1,20 @@
+//
+//  PagerViewControllerDelegate.h
+//  VideoShow
+//
+//  Created by lance on 15/5/13.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+
+/** 用于监听当前所在页面 */
+@protocol PagerViewControllerDelegate <NSObject>
+
+- (void)controllerDidAppear:(UIViewController *)controller;
+
+- (void)controllerDidDisappear:(UIViewController *)controller;
+//是否处于加载数据中
+- (void)controllerLoadData:(BOOL)flag;
+
+@end

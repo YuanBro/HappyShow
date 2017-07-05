@@ -1,0 +1,24 @@
+//
+//  StickerDownloadViewController.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/8.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "BaseTableViewController.h"
+#import "PagerViewControllerDelegate.h"
+#import "Util.h"
+
+/** sticker下载界面 */
+
+@interface StickerDownloadViewController : BaseTableViewController
+
+@property (nonatomic,assign) BOOL disableBack;
+
+@property (nonatomic,weak) id<PagerViewControllerDelegate> mainDelegate;
+
+@property (nonatomic,assign) MaterialType materialType;
+
+@end

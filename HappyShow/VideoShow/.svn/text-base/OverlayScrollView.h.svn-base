@@ -1,0 +1,63 @@
+//
+//  OverlayScrollView.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-10-29.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "VideoFrameView.h"
+#import "SubtitleRectView.h"
+#import "SubtitleRangeSlider.h"
+
+@class qxTimeline;
+@class OverlayScrollView;
+@class SubtitleRectView;// 点击后将对象传出
+@class qxMediaObject;
+
+@protocol OverlayScrollViewDelegate <NSObject>
+@optional
+// 指向视频的某一个时间 tapFlag 是否点击执行的滚动
+- (void)videoScrollView:(OverlayScrollView*)view didScrollTo:(CGFloat)second tapFlag:(BOOL)tapFlag;
+
+// 开始拖动
+- (void)scrubbingDidStart:(OverlayScrollView*)view;
+
+// 松手
+- (void)scrubbingDidEnd:(OverlayScrollView*)view;
+
+// 传出点击的区域
+- (void)videoScrollView:(OverlayScrollView*)view tapSubtitleRectView:(SubtitleRectView *)rectView didToSecond:(CGFloat)second;
+
+// 需要更新回调
+- (void)needRefreshVideo;
+
+// 裁剪时间点
+- (void)videoScrollView:(OverlayScrollView *)view start:(CGFloat)leftSecond end:(CGFloat)rightSecond index:(NSUInteger)index;
+
+// 完成载入预览视频的所有帧
+- (void)framesLoadDone;
+
+@end
+
+@interface OverlayScrollView : UIView<VideoFrameViewDelegate,SubtitleRectViewDelegate,SubtitleRangeSliderDelegate>
+
+- (id)initWithFrame:(CGRect)frame contentSize:(CGSize)contSize timeline:(qxTimeline*)tl fillRectWithSticker:(BOOL)isSticker;
+- (void)refreshSubtitleView;
+- (void)hiddenEditingView;
+
+/** 获取编辑中的对象 */
+- (qxMediaObject *)getEditingMediaObject;
+
+// 默认发送事件
+- (void)scrollToSecond:(float)second;
+// 是否发送指向事件
+- (void)scrollToSecond:(float)second sendEvent:(BOOL)flag;
+
+/** 根据对应的overlay对象 将其在时间轴中的位置设置为编辑状态 flag是否需要滚动 */
+- (void)showEditingViewWithMediaObject:(qxMediaObject *)mediaObject scrollFlag:(BOOL)flag;
+
+@property (nonatomic,weak) id<OverlayScrollViewDelegate> delegate;
+
+@end

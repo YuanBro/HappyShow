@@ -1,0 +1,219 @@
+//
+//  MainViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/5/7.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "MainViewController.h"
+#import "HomeViewController.h"
+#import "FeaturedViewController.h"
+#import "AppMacros.h"
+#import "UIColor+Util.h"
+#import "PagerViewControllerDelegate.h"
+#import "SettingViewController.h"
+#import "RotateNavigationController.h"
+#define naviLineWidth 40
+#define naviLineHeight 4
+
+static int pagerNaviHeight = 64;//这里要包含状态栏的高度
+
+@interface MainViewController ()<UIPageViewControllerDataSource,UIPageViewControllerDelegate,PagerViewControllerDelegate>
+
+@property (nonatomic,assign) NSUInteger selectIndex;
+@property (nonatomic,strong) UIPageViewController *pageController;
+@property (nonatomic,strong) NSMutableArray * controllers;
+
+@property (nonatomic,strong) UIView *customNavibar;
+@property (nonatomic,strong) UIButton * btnHome;
+@property (nonatomic,strong) UIButton * btnFeature;
+@property (nonatomic,strong) UIView * naviLine;
+
+@end
+
+@implementation MainViewController
+
+@synthesize selectIndex;
+@synthesize pageController;
+@synthesize controllers;
+
+@synthesize customNavibar;
+@synthesize btnHome;
+@synthesize btnFeature;
+@synthesize naviLine;
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor colorWithHexString:homeColor];
+//    self.navigationController.navigationBar.hidden=YES;
+    if (sysVersion<7) {
+        pagerNaviHeight=44;
+    }
+    controllers=[NSMutableArray array];
+    
+    [self createTabView];
+    
+    HomeViewController *homeControl=[[HomeViewController alloc] init];
+    homeControl.mainDelegate=self;
+    FeaturedViewController *featureControl=[[FeaturedViewController alloc] init];
+    featureControl.mainDelegate=self;
+    
+    [controllers addObject:homeControl];
+    [controllers addObject:featureControl];
+    
+    self.pageController=[[UIPageViewController alloc] initWithTransitionStyle:UIPageViewControllerTransitionStyleScroll navigationOrientation:UIPageViewControllerNavigationOrientationHorizontal options:nil];
+    
+    self.pageController.view.frame=CGRectMake(0, pagerNaviHeight, self.view.frame.size.width, self.view.frame.size.height-pagerNaviHeight);
+    self.pageController.dataSource=self;
+    self.pageController.delegate=self;
+    
+    NSArray * tmpControls=[NSArray arrayWithObject:[self.controllers objectAtIndex:0]];
+    [self.pageController setViewControllers:tmpControls direction:UIPageViewControllerNavigationDirectionForward animated:NO completion:nil];
+    
+    [self addChildViewController:self.pageController];
+    
+    self.pageController.view.backgroundColor=[UIColor clearColor];
+    [self.view addSubview:self.pageController.view];
+   
+    [self.pageController didMoveToParentViewController:self];
+    
+}
+
+-(void) createTabView
+{
+    UIView * tabView=[[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, pagerNaviHeight)];
+    tabView.backgroundColor=[UIColor colorWithHexString:navigationBarColor];
+    int btnWidth=80;
+    int starty=20;
+    if (sysVersion<7) {
+        starty=0;
+    }
+    
+    NSString *unSelectColor=@"#959596";
+    btnHome=[UIButton buttonWithType:UIButtonTypeCustom];
+    btnHome.frame=CGRectMake((self.view.frame.size.width-btnWidth*2)/2, starty, btnWidth, 44);
+    btnHome.selected=YES;
+    btnHome.tag=0;
+    [btnHome setTitle:NSLocalizedString(@"Home", nil) forState:UIControlStateNormal];
+    btnHome.titleLabel.font=[UIFont systemFontOfSize:15];
+    [btnHome setTitleColor:[UIColor colorWithHexString:unSelectColor] forState:UIControlStateNormal];
+    [btnHome setTitleColor:[UIColor whiteColor] forState:UIControlStateSelected];
+    [btnHome addTarget:self action:@selector(tabAction:) forControlEvents:UIControlEventTouchUpInside];
+    
+    btnFeature=[UIButton buttonWithType:UIButtonTypeCustom];
+    btnFeature.frame=CGRectMake(btnHome.frame.origin.x+btnHome.frame.size.width, starty, btnWidth, 44);
+    btnFeature.tag=1;
+    [btnFeature setTitle:NSLocalizedString(@"Featured", nil) forState:UIControlStateNormal];
+    btnFeature.titleLabel.font=[UIFont systemFontOfSize:15];
+    [btnFeature setTitleColor:[UIColor colorWithHexString:unSelectColor] forState:UIControlStateNormal];
+    [btnFeature setTitleColor:[UIColor whiteColor] forState:UIControlStateSelected];
+    [btnFeature addTarget:self action:@selector(tabAction:) forControlEvents:UIControlEventTouchUpInside];
+    
+    int startx=btnHome.center.x-naviLineWidth/2;
+    naviLine=[[UIView alloc] initWithFrame:CGRectMake(startx, pagerNaviHeight-naviLineHeight-2, naviLineWidth, naviLineHeight)];
+    naviLine.tag=3;
+    naviLine.backgroundColor=[UIColor colorWithHexString:themeColor];
+    naviLine.layer.masksToBounds=YES;
+    naviLine.layer.cornerRadius=3.0;
+    naviLine.layer.borderWidth=0.5;
+    
+    [tabView addSubview:btnHome];
+    [tabView addSubview:btnFeature];
+    [tabView addSubview:naviLine];
+    
+    
+    UIButton * setBut = [[UIButton alloc]initWithFrame:CGRectMake(self.view.frame.size.width-54, starty, 44, 44)];
+    [setBut setImage:[UIImage imageNamed:@"bt_setting_normal.png"] forState:UIControlStateNormal];
+    [setBut addTarget:self action:@selector(setViewAction:) forControlEvents:UIControlEventTouchUpInside];
+    [tabView addSubview:setBut];
+    customNavibar=tabView;
+    [self.view addSubview:tabView];
+}
+
+-(void) tabAction:(UIButton *)sender
+{
+    btnHome.selected=NO;
+    btnFeature.selected=NO;
+    sender.selected=YES;
+    
+    int index = (int)sender.tag;
+    if (selectIndex==index) {
+        return;
+    }
+    [self animWithNaviLine:index];
+    selectIndex=index;
+    NSArray * tmpControls=[NSArray arrayWithObject:[self.controllers objectAtIndex:selectIndex]];
+    [self.pageController setViewControllers:tmpControls direction:UIPageViewControllerNavigationDirectionForward animated:NO completion:nil];
+    
+}
+
+-(void) animWithNaviLine:(NSUInteger)index
+{
+    btnHome.selected=NO;
+    btnFeature.selected=NO;
+    UIButton * btnTab=nil;
+    if (index==0) {
+        btnTab=btnHome;
+    }else{
+        btnTab=btnFeature;
+    }
+    btnTab.selected=YES;
+    
+    __weak MainViewController * weakSelf = self;
+    [UIView animateWithDuration:0.3 animations:^{
+        int startx=btnTab.center.x-naviLineWidth/2;
+        CGRect rect = CGRectMake(startx, pagerNaviHeight-naviLineHeight-2, naviLineWidth, naviLineHeight);
+        weakSelf.naviLine.frame=rect;
+    } completion:^(BOOL finished){
+        
+    }];
+}
+
+- (void)controllerDidAppear:(UIViewController *)controller
+{
+    selectIndex=[self.controllers indexOfObject:controller];
+    [self animWithNaviLine:selectIndex];
+}
+
+- (void)controllerDidDisappear:(UIViewController *)controller
+{
+    
+}
+
+//是否处于加载数据中
+- (void)controllerLoadData:(BOOL)flag
+{
+    
+}
+
+- (UIViewController *)pageViewController:(UIPageViewController *)pageViewController viewControllerBeforeViewController:(UIViewController *)viewController
+{
+    NSUInteger curIndex=[self.controllers indexOfObject:viewController];
+    if (curIndex>0) {
+        return [self.controllers objectAtIndex:(curIndex-1)];
+    }
+    
+    return nil;
+}
+
+- (UIViewController *)pageViewController:(UIPageViewController *)pageViewController viewControllerAfterViewController:(UIViewController *)viewController
+{
+    NSUInteger curIndex=[self.controllers indexOfObject:viewController];
+    if (curIndex<self.controllers.count-1) {
+        return [self.controllers objectAtIndex:(curIndex+1)];
+    }
+    
+    return nil;
+}
+- (void)setViewAction:(id)sender
+{
+    
+    SettingViewController * setControl = [[SettingViewController alloc] init];
+    
+    RotateNavigationController *nav = [[RotateNavigationController alloc] initWithRootViewController:setControl];
+    
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+@end

@@ -1,0 +1,103 @@
+//
+//  SubtitlePositionViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/6/17.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "SubtitlePositionViewController.h"
+#import "UIColor+Util.h"
+
+@interface SubtitlePositionViewController ()
+
+@property (nonatomic,strong) IBOutlet UIButton * btPosition0;
+@property (nonatomic,strong) IBOutlet UIButton * btPosition1;
+@property (nonatomic,strong) IBOutlet UIButton * btPosition2;
+@property (nonatomic,strong) IBOutlet UIButton * btPosition3;
+@property (nonatomic,strong) IBOutlet UIButton * btPosition4;
+@property (nonatomic,strong) IBOutlet UIButton * btPosition5;
+@property (nonatomic,strong) IBOutlet UIButton * btPosition6;
+@property (nonatomic,strong) IBOutlet UIButton * btPosition7;
+@property (nonatomic,strong) IBOutlet UIButton * btPosition8;
+
+-(IBAction)positionAction:(id)sender;
+
+@end
+
+@implementation SubtitlePositionViewController
+
+@synthesize btPosition0;
+@synthesize btPosition1;
+@synthesize btPosition2;
+@synthesize btPosition3;
+@synthesize btPosition4;
+@synthesize btPosition5;
+@synthesize btPosition6;
+@synthesize btPosition7;
+@synthesize btPosition8;
+
+-(void)viewDidLoad
+{
+    [super viewDidLoad];
+}
+
+
+-(IBAction)positionAction:(UIButton *)sender
+{
+    for (id subview in self.view.subviews) {
+        if ([subview isKindOfClass:[UIButton class]]) {
+            [self selectStatus:subview flag:NO];
+        }
+    }
+    
+    [self selectStatus:sender flag:YES];
+//    if([self.delegate respondsToSelector:@selector(selectPosition:)]){
+//        [self.delegate selectPosition:(int)sender.tag];
+//    }
+    switch (sender.tag) {
+        case 0:
+            
+            break;
+        case 1:
+            
+            break;
+        case 2:
+            
+            break;
+        case 3:
+            
+            break;
+        case 4:
+            
+            break;
+        case 5:
+            
+            break;
+        case 6:
+            
+            break;
+        case 7:
+            
+            break;
+        case 8:
+            
+            break;
+        default:
+            break;
+    }
+}
+
+
+-(void) selectStatus:(UIButton *)sender flag:(BOOL)flag
+{
+    if (flag) {
+        sender.layer.borderWidth=2;
+        sender.layer.borderColor=[UIColor colorWithHexString:@"#dd6b6f"].CGColor;
+    }else{
+        sender.layer.borderWidth=1;
+        sender.layer.borderColor=[UIColor colorWithHexString:@"#d1d1d1"].CGColor;
+    }
+}
+
+@end

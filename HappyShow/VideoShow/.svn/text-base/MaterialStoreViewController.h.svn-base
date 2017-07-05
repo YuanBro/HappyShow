@@ -1,0 +1,14 @@
+//
+//  MaterialStoreViewController.h
+//  VideoShow
+//
+//  Created by lance on 15/12/1.
+//  Copyright © 2015年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+
+/** 素材商店 */
+@interface MaterialStoreViewController : BaseViewController<UIScrollViewDelegate>
+
+@end

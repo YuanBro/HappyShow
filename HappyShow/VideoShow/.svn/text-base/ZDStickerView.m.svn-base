@@ -1,0 +1,422 @@
+//
+//  ZDStickerView.m
+//
+//  Created by Seonghyun Kim on 5/29/13.
+//  Copyright (c) 2013 scipi. All rights reserved.
+//
+
+#import "ZDStickerView.h"
+#import <QuartzCore/QuartzCore.h>
+#import "UIImage+Util.h"
+
+#define kSPUserResizableViewGlobalInset 5.0
+#define kSPUserResizableViewDefaultMinWidth 48.0
+#define kSPUserResizableViewInteractiveBorderSize 10.0
+#define kZDStickerViewControlSize 24.0
+
+
+@interface ZDStickerView ()
+
+@property (strong, nonatomic) UIImageView *resizingControl;
+@property (strong, nonatomic) UIImageView *deleteControl;
+
+@property (nonatomic) BOOL preventsLayoutWhileResizing;
+
+@property (nonatomic) float deltaAngle;
+@property (nonatomic) float preAngle;
+@property (nonatomic) CGPoint prevPoint;
+@property (nonatomic) CGAffineTransform startTransform;
+
+@property (nonatomic) CGPoint touchStart;
+
+@end
+
+@implementation ZDStickerView
+
+@synthesize borderRect;
+@synthesize globalInset;
+@synthesize borderSize;
+@synthesize defaultMinWidth;
+@synthesize controlSize;
+
+@synthesize contentView, touchStart;
+
+@synthesize prevPoint;
+@synthesize preAngle;
+@synthesize deltaAngle, startTransform; //rotation
+@synthesize resizingControl, deleteControl;
+@synthesize preventsPositionOutsideSuperview;
+@synthesize preventsResizing;
+@synthesize preventsDeleting;
+@synthesize minWidth, minHeight;
+
+-(void)singleTap:(UITapGestureRecognizer *)recognizer
+{
+    if (NO == self.preventsDeleting) {
+        
+        self.preventsDeleting=YES;
+        __weak ZDStickerView *weakSelf = self;
+        if([weakSelf.delegate respondsToSelector:@selector(stickerViewDidClose:)]) {
+            [weakSelf.delegate stickerViewDidClose:self];
+        }
+        
+        self.preventsDeleting = NO;
+    }else{
+        //deleting...
+    }
+}
+
+/** 获取自身的旋转角度 */
+- (float) stickerRotatef
+{
+    return [[self.layer valueForKeyPath:@"transform.rotation.z"] floatValue];
+}
+
+/** 控制缩放和旋转 */
+-(void)resizeTranslate:(UIPanGestureRecognizer *)recognizer
+{
+    switch (recognizer.state) {
+        case UIGestureRecognizerStateBegan:
+        {
+            prevPoint = [recognizer locationInView:self];
+            [self setNeedsDisplay];
+            if([_delegate respondsToSelector:@selector(stickerViewDidBeganResizeTranslating:)]) {
+                [_delegate stickerViewDidBeganResizeTranslating:self];
+            }
+        }
+            break;
+        case UIGestureRecognizerStateChanged:
+        {
+            /* Rotation 很可能会超出边界 计算缩放控件相对父控件旋转的弧度 */
+            float ang = atan2([recognizer locationInView:self.superview].y - self.center.y,
+                              [recognizer locationInView:self.superview].x - self.center.x);
+            float angleDiff = ang - deltaAngle;//计算出旋转的弧度
+            
+            if (self.bounds.size.width < minWidth || self.bounds.size.width < minHeight)
+            {//设置为控制的最小区域---必须先计算出旋转后的边界才好计算
+                self.bounds = CGRectMake(self.bounds.origin.x,
+                                         self.bounds.origin.y,
+                                         minWidth,
+                                         minHeight);
+                resizingControl.frame =CGRectMake(self.bounds.size.width-kZDStickerViewControlSize,
+                                                  self.bounds.size.height-kZDStickerViewControlSize,
+                                                  kZDStickerViewControlSize,
+                                                  kZDStickerViewControlSize);
+                deleteControl.frame = CGRectMake(0, 0,
+                                                 kZDStickerViewControlSize, kZDStickerViewControlSize);
+                prevPoint = [recognizer locationInView:self];
+            } else {//control scale
+                CGPoint point = [recognizer locationInView:self];//
+                float wChange = 0.0, hChange = 0.0;
+                
+                wChange = (point.x - prevPoint.x);
+                hChange = (point.y - prevPoint.y);
+                
+                if (ABS(wChange) > 20.0f || ABS(hChange) > 20.0f) {//防止操作太快,变化太大
+                    prevPoint = [recognizer locationInView:self];
+                    return;
+                }
+                
+                if (YES == self.preventsLayoutWhileResizing) {
+                    //计算最大允许的变化量
+                    //float xtmp=MIN(self.frame.origin.x, self.borderRect.size.width-(self.frame.origin.x+self.frame.size.width));
+                    //float ytmp=MIN(self.frame.origin.y, self.borderRect.size.height-(self.frame.origin.y+self.frame.size.height));
+                    if (wChange < 0.0f && hChange < 0.0f) {//如果x,y变化都小于0,取变化最大的
+                        float change = MIN(wChange, hChange);
+                        wChange = change;
+                        hChange = change;
+                    }else if (wChange < 0.0f) {//如果只有一个小于0,以小于0的取值为基准操作
+                        hChange = wChange;
+                    } else if (hChange < 0.0f) {
+                        wChange = hChange;
+                    } else {//都大于0 取变化最大的
+                        float change = MAX(wChange, hChange);
+                        wChange = change;
+                        hChange = change;
+                    }
+                }
+                CGRect tmpBounds=CGRectMake(self.bounds.origin.x, self.bounds.origin.y,
+                                            self.bounds.size.width + (wChange),
+                                            self.bounds.size.height + (hChange));
+                
+//                float s=(self.bounds.size.width)/2;
+//                float l=sqrt(s*s+s*s);
+//                float radians=ABS(angleDiff+M_PI/4);
+//                if (radians>M_PI/4*3) {//>135
+//                    radians=radians-M_PI/4*3;
+//                }else if(radians>M_PI/2){//>90
+//                    radians=radians-M_PI/2;
+//                }else if(radians>M_PI/4){//>45
+//                    radians=radians-M_PI/4;
+//                }
+//                //旋转后的角度的余弦值一定是在cos(M_PI/4)~cos(0)之间
+//                float newW=l*cos(radians);
+//                CGRect tmpRect=CGRectMake(self.center.x-newW, self.center.y-newW,newW*2,newW*2);
+//                NSLog(@"转角--->%f     %f",angleDiff,radians);
+//                //NSLog(@"计算前<<<<<<%f   %f   %f   %f   %f   %f",angleDiff,radians,tmpRect.origin.x,tmpRect.origin.y,tmpRect.size.width,tmpRect.size.height);
+//                if ([self checkBounds:tmpRect]) {
+//                    angleDiff=preAngle;
+//                }
+//                if ([self checkBounds:tmpBounds]) {
+//                    return;
+//                }
+                
+                //需要判断新边界是否出界
+                self.bounds = tmpBounds;
+                
+                resizingControl.frame =CGRectMake(self.bounds.size.width-kZDStickerViewControlSize,
+                                                  self.bounds.size.height-kZDStickerViewControlSize,
+                                                  kZDStickerViewControlSize, kZDStickerViewControlSize);
+                deleteControl.frame = CGRectMake(0, 0,
+                                                 kZDStickerViewControlSize, kZDStickerViewControlSize);
+                prevPoint = [recognizer locationInView:self];
+            }
+            borderView.frame = CGRectInset(self.bounds, kSPUserResizableViewGlobalInset, kSPUserResizableViewGlobalInset);
+            [borderView setNeedsDisplay];
+            
+            if (NO == preventsResizing) {//这里需要计算执行旋转后是否会超出边界
+                self.transform = CGAffineTransformMakeRotation(angleDiff);
+            }
+            //NSLog(@"旋转后<<<<<=>%f   %f   %f   %f   ",self.frame.origin.x,self.frame.origin.y,self.frame.size.width,self.frame.size.height);
+            [self setNeedsDisplay];
+            preAngle=angleDiff;
+            if([_delegate respondsToSelector:@selector(stickerViewDidMoveResizeTranslating:)]) {
+                [_delegate stickerViewDidMoveResizeTranslating:self];
+            }
+        }
+            break;
+        case UIGestureRecognizerStateEnded:
+        {
+            prevPoint = [recognizer locationInView:self];
+            [self setNeedsDisplay];
+            if([_delegate respondsToSelector:@selector(stickerViewDidEndResizeTranslating:)]) {
+                [_delegate stickerViewDidEndResizeTranslating:self];
+            }
+        }
+        default:
+            break;
+    }
+}
+
+/** 申请重新绘制时调用 */
+- (void)setupDefaultAttributes {
+    borderView = [[SPGripViewBorderView alloc] initWithFrame:CGRectInset(self.bounds, kSPUserResizableViewGlobalInset, kSPUserResizableViewGlobalInset)];
+    [borderView setHidden:YES];
+    [self addSubview:borderView];
+    
+    if (kSPUserResizableViewDefaultMinWidth > self.bounds.size.width*0.5) {
+        self.minWidth = kSPUserResizableViewDefaultMinWidth;
+        self.minHeight = self.bounds.size.height * (kSPUserResizableViewDefaultMinWidth/self.bounds.size.width);
+    } else {
+        self.minWidth = self.bounds.size.width*0.5;
+        self.minHeight = self.bounds.size.height*0.5;
+    }
+    self.preventsPositionOutsideSuperview = YES;
+    self.preventsLayoutWhileResizing = YES;
+    self.preventsResizing = NO;
+    self.preventsDeleting = NO;
+    
+    deleteControl = [[UIImageView alloc]initWithFrame:CGRectMake(0, 0,
+                                                                 kZDStickerViewControlSize, kZDStickerViewControlSize)];
+    deleteControl.backgroundColor = [UIColor clearColor];
+    deleteControl.image = [UIImage imageResource:@"bt_clip_delete.png" ];
+    deleteControl.userInteractionEnabled = YES;
+    UITapGestureRecognizer * singleTap = [[UITapGestureRecognizer alloc]
+                                          initWithTarget:self
+                                          action:@selector(singleTap:)];
+    [deleteControl addGestureRecognizer:singleTap];
+    [self addSubview:deleteControl];
+    
+    resizingControl = [[UIImageView alloc]initWithFrame:CGRectMake(self.frame.size.width-kZDStickerViewControlSize,
+                                                                   self.frame.size.height-kZDStickerViewControlSize,
+                                                                   kZDStickerViewControlSize, kZDStickerViewControlSize)];
+    resizingControl.backgroundColor = [UIColor clearColor];
+    resizingControl.userInteractionEnabled = YES;
+    resizingControl.image = [UIImage imageResource:@"subtitle_scale.png"];
+    UIPanGestureRecognizer* panResizeGesture = [[UIPanGestureRecognizer alloc]
+                                                initWithTarget:self
+                                                action:@selector(resizeTranslate:)];
+    [resizingControl addGestureRecognizer:panResizeGesture];
+    [self addSubview:resizingControl];
+    //计算重新布局后已经旋转的弧度
+    deltaAngle = atan2(self.frame.origin.y+self.frame.size.height - self.center.y,
+                       self.frame.origin.x+self.frame.size.width - self.center.x);
+}
+
+- (id)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if ((self)) {
+        self.userInteractionEnabled = YES;
+        [self setupDefaultAttributes];
+        self.globalInset=kSPUserResizableViewGlobalInset;
+        self.borderSize=kSPUserResizableViewInteractiveBorderSize;
+        self.defaultMinWidth=kSPUserResizableViewDefaultMinWidth;
+        self.controlSize=kZDStickerViewControlSize;
+    }
+    return self;
+}
+
+- (id)initWithCoder:(NSCoder *)aDecoder {
+    if ((self = [super initWithCoder:aDecoder])) {
+        [self setupDefaultAttributes];
+    }
+    return self;
+}
+
+- (void)setContentView:(UIView *)newContentView {
+    [contentView removeFromSuperview];
+    contentView = newContentView;
+    contentView.frame = CGRectInset(self.bounds, kSPUserResizableViewGlobalInset + kSPUserResizableViewInteractiveBorderSize/2, kSPUserResizableViewGlobalInset + kSPUserResizableViewInteractiveBorderSize/2);
+    contentView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [self addSubview:contentView];
+    
+    [self bringSubviewToFront:borderView];
+    [self bringSubviewToFront:resizingControl];
+    [self bringSubviewToFront:deleteControl];
+}
+
+- (void)setFrame:(CGRect)newFrame {
+    [super setFrame:newFrame];
+    contentView.frame = CGRectInset(self.bounds, kSPUserResizableViewGlobalInset + kSPUserResizableViewInteractiveBorderSize/2, kSPUserResizableViewGlobalInset + kSPUserResizableViewInteractiveBorderSize/2);
+    
+    borderView.frame = CGRectInset(self.bounds, kSPUserResizableViewGlobalInset, kSPUserResizableViewGlobalInset);
+    resizingControl.frame =CGRectMake(self.bounds.size.width-kZDStickerViewControlSize,
+                                      self.bounds.size.height-kZDStickerViewControlSize,
+                                      kZDStickerViewControlSize,
+                                      kZDStickerViewControlSize);
+    deleteControl.frame = CGRectMake(0, 0,
+                                     kZDStickerViewControlSize, kZDStickerViewControlSize);
+    [borderView setNeedsDisplay];
+}
+
+//可能是平移也可能是缩放
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
+    UITouch *touch = [touches anyObject];
+    touchStart = [touch locationInView:self.superview];
+    if([_delegate respondsToSelector:@selector(stickerViewDidBeginEditing:)]) {
+        [_delegate stickerViewDidBeginEditing:self];
+    }
+}
+
+- (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
+    if([_delegate respondsToSelector:@selector(stickerViewDidEndEditing:)]) {
+        [_delegate stickerViewDidEndEditing:self];
+    }
+}
+
+- (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {
+    if([_delegate respondsToSelector:@selector(stickerViewDidCancelEditing:)]) {
+        [_delegate stickerViewDidCancelEditing:self];
+    }
+}
+
+- (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
+    CGPoint touch = [[touches anyObject] locationInView:self.superview];
+    [self translateUsingTouchLocation:touch];
+    touchStart = touch;
+    //if([_delegate respondsToSelector:@selector(stickerViewDidMoveEditing:)]) {
+      //  [_delegate stickerViewDidMoveEditing:self];
+    //}
+}
+
+//计算新的中心点
+- (void)translateUsingTouchLocation:(CGPoint)touchPoint {
+    
+    float xoffset=touchPoint.x - touchStart.x;
+    float yoffset=touchPoint.y - touchStart.y;
+//    NSArray * preResults=[self prepareHandle:xoffset y:yoffset];
+//    xoffset=[[preResults objectAtIndex:0] floatValue];
+//    yoffset=[[preResults objectAtIndex:1] floatValue];
+    
+    CGPoint newCenter = CGPointMake(self.center.x + xoffset,
+                                    self.center.y + yoffset);
+    if (self.preventsPositionOutsideSuperview) {//基本不会执行
+        // Ensure the translation won't cause the view to move offscreen.
+        CGFloat midPointX = CGRectGetMidX(self.frame);
+        if (newCenter.x > self.superview.bounds.size.width - midPointX) {
+            newCenter.x = self.superview.bounds.size.width - midPointX;
+        }
+        if (newCenter.x < midPointX) {
+            newCenter.x = midPointX;
+        }
+        CGFloat midPointY = CGRectGetMidY(self.frame);
+        if (newCenter.y > self.superview.bounds.size.height - midPointY) {
+            newCenter.y = self.superview.bounds.size.height - midPointY;
+        }
+        if (newCenter.y < midPointY) {
+            newCenter.y = midPointY;
+        }
+    }
+
+    self.center = newCenter;
+}
+
+/** 预处理 */
+-(NSArray*)prepareHandle:(float)xoffset y:(float)yoffset
+{
+    NSMutableArray * results=[NSMutableArray arrayWithCapacity:2];
+    if (xoffset>0) {//右移--计算是否超出最右边
+        float maxX=self.borderRect.size.width-(self.center.x+self.frame.size.width/2);
+        if (xoffset>maxX) {
+            xoffset=maxX;
+        }
+    }else{//最大的负偏移
+        float maxX=self.frame.size.width/2-self.center.x;
+        if(xoffset<maxX){
+            xoffset=maxX;
+        }
+    }
+    
+    if (yoffset>0) {
+        float maxY=self.borderRect.size.height-(self.center.y+self.frame.size.height/2);
+        if (yoffset>maxY) {
+            yoffset=maxY;
+        }
+    }else{
+        float maxY=self.frame.size.height/2-self.center.y;
+        if (yoffset<maxY) {
+            yoffset=maxY;
+        }
+    }
+    [results addObject:[NSNumber numberWithFloat:xoffset]];
+    [results addObject:[NSNumber numberWithFloat:yoffset]];
+    return results;
+}
+
+/** 检测是否越界 */
+-(BOOL) checkBounds:(CGRect)boundsp
+{
+    if (self.center.x-boundsp.size.width/2<0||
+        self.center.y-boundsp.size.height/2<0||
+        self.center.x+boundsp.size.width/2>borderRect.size.width||
+        self.center.y+boundsp.size.height/2>borderRect.size.height) {
+        return YES;
+    }
+    return NO;
+}
+
+- (void)hideDelHandle
+{
+    deleteControl.hidden = YES;
+}
+
+- (void)showDelHandle
+{
+    deleteControl.hidden = NO;
+}
+
+- (void)hideEditingHandles
+{
+    resizingControl.hidden = YES;
+    deleteControl.hidden = YES;
+    [borderView setHidden:YES];
+}
+
+- (void)showEditingHandles
+{
+    resizingControl.hidden = NO;
+    deleteControl.hidden = NO;
+    [borderView setHidden:NO];
+}
+
+@end

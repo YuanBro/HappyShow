@@ -1,0 +1,29 @@
+//
+//  MusicPickerTableViewController.h
+//  X-VideoShow
+//
+//  Created by Jerry Chen  on 14-6-24.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import <MediaPlayer/MediaPlayer.h>
+#import <AVFoundation/AVFoundation.h>
+#import "BaseViewController.h"
+
+@class MusicPickerViewController;
+@class qxMediaObject;
+@protocol MusicPickerViewControllerDelegate <NSObject>
+@optional
+/** 添加音乐的回调 flag = YES 系统音乐库中的音乐 */
+-(void)musicPickerViewController:(MusicPickerViewController*)controller didFinishPickMediaItem:(qxMediaObject*)mediaObj flag:(BOOL)flag;
+-(void)musicPickerCanceled;
+
+@end
+
+/** 音乐拾取器 */
+@interface MusicPickerViewController : BaseViewController
+
+@property (weak,nonatomic) id<MusicPickerViewControllerDelegate> delegate;
+
+@end

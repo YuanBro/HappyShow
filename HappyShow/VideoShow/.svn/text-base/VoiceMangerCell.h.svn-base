@@ -1,0 +1,17 @@
+//
+//  VoiceMangerCell.h
+//  VideoShow
+//
+//  Created by admin on 16/1/20.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "VoiceController.h"
+
+@interface VoiceMangerCell : UITableViewCell<UIAlertViewDelegate>
+@property (weak, nonatomic) IBOutlet UILabel *label;
+
+
+@property (assign, nonatomic) NSNumber*  cellid;
+@end

@@ -1,0 +1,16 @@
+//
+//  VoiceController.h
+//  VideoShow
+//
+//  Created by admin on 16/1/26.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "BaseTableViewController.h"
+#import "Util.h"
+#import "VoiceMangerCell.h"
+@interface VoiceController : BaseTableViewController
+
+@property (nonatomic,assign) MaterialType materialType;
+
+@end

@@ -1,0 +1,50 @@
+//
+//  MusicPickerCell.h
+//  VideoShow
+//
+//  Created by lance on 15/5/18.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "REDRangeSlider.h"
+
+#define Title_Width_Max 200
+
+@protocol MusicPickerCellDelegate;
+
+@interface MusicPickerCell : UITableViewCell
+
+@property (weak,nonatomic) IBOutlet UIButton *tagImg;
+@property (weak,nonatomic) IBOutlet UIButton *btnPlayStatus;
+@property (weak,nonatomic) IBOutlet UIButton *add;
+@property (weak,nonatomic) IBOutlet UILabel *title;
+@property (weak,nonatomic) IBOutlet UILabel *duration;
+@property (weak,nonatomic) IBOutlet UILabel *startTime;
+@property (weak,nonatomic) IBOutlet UILabel *endTime;
+@property (weak,nonatomic) IBOutlet REDRangeSlider *rangeSlider;
+@property (weak,nonatomic) IBOutlet UIView *topBgView;
+@property (weak,nonatomic) IBOutlet UIView *bottomBgView;
+
+@property (nonatomic,weak) id<MusicPickerCellDelegate> delegate;
+
+//- (void)resizeTitle;
+
+- (IBAction)playAction:(UIButton*)sender;
+
+- (IBAction)addAction:(id)sender;
+
+- (IBAction)sliderValueChanged:(id)sender;
+- (IBAction)sliderTouchDown:(id)sender;
+- (IBAction)sliderTouchUpInside:(id)sender;
+
+@end
+
+@protocol MusicPickerCellDelegate <NSObject>
+@optional
+-(void)musicPickerCellSliderTouchDown:(MusicPickerCell*)cell;
+-(void)musicPickerCellSliderTouchUp:(MusicPickerCell*)cell;
+-(void)musicPickerCellAddAction:(UIButton*)sender;
+-(void)musicPickerCellPlayAction:(UIButton*)sender;
+
+@end

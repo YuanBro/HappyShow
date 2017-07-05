@@ -1,0 +1,16 @@
+//
+//  qxPlaybackView+Util.h
+//  VideoShow
+//
+//  Created by lance on 15/6/8.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "qxPlaybackView.h"
+
+@interface qxPlaybackView (Util)
+
+/** 播放前将qxPlaybackView视图之外的覆盖物置到videoView之前---包含sticker,字幕 */
++ (void) bringFromVideoView:(UIView *)videoView;
+
+@end

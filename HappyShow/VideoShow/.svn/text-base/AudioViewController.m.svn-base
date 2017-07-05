@@ -1,0 +1,600 @@
+//
+//  AudioViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/6/4.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "AudioViewController.h"
+#import "qxFxPlaybackHelper.h"
+#import "qxTimeline+Util.h"
+#import "qxTrack+Util.h"
+#import "UIImage+Util.h"
+#import "MyLabel.h"
+#import "Util.h"
+#import "AudioScrollView.h"
+#import "FileHandle.h"
+#import "AppMacros.h"
+#import "UIColor+Util.h"
+#import "Toast+UIView.h"
+//#import "qxPlaybackView+Util.h"
+#import "MBProgressHUD.h"
+
+static NSString *observerPlaying = @"playing";
+
+@interface AudioViewController()<qxFxPlaybackDelegate,AudioScrollViewDelegate>
+{
+
+}
+
+@property (nonatomic, strong) dispatch_queue_t recordQueue;// 录制队列---避免还没有开始录音就停止录音的
+@property (nonatomic,strong) AVAudioRecorder *audioRecorder;
+@property (nonatomic,assign) BOOL prepareForRecordAudio;
+@property (nonatomic,strong) NSString *recordCache;//录音的缓存路径
+@property (nonatomic,assign) float recordingStartSecond;
+@property (nonatomic,assign) float recordingMaxTime;
+//记录录音之前的音量---录音完成之后恢复音量
+@property (nonatomic,assign) float videoTrackVolumePercent;
+@property (nonatomic,assign) float musicTrackVolumePercent;
+
+@property (nonatomic,assign) CMTime duration;//视频时长
+@property (nonatomic,assign) BOOL playing;
+@property (nonatomic,strong) qxFxPlaybackHelper * playbackHelper;
+@property (nonatomic,strong) NSTimer * previewControlTimer;
+@property (nonatomic,strong) qxMediaObject *currentMediaObject;
+
+@property (nonatomic,strong) IBOutlet UIView * videoView;
+@property (nonatomic,strong) IBOutlet UIView * bottomPanel;
+@property (nonatomic,strong) IBOutlet UIButton * btPlay;
+@property (nonatomic,strong) IBOutlet UIButton * btRecord;
+@property (nonatomic,strong) IBOutlet UIButton * btDelRecord;
+
+@property (nonatomic,strong) IBOutlet MyLabel * labelCurrent;
+@property (nonatomic,strong) IBOutlet MyLabel * labelTotal;
+
+@property (nonatomic,strong) IBOutlet UIView * toolView;
+@property (nonatomic,strong) IBOutlet UIImageView * spliteImageView;
+@property (nonatomic,strong) IBOutlet UIView *frameView;
+@property (nonatomic,strong) AudioScrollView * mTimelineView;
+
+@property (nonatomic, strong) NSMutableArray *backupPaths;// 备份的录音路径---不允许直接删除---如果取消的话
+
+@property (nonatomic, assign) CGFloat currentPosOnTrack;
+
+@property (nonatomic, assign) BOOL needRefreshVideoBeforePreview;// 是否需要重建
+
+@property (atomic, assign) NSUInteger loadCount;
+
+- (IBAction)playAction:(id)sender;
+
+@end
+
+@implementation AudioViewController
+
+@synthesize audioRecorder;
+@synthesize prepareForRecordAudio;
+@synthesize recordCache;
+@synthesize recordingStartSecond;
+@synthesize recordingMaxTime;
+@synthesize videoTrackVolumePercent;
+@synthesize musicTrackVolumePercent;
+
+@synthesize duration;
+@synthesize playing;
+@synthesize playbackHelper;
+@synthesize videoView;
+@synthesize bottomPanel;
+@synthesize btPlay;
+@synthesize btRecord;
+@synthesize btDelRecord;
+@synthesize labelCurrent;
+@synthesize labelTotal;
+@synthesize toolView;
+@synthesize spliteImageView;
+@synthesize frameView;
+@synthesize mTimelineView;
+@synthesize currentMediaObject;
+@synthesize previewControlTimer;
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor colorWithHexString:homeColor];
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"Recording", nil)];
+    [self.navigationController.navigationBar initWithViewController:self leftText:NSLocalizedString(@"Back", nil) leftImageName:@"ic_back_arrow.png" action:@selector(cancelAction:)];
+    [self.navigationController.navigationBar initWithViewController:self rightImageName:@"bt_ok.png" action:@selector(confirmAction:)];
+    
+    toolView.backgroundColor=[UIColor colorWithHexString:bottomViewColor];
+    spliteImageView.backgroundColor=[UIColor colorWithHexString:bottomViewSpliteColor];
+    UITapGestureRecognizer *playbackTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(playbackViewTap:)];
+    [videoView addGestureRecognizer:playbackTap];
+    
+    [btRecord addTarget:self action:@selector(recordFinish:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
+    [btRecord addTarget:self action:@selector(recordStart:) forControlEvents:UIControlEventTouchDown];
+    [btDelRecord addTarget:self action:@selector(deleteRecording:) forControlEvents:UIControlEventTouchUpInside];
+    
+    float startx=self.btPlay.frame.origin.x*2+self.btPlay.frame.size.width;
+    startx=0;
+    CGSize size=CGSizeMake(self.view.frame.size.width-startx, self.frameView.frame.size.height);
+    mTimelineView = [[AudioScrollView alloc] initWithFrame:CGRectMake(startx, 0, size.width, size.height) contentSize:size timeline:self.timeline];
+    mTimelineView.backgroundColor = [UIColor clearColor];
+    mTimelineView.delegate = self;
+    [frameView addSubview:mTimelineView];
+    labelTotal.text = [Util stringWithSeconds:round(CMTimeGetSeconds( duration = playbackHelper.mpTimeline.timelineDuration))];
+    
+    [self checkButtonStatus];
+    
+    self.recordQueue = dispatch_queue_create("record_queue", nil);
+    
+    self.backupPaths = [NSMutableArray array];
+    NSMutableArray * array = [self.timeline getTrackForAudio].mpMediaObjArray;
+    for(qxMediaObject * obj in array){
+        [self.backupPaths addObject:obj.strFilePath];
+    }
+    
+    [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+    __weak AudioViewController * weakSelf = self;
+//    [[self.timeline getTrackFromTimeline:0] initUsableForSize:self.screenRect.size block:^{
+//        [weakSelf prepareForPreview];
+//        
+//        [weakSelf enableEditing];
+//    }];
+    [[self.timeline getTrackFromTimeline:0] reloadPhoto:self.screenRect.size block:^{
+        [weakSelf prepareForPreview];
+        [weakSelf enableEditing];
+    }];
+
+    
+}
+
+/** 打开编辑 当执行完预览和加载图片帧---两个都加载完成之后才开启---速度不一定 */
+- (void) enableEditing {
+    self.loadCount += 1;
+    if (self.loadCount < 2) {
+        return;
+    }
+    
+    [MBProgressHUD hideAllHUDsForView:self.view animated:YES];
+    
+    [mTimelineView refreshViewWithAudioTrack:2];
+    [mTimelineView scrollToSecond:0];
+    btRecord.enabled=YES;
+    btDelRecord.enabled=YES;
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    
+    [self addObserver:self forKeyPath:observerPlaying options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld context:nil];
+    
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    
+    [self removeObserver:self forKeyPath:observerPlaying];
+    
+}
+
+- (void)dealloc {
+    self.timeline = nil;
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSString *,id> *)change context:(void *)context {
+    
+    if ([observerPlaying isEqualToString:keyPath]) {
+        
+        BOOL newPlaying = [change[NSKeyValueChangeNewKey] boolValue];
+        if (newPlaying) {
+            self.btRecord.enabled = NO;
+            self.btDelRecord.enabled = NO;
+        }else{
+            self.btRecord.enabled = YES;
+            self.btDelRecord.enabled = YES;
+        }
+        
+    }
+    
+}
+
+
+-(void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+//    if ([self heightLessThan480]) {//4s以下的屏幕设备
+//        float screenHeight=[UIScreen mainScreen].bounds.size.height;
+//        float starty=self.view.frame.size.width-20;
+//        CGRect bottomRect=CGRectMake(0, starty, self.view.frame.size.width, screenHeight-starty);
+//        self.bottomPanel.frame=bottomRect;
+//    }
+}
+
+
+- (IBAction)playAction:(id)sender
+{
+    if(playing){
+        [self pausePreview];
+    }else{
+        if(self.needRefreshVideoBeforePreview){
+            [self prepareForPreview];
+        }else{
+            [self startPreview];
+        }
+    }
+}
+
+- (void)playbackViewTap:(id)sender
+{
+    if(playing){
+        [self pausePreview];
+    }
+}
+
+- (void)cancelAction:(id)sender
+{
+    [self stopPreview];
+    [playbackHelper destroy];
+    playbackHelper = nil;
+    
+    if ([self.delegate respondsToSelector:@selector(videoEdit:type:editFlag:)]) {
+        [self.delegate videoEdit:self type:EditTypeMusic editFlag:NO];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)confirmAction:(id)sender
+{
+    [self stopPreview];
+    [playbackHelper destroy];
+    playbackHelper = nil;
+    if ([self.delegate respondsToSelector:@selector(videoEdit:type:editFlag:)]) {
+        [self.delegate videoEdit:self type:EditTypeMusic editFlag:YES];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+#pragma mark - Timer
+-(void)updatePlayStatusTask
+{
+    NSTimeInterval tm = [playbackHelper playbackProgress];
+    float second = tm/1000;
+    NSString *str = [Util stringWithSeconds:round(second)];
+    labelCurrent.text = str;
+    [mTimelineView scrollToSecond:second];
+    qxMediaObject *obj = [[self.timeline getTrackFromTimeline:0] findMediaObjectAtSecond:second];
+    if (obj!=nil) {
+        currentMediaObject = obj;
+    }
+    
+    qxMediaObject *audioObj = [[self.timeline getTrackForAudio] findAudioObjAtSecond:second];
+    if (audioObj) {
+        if (audioRecorder && audioRecorder.isRecording) {
+            [self recordFinish:nil];//如果找到片段---结束录音
+        }
+    }
+    
+}
+
+-(void)startUpdatePlayStatus
+{
+    if(previewControlTimer == nil || ![previewControlTimer isValid]){
+        previewControlTimer = [NSTimer scheduledTimerWithTimeInterval:0.05 target:self selector:@selector(updatePlayStatusTask) userInfo:nil repeats:YES];
+    }
+}
+
+-(void)stopUpdatePlayStatus
+{
+    if(previewControlTimer != nil && [previewControlTimer isValid]){
+        [previewControlTimer invalidate];
+        previewControlTimer = nil;
+    }
+}
+
+//更新到指定的预览时间点
+- (void)seekTo:(float)second
+{
+    if(CMTimeGetSeconds(duration) > 0){
+//        [self.playbackHelper.player seekToTime:CMTimeMakeWithSeconds(second, duration.timescale) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
+        [playbackHelper seekToTime:second];
+        NSString *timeStr = [Util stringWithSeconds:round(second)];
+        labelCurrent.text = timeStr;
+    }
+}
+
+#pragma mark - Preview control
+-(void)stopPreview
+{
+    [self stopUpdatePlayStatus];
+    if(playbackHelper){
+        [playbackHelper stop];
+    }
+    self.playing = NO;
+}
+
+-(void)startPreview
+{
+    if(!self.playing && playbackHelper){
+        [playbackHelper playPause:YES];
+        self.playing = YES;
+        [self startUpdatePlayStatus];
+    }
+    self.btPlay.selected=YES;
+}
+
+-(void)pausePreview
+{
+    [self stopUpdatePlayStatus];
+    if(self.playing && playbackHelper){
+        [playbackHelper playPause:NO];
+        self.playing = NO;
+    }
+    self.btPlay.selected=NO;
+}
+
+#pragma mark 切换模式时使用
+-(void)prepareForPreview
+{
+//    NSLog(@"===>prepareForPreview");
+    if(playbackHelper){
+        playbackHelper.delegate = nil;
+        [playbackHelper stop];
+        [playbackHelper destroy];
+        playbackHelper = nil;
+    }
+    self.videoView.frame=self.videoViewRect;
+    playbackHelper = [[qxFxPlaybackHelper alloc] init];
+    playbackHelper.delegate = self;
+    float scale = [UIScreen mainScreen].scale;
+    self.timeline.timelineSize = CGSizeMake(videoView.frame.size.width*scale, videoView.frame.size.height*scale);
+    playbackHelper.mpTimeline = self.timeline;
+    [playbackHelper initWithUIView:videoView];
+    
+//    duration = playbackHelper.playerItem.duration;
+     duration = playbackHelper.mpTimeline.timelineDuration;
+    labelCurrent.text = [Util stringWithSeconds:0];
+    labelTotal.text = [Util stringWithSeconds:round(CMTimeGetSeconds(duration))];
+    
+//    [qxPlaybackView bringFromVideoView:videoView];
+}
+
+#pragma mark - qxPlaybackDelegate 处理艺术字的回调,目前没有用到
+- (void)readyForPlayback
+{
+    if(prepareForRecordAudio){
+        [self startRecord];
+        
+        NSLog(@"readyForPlayback startRecord");
+    }else if(self.needRefreshVideoBeforePreview){
+        self.needRefreshVideoBeforePreview = NO;
+        [self startPreview];
+        
+        NSLog(@"readyForPlayback no");
+    }
+}
+
+- (void)FinishPlayback
+{
+    [self stopUpdatePlayStatus];
+    [self pausePreview];
+    [self seekTo:0];
+    //执行seek后，有时候播放进度值没有立马变为0，这个时候currentMediaObject的指向不对，因此这里显示赋值。
+    currentMediaObject = [self.timeline getTrackFromTimeline:0].mpMediaObjArray[0];
+    [mTimelineView scrollToSecond:0];
+    
+}
+
+- (void)checkButtonStatus
+{
+    qxMediaObject *currentAudioObj = [self currentAudioObj];
+    BOOL flag = currentAudioObj != nil;
+    btRecord.hidden = flag;
+    btDelRecord.hidden = !flag;
+}
+
+/** 获取当前音频对象 */
+- (qxMediaObject*)currentAudioObj
+{
+    qxTrack *audioTrack = [self.timeline getTrackForAudio];
+    return [audioTrack findAudioObjAtSecond:[mTimelineView currentSecond]];
+}
+
+/** 执行录音 */
+- (void)recordStart:(id)sender
+{
+    NSLog(@"recordStart...");
+    self.prepareForRecordAudio = YES;
+    self.recordCache = [Util createRecordFile];
+    NSLog(@"recordCache=%@",self.recordCache);
+    //初始化录音
+    [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayAndRecord error:nil];
+    NSError *error;
+    self.audioRecorder = [[AVAudioRecorder alloc] initWithURL:[NSURL fileURLWithPath:recordCache isDirectory:NO] settings:[self recorderSetting] error:&error];
+    self.audioRecorder.meteringEnabled = YES;
+    BOOL flag = [self.audioRecorder prepareToRecord];
+    if(!error && flag){
+        [self closeTrackVolume];
+        [self prepareForPreview];
+    }else{
+        [Util showAlert:NSLocalizedString(@"Record Failed", nil) title:nil tag:0];
+    }
+    
+}
+
+/** 开始执行录音 */
+- (void)startRecord
+{
+    NSLog(@"startRecord...");
+    if(!self.audioRecorder || !self.audioRecorder.isRecording){
+        self.recordingStartSecond = [self.mTimelineView currentSecond];
+        self.recordingMaxTime = CMTimeGetSeconds(self.duration);
+        qxMediaObject *nearestAudioObj = [[self.timeline getTrackForAudio] findNearestAudioObjAfterTime:self.recordingStartSecond];
+        if(nearestAudioObj){
+            self.recordingMaxTime = CMTimeGetSeconds(nearestAudioObj.startTimeOfTrack);
+        }
+        
+        //
+        [self seekTo:recordingStartSecond];
+        if([self.audioRecorder record]){
+            [self startPreview];
+            self.mTimelineView.scrollEnable = NO;
+        }else{
+            self.prepareForRecordAudio = NO;
+            [Util showAlert:NSLocalizedString(@"Record Failed", nil) title:nil tag:0];
+        }
+    }
+}
+
+/** 录音结束 */
+- (void)recordFinish:(id)sender
+{
+    NSLog(@"recordFinish...");
+    if(audioRecorder == nil){// 已经添加过了
+        return;
+    }
+    
+    if([self.audioRecorder isRecording]){
+        [self.audioRecorder stop];
+    }
+    self.audioRecorder = nil;
+
+    [self pausePreview];
+    self.prepareForRecordAudio = NO;
+    self.mTimelineView.scrollEnable = YES;
+    [self.mTimelineView clearSelectRect];
+    [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
+    //add audio
+    qxMediaObject *mediaObj = [[qxMediaObject alloc] init];
+    [mediaObj setFilePath:self.recordCache withType:eMT_Audio fromAssetLibrary:NO];
+    
+    int type=[Util addAudio:mediaObj WithTrack:[self.timeline getTrackForAudio] startTime:self.recordingStartSecond duration:self.duration flag:NO];
+    switch (type) {
+        case 0:
+            [self.mTimelineView refreshViewWithAudioTrack:2];
+            self.needRefreshVideoBeforePreview = YES;
+            break;
+        case -1:
+            [self.view makeToast:NSLocalizedString(@"Audio too short", nil)];
+            NSLog(@"录音时长太短");
+            self.needRefreshVideoBeforePreview = NO;
+            [self resumeTrackVolume];
+            [self prepareForPreview];
+            break;
+        case -2:
+            //[self.view makeToast:NSLocalizedString(@"Add audio failed", nil)];
+            //NSLog(@"底层库错误");
+            self.needRefreshVideoBeforePreview = YES;
+            break;
+            
+        default:
+            break;
+    }
+    [self resumeTrackVolume];
+    [mTimelineView scrollToSecond:0];
+
+}
+
+/** 关闭视频和音乐的音量 */
+- (void)closeTrackVolume
+{
+    qxTrack *videoTrack = [self.timeline getTrackFromTimeline:0];
+    qxTrack *musicTrack = [self.timeline getTrackFromTimeline:1];
+    videoTrackVolumePercent = [videoTrack getAudioPercent];
+    [videoTrack setAudioPercent:0];
+    musicTrackVolumePercent = [musicTrack getAudioPercent];
+    [musicTrack setAudioPercent:0];
+}
+
+/** 恢复视频和音乐的音量 */
+- (void)resumeTrackVolume
+{
+    qxTrack *videoTrack = [self.timeline getTrackFromTimeline:0];
+    [videoTrack setAudioPercent:videoTrackVolumePercent];
+    qxTrack *musicTrack = [self.timeline getTrackFromTimeline:1];
+    [musicTrack setAudioPercent:musicTrackVolumePercent];
+}
+
+/** 初始化录音设置 */
+-(NSDictionary*)recorderSetting
+{
+    [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayAndRecord error:nil];
+    NSMutableDictionary *settings = [[NSMutableDictionary alloc] init];
+    [settings setObject:[NSNumber numberWithInt: kAudioFormatLinearPCM] forKey: AVFormatIDKey];
+    [settings setObject:[NSNumber numberWithFloat:44100.0] forKey: AVSampleRateKey];
+    [settings setObject:[NSNumber numberWithInt:2]forKey:AVNumberOfChannelsKey];
+    [settings setObject:[NSNumber numberWithInt:16] forKey:AVLinearPCMBitDepthKey];
+    [settings setObject:[NSNumber numberWithBool:YES] forKey:AVLinearPCMIsBigEndianKey];
+    [settings setObject:[NSNumber numberWithBool:YES] forKey:AVLinearPCMIsFloatKey];
+    
+    return settings;
+}
+
+- (void)deleteRecording:(id)sender
+{
+    [self pausePreview];
+    qxMediaObject *curAudioObj = [self currentAudioObj];
+    NSString *filepath = [[self.timeline getTrackForAudio] delMediaObjectForMediaObj:curAudioObj];
+    if (filepath) {
+        [self deletePath:filepath];
+    }
+    [mTimelineView refreshViewWithAudioTrack:2];
+    [self checkButtonStatus];
+    self.needRefreshVideoBeforePreview = YES;
+}
+
+#pragma mark  AudioScrollViewDelegate
+// 指向视频的某一个时间 tapFlag 是否点击执行的滚动
+- (void)videoScrollView:(AudioScrollView*)view didScrollTo:(CGFloat)second tapFlag:(BOOL)tapFlag {
+    self.currentPosOnTrack = second;
+    if(audioRecorder && [audioRecorder isRecording]){
+        
+        // 设置录音片段的色块
+        [mTimelineView setSelectRectFrom:recordingStartSecond to:second];
+    }else{
+        if (!self.playing){
+            [self seekTo:second];
+        }
+    }
+    
+    [self checkButtonStatus];
+}
+
+- (void)framesLoadDone {
+    
+    [self enableEditing];
+}
+
+// 开始拖动
+- (void)scrubbingDidStart:(AudioScrollView *)view {
+    if (self.playing) {
+        [self pausePreview];
+    }
+}
+
+// 松手
+- (void)scrubbingDidEnd:(AudioScrollView *)view {
+    
+}
+
+/** 删除文件路径 --- 不允许删除预览界面传递过来的路径 */
+- (void)deletePath:(NSString *)path {
+    
+    if (path == nil) {
+        return;
+    }
+    
+    if (self.backupPaths.count != 0) {
+        for (NSString *tmpPath in self.backupPaths) {
+            if ([tmpPath isEqualToString:path]) {
+                return;
+            }
+        }
+    }
+    
+    [Util deleteFile:path];
+}
+
+
+@end

@@ -1,0 +1,1071 @@
+//
+//  SubtitleViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/5/14.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "SubtitleViewController.h"
+#import "MyLabel.h"
+#import "qxTimeline.h"
+#import "qxPlaybackHelper.h"
+#import "OverlayScrollView.h"
+#import "SubtitleTextView.h"
+#import "ColorSelectorView.h"
+#import "FontSelectorView.h"
+#import "SubtitlePositionView.h"
+#import "CustomAlertView.h"
+#import "UIColor+Util.h"
+#import "UIImage+Util.h"
+#import "UIView+FirstResponder.h"
+#import "InputToolbar.h"
+#import "Toast+UIView.h"
+#import "SubtitleView.h"
+
+#import "MBProgressHUD.h"
+#import "Util.h"
+#import "qxTimeline+Util.h"
+#import "qxMediaObject+Util.h"
+#import "AppMacros.h"
+#import "qxPlaybackView+Util.h"
+
+#define MAX_NUM_SUBTITLE_CHARACTERS  150
+#define kToolBarH 44
+
+
+static NSString *observerPlaying = @"playing";
+static NSString *observerEditing = @"isEditing";
+
+@interface SubtitleViewController()<UITextViewDelegate,qxPlaybackDelegate,OverlayScrollViewDelegate,SubtitleTextViewDelegate,ColorSelectorViewDelegate,FontSelectorViewDelegate,UITextFieldDelegate, SubtitleViewDelegate>
+{
+    
+    ColorSelectorView *colorSelector;
+    FontSelectorView *fontSelector;
+    
+    CMTime duration;
+    
+    CGFloat currentPosOnTrack;// time in second
+    
+    BOOL applicationActive;
+}
+
+@property (assign,nonatomic) BOOL playing;
+@property (assign, nonatomic) BOOL isEditing;// 是否字幕修改中
+
+@property (nonatomic,strong) qxPlaybackHelper *playbackHelper;
+@property (nonatomic,strong) qxMediaObject *currentOverlayObj;
+@property (nonatomic,strong) NSTimer *previewControlTimer;
+
+@property (nonatomic, strong) IBOutlet UIView *videoBgView;
+@property (nonatomic, strong) IBOutlet UIView *videoView;
+@property (nonatomic, strong) IBOutlet UIView *overlayView;
+
+@property (nonatomic,strong) IBOutlet UIButton *btPlay;
+
+@property (nonatomic,strong) IBOutlet UIButton *btAddSubtitle;
+
+@property (nonatomic,strong) IBOutlet MyLabel *labelCurrent;
+@property (nonatomic,strong) IBOutlet MyLabel *labelTotal;
+
+@property (nonatomic,strong) IBOutlet UIView * toolView;
+@property (nonatomic,strong) IBOutlet UIImageView * spliteImageView;
+@property (nonatomic,strong) IBOutlet UIView * frameView;
+@property (nonatomic,strong) OverlayScrollView *mTimelineView;
+@property (nonatomic,strong) SubtitleTextView *subtitleTextView;//字幕图层---移动,缩放字幕的组件
+
+@property (nonatomic, strong) SubtitleView *subtitleOverlayView;// 专门负责绘制字幕的图层
+
+@property (nonatomic,strong) InputToolbar * inputToolbar;//输入工具栏
+
+@property (nonatomic, strong) NSMutableArray *backupPaths;// 备份传递过来的路径字幕路径---不允许删除(因为操作可能取消)
+@property (nonatomic, assign) BOOL isLoadDone;
+
+@property (atomic, assign) NSUInteger loadCount;// 加载计数为2时表示加载完成
+
+@property (nonatomic, assign) BOOL needRefreshVideoBeforePreview;;
+
+- (IBAction) playViewAction:(UIButton*)sender;
+
+- (IBAction) addSubtitleAction:(id)sender;
+
+@end
+
+@implementation SubtitleViewController
+
+@synthesize playing;
+@synthesize playbackHelper;
+@synthesize currentOverlayObj;
+@synthesize previewControlTimer;
+
+@synthesize btPlay;
+
+@synthesize btAddSubtitle;
+
+@synthesize labelCurrent;
+@synthesize labelTotal;
+
+@synthesize toolView;
+@synthesize spliteImageView;
+@synthesize frameView;
+@synthesize mTimelineView;
+@synthesize videoView;
+@synthesize subtitleTextView;
+
+@synthesize inputToolbar;
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor colorWithHexString:homeColor];
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"Subtitle", nil)];
+    [self.navigationController.navigationBar initWithViewController:self leftText:NSLocalizedString(@"Back", nil) leftImageName:@"ic_back_arrow.png" action:@selector(cancelAction:)];
+    [self.navigationController.navigationBar initWithViewController:self rightImageName:@"bt_ok.png" action:@selector(confirmAction:)];
+    
+    toolView.backgroundColor=[UIColor colorWithHexString:bottomViewColor];
+    spliteImageView.backgroundColor=[UIColor colorWithHexString:bottomViewSpliteColor];
+    
+    mTimelineView = [[OverlayScrollView alloc] initWithFrame:CGRectMake(0,  0, self.view.frame.size.width, 42) contentSize:CGSizeMake(self.view.frame.size.width, 42) timeline:self.timeline fillRectWithSticker:NO];
+    mTimelineView.delegate = self;
+    mTimelineView.backgroundColor = [UIColor clearColor];
+    [self.frameView addSubview:mTimelineView];
+    
+    self.overlayView.frame = self.videoViewRect;
+    self.subtitleOverlayView = [[SubtitleView alloc] initWithFrame:CGRectMake(0, 0, self.videoViewRect.size.width, self.videoViewRect.size.height)];
+    self.subtitleOverlayView.delegate = self;
+    [self.overlayView addSubview:self.subtitleOverlayView];
+    
+    //subtitle textview
+    subtitleTextView = [[SubtitleTextView alloc] initWithFrame:CGRectMake((self.view.frame.size.width - 200)/2, 155, 200, 100)];
+    subtitleTextView.delegate = self;
+    [self.overlayView addSubview:subtitleTextView];//方便计算字幕的位置
+    UIPanGestureRecognizer *subtitlePanGestureRecognizer = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleSubtitlePanGestureRecognizer:)];
+    subtitlePanGestureRecognizer.minimumNumberOfTouches = 1;
+    subtitlePanGestureRecognizer.maximumNumberOfTouches = 1;
+    [subtitleTextView addGestureRecognizer:subtitlePanGestureRecognizer];
+    subtitleTextView.hidden = YES;
+
+    //color selector
+    colorSelector = [[ColorSelectorView alloc] initWithFrame:CGRectMake(10, self.screenRect.origin.y + 25, self.screenRect.size.width - 10, 35)];
+    colorSelector.delegate = self;
+    [self.view addSubview:colorSelector];
+    
+    //font selector
+    fontSelector = [[FontSelectorView alloc] initWithFrame:CGRectMake(10, colorSelector.frame.origin.y + 35 + 20, colorSelector.frame.size.width, 35)];
+    fontSelector.delegate = self;
+    [self.view addSubview:fontSelector];
+
+    inputToolbar = [[InputToolbar alloc] initWithFrame:CGRectMake(0, self.view.frame.size.height, self.view.frame.size.width, kToolBarH)];
+    [inputToolbar addTarget:self dismissAction:@selector(inputDismissAction:)];
+    [inputToolbar addTarget:self confirmAction:@selector(inputConfirmAction:)];
+    
+    [self.view addSubview:inputToolbar];
+    
+    self.backupPaths = [NSMutableArray array];
+    NSMutableArray * array = [self.timeline getAllSubtitles];
+    for(qxMediaObject * obj in array){
+        qxMediaObject *textObj = obj.overlayCustomObj;
+        //NSLog(@"backup path ---->%@   rect --->%@   text_rect --->%@", obj.strFilePath, NSStringFromCGRect(obj.textDisplayRect), NSStringFromCGRect(textObj.textDisplayRect));
+        [self.backupPaths addObject:obj.strFilePath];
+    }
+
+    [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+    __weak SubtitleViewController * weakSelf = self;
+    [[self.timeline getTrackFromTimeline:0] initUsableForSize:[UIScreen mainScreen].bounds.size block:^{
+        [weakSelf prepareForPreview];
+        
+        [weakSelf enableEditing];
+    }];
+}
+
+/** 打开编辑 当执行完预览和加载图片帧---两个都加载完成之后才开启---速度不一定 */
+- (void) enableEditing {
+    self.loadCount += 1;
+    if (self.loadCount < 2) {
+        return;
+    }
+
+    [MBProgressHUD hideAllHUDsForView:self.view animated:YES];
+    self.isLoadDone = YES;
+    btAddSubtitle.enabled=YES;
+    [mTimelineView refreshSubtitleView];
+    
+    // 查询有多少字幕
+    
+    qxTrack *overlayTrack = [self.timeline getTrackForOverlay];
+    [self.subtitleOverlayView setMediaObjects:[overlayTrack findTextObjects]];
+    [self showMediaObject:currentPosOnTrack];
+    [self showOverlayAtTime:0 forceDraw:NO];
+    if(![self.timeline hasSubtitle]){
+        [self addSubtitleAction:nil];
+    }
+}
+
+// 添加字幕
+- (void)subtitleTextViewTapped
+{
+    // 需要查询显示对应的
+    [self showMediaObject:currentPosOnTrack];
+    
+    __weak SubtitleViewController * weakSelf=self;
+    [UIView animateWithDuration:0.3f animations:^{
+        weakSelf.inputToolbar.subtitleText.text=weakSelf.subtitleTextView.text;
+        weakSelf.inputToolbar.subtitleText.selectedRange=NSMakeRange(0, weakSelf.subtitleTextView.text.length);
+        [weakSelf.inputToolbar.subtitleText becomeFirstResponder];
+    } completion:^(BOOL finished) {
+        
+    }];
+}
+
+// 对字幕进行修改
+- (void)subtitleTextViewModify{
+    self.isEditing = YES;
+    // 需要查询显示对应的
+    [self showMediaObject:currentPosOnTrack];
+    
+    __weak SubtitleViewController * weakSelf=self;
+    [UIView animateWithDuration:0.3f animations:^{
+        weakSelf.inputToolbar.subtitleText.text=weakSelf.subtitleTextView.text;
+        weakSelf.inputToolbar.subtitleText.selectedRange=NSMakeRange(0, weakSelf.subtitleTextView.text.length);
+        [weakSelf.inputToolbar.subtitleText becomeFirstResponder];
+    } completion:^(BOOL finished) {
+        
+    }];
+}
+
+-(void) inputDismissAction:(id)sender
+{
+    self.isEditing = NO;
+    [self showOverlayAtTime:currentPosOnTrack forceDraw:YES];
+}
+
+-(void) inputConfirmAction:(id)sender
+{
+    NSString * subtitleStr=inputToolbar.subtitleText.text;
+    if (subtitleStr==nil || [subtitleStr isEqualToString:@""]) {
+        
+        MBProgressHUD *hud = [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+        hud.labelText = NSLocalizedString(@"Subtitle empty", nil);
+        hud.mode = MBProgressHUDModeText;
+        [hud hide:YES afterDelay:3.0];
+        //[self.view makeToast:NSLocalizedString(@"Subtitle empty", nil)];
+        return;
+    }
+    
+    [subtitleTextView updateText:subtitleStr];
+    //调整字幕到居中位置
+    subtitleTextView.center = CGPointMake(self.videoViewRect.size.width/2, self.videoViewRect.size.height/2);
+    [inputToolbar.subtitleText resignFirstResponder];
+    
+    if (self.isEditing) {
+        
+        self.isEditing = NO;
+        qxMediaObject *textObj = self.currentOverlayObj.overlayCustomObj;
+        textObj.text = subtitleStr;
+        
+        CGSize size = [subtitleTextView subtitleRect].size;
+    
+        NSString *file = [textObj createTextImageWithSize:size];
+        if(file){
+            [self deletePath:currentOverlayObj.strFilePath];
+            [self.currentOverlayObj setFilePath:file withType:eMT_Overlay fromAssetLibrary:NO];
+            
+            [self setTextDisplayRect:currentOverlayObj.overlayCustomObj];
+            //重新生成图片
+            [self.subtitleOverlayView updateMediaObject:self.currentOverlayObj hidden:YES];
+        }
+        
+    }else{
+        [self addTextObj:[subtitleTextView text]];
+        [self setTextDisplayRect:currentOverlayObj.overlayCustomObj];
+        
+        ///////////////////////////////
+        [self.subtitleOverlayView addMediaObject:currentOverlayObj];
+        //////////////////////////////
+    }
+    
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    
+    [self addObserver:self forKeyPath:observerPlaying options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld context:nil];
+    [self addObserver:self forKeyPath:observerEditing options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld context:nil];
+    
+    NSNotificationCenter * notifyCenter=[NSNotificationCenter defaultCenter];
+    [notifyCenter addObserver:self selector:@selector(keyboardWillChange:) name:UIKeyboardWillChangeFrameNotification object:nil];
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    applicationActive = YES;
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    
+    [self removeObserver:self forKeyPath:observerPlaying];
+    [self removeObserver:self forKeyPath:observerEditing];
+    
+    NSNotificationCenter * notifyCenter=[NSNotificationCenter defaultCenter];
+    [notifyCenter removeObserver:self name:UIKeyboardWillChangeFrameNotification object:nil];
+    applicationActive = NO;
+    [self stopPreview];
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSString *,id> *)change context:(void *)context {
+    
+    if ([observerPlaying isEqualToString:keyPath]) {
+        if (self.isLoadDone == false) {
+            return;
+        }
+        BOOL newPlaying = [change[NSKeyValueChangeNewKey] boolValue];
+        if (newPlaying) {
+            self.subtitleTextView.hidden = YES;
+            self.subtitleOverlayView.userInteractionEnabled = NO;
+            colorSelector.userInteractionEnabled = NO;
+            fontSelector.userInteractionEnabled = NO;
+            self.btAddSubtitle.enabled = NO;
+        }else{
+            [self showOverlayAtTime:currentPosOnTrack forceDraw:NO];
+            
+            self.subtitleOverlayView.userInteractionEnabled = YES;
+            colorSelector.userInteractionEnabled = YES;
+            fontSelector.userInteractionEnabled = YES;
+            self.btAddSubtitle.enabled = YES;
+        }
+        
+    } else if([observerEditing isEqualToString:keyPath]){
+        
+        BOOL newEditing = [change[NSKeyValueChangeNewKey] boolValue];
+        if(newEditing){// 禁用某些操作
+            self.subtitleOverlayView.userInteractionEnabled = NO;
+            colorSelector.userInteractionEnabled = NO;
+            fontSelector.userInteractionEnabled = NO;
+        }else{// 启用某些操作
+            self.subtitleOverlayView.userInteractionEnabled = YES;
+            colorSelector.userInteractionEnabled = YES;
+            fontSelector.userInteractionEnabled = YES;
+        }
+        
+    }
+    
+}
+
+// 显示和隐藏编辑框
+- (void)showOrHiddenSubtitleTextView:(BOOL)flag {
+    subtitleTextView.hidden = flag;
+    
+    if (flag) {// 编辑框隐藏
+        
+        [self showMediaObject:currentPosOnTrack];
+    }else{//编辑框显示, 为空的情况要显示正确的字幕,而不仅仅是显示编辑框
+        
+    }
+}
+
+/** 显示当前时间在时间轴上的字幕 */
+- (void)showMediaObject:(CGFloat)timeInTimeline {
+    NSMutableArray *resultArray = [self.timeline getTextObjectsAtTime:timeInTimeline];
+    if (resultArray.count == 0) {
+        return;
+    }
+    
+    for(qxMediaObject *overlayObj in resultArray){
+        [self.subtitleOverlayView hideMediaObject:overlayObj flag:NO];
+    }
+}
+
+- (void)applicationWillResignActive:(NSNotification *)notify
+{
+    applicationActive = NO;
+    [self stopPreview];
+    self.needRefreshVideoBeforePreview = YES;
+}
+
+- (void)applicationBecomeActive:(NSNotification *)notify
+{
+    applicationActive = YES;
+    [self pausePreview];
+}
+
+- (void)dealloc
+{
+    self.timeline = nil;
+}
+
+-(void) cleanMemory
+{
+    
+}
+
+- (void)cancelAction:(id)sender
+{
+    [self.subtitleOverlayView clearAll];
+    [self stopPreview];
+    [playbackHelper destroy];
+    playbackHelper = nil;
+    
+    
+    if ([self.delegate respondsToSelector:@selector(videoEdit:type:editFlag:)]) {
+        [self.delegate videoEdit:self type:EditTypeSubtitle editFlag:NO];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)confirmAction:(id)sender
+{
+    [self.subtitleOverlayView clearAll];
+    [Util clearPhotoTrack:[self.timeline getTrackFromTimeline:3]];
+    [self stopPreview];
+    [playbackHelper destroy];
+    playbackHelper = nil;
+    
+    
+    if ([self.delegate respondsToSelector:@selector(videoEdit:type:editFlag:)]) {
+        [self.delegate videoEdit:self type:EditTypeSubtitle editFlag:YES];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+#pragma mark 添加字幕
+- (IBAction) addSubtitleAction:(id)sender
+{
+    if (self.playing) {
+        NSLog(@"playing...");
+        return;
+    }
+    //[self pausePreview];
+    [mTimelineView hiddenEditingView];
+    [self resetSubtitleTextView];
+    [subtitleTextView triggerSubtitleViewTapped];
+}
+
+#pragma mark 重新编辑字幕
+- (void)resetSubtitleTextView
+{
+    [subtitleTextView setTextWithOverlayObj:nil];
+    [subtitleTextView setTextFont:@"default"];
+    [subtitleTextView resetTextSize];
+    [subtitleTextView setTextColor:[UIColor colorWithRed:1.0 green:1.0 blue:1.0 alpha:1.0]];
+    subtitleTextView.frame = CGRectMake((videoView.frame.size.width - 200)/2, (videoView.frame.size.height - 100)/2, 200, 100);
+}
+
+#pragma mark 重新显示字幕---需要将字幕处理成图片----这一步是恢复字幕位置和大小的关键
+- (void)setTextDisplayRect:(qxMediaObject*)textObj
+{
+    if(textObj && textObj.eType == eMT_Text){
+        CGRect subtitleRect = [subtitleTextView subtitleRect];
+        CGSize viewSize = videoView.frame.size;
+        float subtitleX = subtitleRect.origin.x;
+        float subtitleY = subtitleRect.origin.y;
+        CGRect rect = CGRectMake(subtitleX/viewSize.width, subtitleY/viewSize.height, subtitleRect.size.width/viewSize.width, subtitleRect.size.height/viewSize.height);
+        [textObj setDisplayRect:rect];
+        
+        [self updateCurrentOverlayWithTextObj:textObj];
+        self.needRefreshVideoBeforePreview = YES;
+    }
+}
+
+#pragma mark 返回字幕的显示区域---使用比例再计算回来---这一步是提供字幕参数的关键
+- (CGRect)displayRectOfText:(qxMediaObject*)textObj
+{
+    CGRect rect = CGRectZero;
+    if(textObj && textObj.eType == eMT_Text){
+        CGSize viewSize = self.videoViewRect.size;
+        CGRect displayRect = textObj.textDisplayRect;
+        rect.origin.x = viewSize.width * displayRect.origin.x;
+        rect.origin.y = viewSize.height * displayRect.origin.y;
+        rect.size.width = viewSize.width * displayRect.size.width;
+        rect.size.height = viewSize.height * displayRect.size.height;
+        rect = [subtitleTextView calTextViewRectFromSubtitleRect:rect];
+    }
+    return rect;
+}
+
+#pragma mark 设置字幕图片的显示位置---这里是相对区域
+- (qxMediaObject*)overlayObjFromTextObj:(qxMediaObject*)textObj
+{
+    qxMediaObject *overlayObj = nil;
+    CGSize size = [subtitleTextView subtitleRect].size;
+    NSString *file = [textObj createTextImageWithSize:size];
+    if(file){
+        overlayObj = [[qxMediaObject alloc] init];
+        overlayObj.overlayCustomObj = textObj;
+        [self deletePath:overlayObj.strFilePath];
+        [overlayObj setFilePath:file withType:eMT_Overlay fromAssetLibrary:NO];
+        [overlayObj setDisplayRect:textObj.textDisplayRect];
+        
+    }
+    return overlayObj;
+}
+
+- (void)addTextObj:(NSString *)text
+{
+    
+    qxMediaObject *textObj = [[qxMediaObject alloc] init];
+    [textObj setFilePath:nil withType:eMT_Text fromAssetLibrary:NO];
+    textObj.text = text;
+    //------------------------------
+    UIFont *font = [UIFont systemFontOfSize:17];
+    UIColor *color = [UIColor colorWithRed:1.0 green:1.0 blue:1.0 alpha:1.0];
+
+    [textObj setTextFont:font.fontName size:font.pointSize];
+    [textObj setTextColor:color];
+    //[self setTextDisplayRect:textObj];
+    //---------------
+    CGFloat tmpDuration = (CMTimeGetSeconds(duration) - currentPosOnTrack) > 3 ? 3 : (CMTimeGetSeconds(duration) - currentPosOnTrack);
+    //
+    qxTrack *overlayTrack = [self.timeline getTrackForOverlay];
+    qxMediaObject *overlayObj = [self overlayObjFromTextObj:textObj];
+    overlayObj.zorder = 2;
+    
+    [overlayTrack addMediaObject:overlayObj];
+    
+    CMTime startTimeOfTrack = CMTimeMakeWithSeconds(currentPosOnTrack, duration.timescale);
+    CMTime timeDuration = CMTimeMakeWithSeconds(tmpDuration, duration.timescale);
+    
+    //textObj.startTimeOfTrack = startTimeOfTrack;
+    //textObj.actualTimeRange.duration = timeDuration;
+    
+    [overlayTrack updateTimeAtIndex:(int)(overlayTrack.mpMediaObjArray.count - 1) startTime:startTimeOfTrack duration:timeDuration];
+    
+    currentOverlayObj = overlayObj;
+    [mTimelineView refreshSubtitleView];
+    [self updateSelectionFont:font Color:color];
+}
+
+#pragma mark 获取指定时间对应的媒体对象
+-(qxMediaObject*) getSubtitleObjectAtTime:(CGFloat)timeInSecond
+{
+    qxMediaObject *stickerObj = nil;
+    if (self.timeline) {
+        NSMutableArray *resultArray = [self.timeline getTextObjectsAtTime:timeInSecond];
+        if (resultArray.count >= 1) {
+            stickerObj = resultArray.lastObject;
+        }
+    }
+    return stickerObj;
+}
+
+// 删除字幕
+- (void)subtitleTextViewDelete:(SubtitleTextView *)subtitle {
+    [self pausePreview];
+    
+    if (self.currentOverlayObj == nil) {
+        return;
+    }
+    
+    [self.subtitleOverlayView deleteMediaObject:self.currentOverlayObj];
+    if (self.currentOverlayObj.strFilePath) {
+        [self deletePath:self.currentOverlayObj.strFilePath];
+    }
+    qxTrack *stickerTrack = [self.timeline getTrackForOverlay];
+    int index = [stickerTrack findMediaObject:self.currentOverlayObj];
+    if (index >=0 && index < stickerTrack.mpMediaObjArray.count) {
+        [stickerTrack delMediaObject:index];
+        [self.mTimelineView refreshSubtitleView];
+    }
+    
+    [self.mTimelineView hiddenEditingView];
+    
+    self.currentOverlayObj =[self getSubtitleObjectAtTime:currentPosOnTrack];
+    
+    [self updateEditViewWithMediaObject:self.currentOverlayObj];// 更新最新字幕的编辑框
+    // 更新字体位置
+    [self showOverlayAtTime:currentPosOnTrack forceDraw:NO];
+    self.needRefreshVideoBeforePreview = YES;
+    
+}
+
+
+- (void)updateSelectionFont:(UIFont*)font Color:(UIColor*)color
+{
+    if(currentOverlayObj && [currentOverlayObj isTextObj]){
+        [colorSelector setSelect:color];
+        [fontSelector selectFont:font];
+    }else{
+        [colorSelector setSelect:nil];
+        [fontSelector selectFont:nil];
+    }
+}
+
+- (IBAction) playViewAction:(UIButton*)sender
+{
+    if(!self.playing){
+        if(self.needRefreshVideoBeforePreview){
+            [self prepareForPreview];
+        }else{
+            [self startPreview];
+        }
+    }else{
+        [self pausePreview];
+    }
+}
+
+- (void)playbackViewTap:(UITapGestureRecognizer*)gesture
+{
+    if(self.playing){
+        [self pausePreview];
+    }
+}
+
+-(void)prepareForPreview
+{
+    NSLog(@"prepareForPreview");
+    [Util clearPhotoTrack:[self.timeline getTrackFromTimeline:3]];
+    if(playbackHelper){
+        playbackHelper.delegate = nil;
+        [playbackHelper stop];
+        [playbackHelper destroy];
+        playbackHelper = nil;
+    }
+    self.videoView.frame=self.videoViewRect;
+    self.overlayView.frame = self.videoViewRect;
+    
+    playbackHelper = [[qxPlaybackHelper alloc] init];
+    playbackHelper.delegate = self;
+    float scale = [UIScreen mainScreen].scale;
+    self.timeline.timelineSize = CGSizeMake(videoView.frame.size.width*scale, videoView.frame.size.height*scale);
+    playbackHelper.mpTimeline = self.timeline;
+    [playbackHelper initWithUIView:videoView];
+    
+    duration = playbackHelper.playerItem.duration;
+    labelCurrent.text = [Util stringWithSeconds:0];
+    labelTotal.text = [Util stringWithSeconds:round(CMTimeGetSeconds(duration))];
+    
+    [qxPlaybackView bringFromVideoView:videoView];
+    
+}
+
+#pragma mark - qxPlaybackDelegate
+- (void)readyForPlayback
+{
+    if (self.isEditing || self.playing){
+        return;
+    }
+    
+    if(self.needRefreshVideoBeforePreview){
+        self.needRefreshVideoBeforePreview = NO;
+        if(applicationActive){
+            [self startPreview];
+        }
+    }else{
+        self.playing = NO;
+        btPlay.selected=NO;
+        [self pausePreview];
+    }
+    
+}
+
+#pragma mark 结束预览
+- (void)FinishPlayback
+{
+    [self stopUpdatePlayStatus];
+    [playbackHelper rebuildForTextEdit:NO];
+    
+    [self seekTo:0.0];// 必须在设置playing之前---因为设置了观察者
+    [mTimelineView scrollToSecond:0.0 sendEvent:NO];
+    self.playing = NO;
+    btPlay.selected=NO;
+    
+}
+
+#pragma mark - OverlayScrollViewDelegate --- 手势拖动响应
+- (void)videoScrollView:(OverlayScrollView *)view didScrollTo:(CGFloat)second tapFlag:(BOOL)tapFlag
+{
+    currentPosOnTrack = second;
+    if(!self.playing){
+        [self seekTo:second];
+    }
+    
+    if (tapFlag == NO) {
+        [self.subtitleOverlayView scrollToSecond:currentPosOnTrack];
+    }else{// 点击字幕激活 不改变当前对象---点击字幕在时间轴中的区间也会走这里
+        [self.subtitleOverlayView hideAllSubtitleExcludeMediaObject:nil];
+        
+        NSMutableArray *resultArray = [self.timeline getTextObjectsAtTime:currentPosOnTrack];
+        for (qxMediaObject *obj in resultArray) {
+            if (obj == self.currentOverlayObj) {
+                [self.subtitleOverlayView hideMediaObject:obj flag:YES];
+            }else{
+                [self.subtitleOverlayView hideMediaObject:obj flag:NO];
+            }
+        }
+    }
+    
+}
+
+// 点击的区域 --- 然后响应滚动到的区域
+- (void)videoScrollView:(OverlayScrollView*)view tapSubtitleRectView:(SubtitleRectView *)rectView didToSecond:(CGFloat)second {
+    
+    [self pausePreview];
+    currentPosOnTrack = second;
+    // 找到正在编辑的字幕
+    
+    qxMediaObject *mediaObject = rectView.mediaObject;
+    if (mediaObject) {// 这里与点击字幕激活编辑有冲突---点击时间轴中字幕区间
+        [self.subtitleOverlayView hideAllSubtitleExcludeMediaObject:nil];
+        
+        [self showMediaObject:currentPosOnTrack];
+        self.currentOverlayObj = mediaObject;
+        [self updateEditViewWithMediaObject:self.currentOverlayObj];
+        [self.subtitleOverlayView hideMediaObject:self.currentOverlayObj flag:YES];
+    }
+    
+}
+
+- (void)videoScrollViewPaned {
+    [self pausePreview];
+}
+
+#pragma mark SubtitleViewDelegate 字幕点击事件---需要隐藏当前字幕和显示当前时间线中的字幕
+- (void)subtitleView:(SubtitleView *)view withMediaObject:(qxMediaObject *)mediaObject {
+    
+    if (mediaObject == nil) {
+        return;
+    }
+    self.currentOverlayObj = mediaObject;
+    
+    [self updateEditViewWithMediaObject:currentOverlayObj];
+    // 时间轴中显示为编辑状态   OverlayScrollViewDelegate
+    [self.mTimelineView showEditingViewWithMediaObject:mediaObject scrollFlag:YES];
+}
+
+// 开始拖动
+- (void)scrubbingDidStart:(OverlayScrollView*)view {
+    [self pausePreview];
+
+    [self showOrHiddenSubtitleTextView:YES];
+    
+}
+
+// 松手
+- (void)scrubbingDidEnd:(OverlayScrollView*)view {
+    [self showOverlayAtTime:currentPosOnTrack forceDraw:NO];
+    
+}
+
+// 松手后显示指定的overlay forceFlag 对于相同的对象是否重新定位编辑框
+- (void)showOverlayAtTime:(CGFloat)second forceDraw:(BOOL)forceFlag {
+    NSMutableArray *resultArray = [self.timeline getTextObjectsAtTime:second];
+    
+    if (resultArray.count == 0) {
+        self.currentOverlayObj = nil;
+        [self.subtitleOverlayView hideAllSubtitleExcludeMediaObject:nil];
+        [self showOrHiddenSubtitleTextView:YES];
+        [self.mTimelineView hiddenEditingView];
+        return;
+    }
+    
+    qxMediaObject *editingMediaObject = [self.mTimelineView getEditingMediaObject];
+    
+    if (editingMediaObject == nil) {
+        
+    } else {// 已经处于编辑中
+        if([resultArray containsObject:editingMediaObject]) {
+            [self showOrHiddenSubtitleTextView:NO];
+            [self.subtitleOverlayView hideMediaObject:editingMediaObject flag:YES];
+            [self updateEditViewWithMediaObject:editingMediaObject];
+            return;
+        }else{// 如果包含已经在编辑中的的字幕return,如果不包含取消编辑---重新指向
+            [self.mTimelineView hiddenEditingView];
+        }
+    }
+    
+    qxMediaObject *overlayObj = [resultArray lastObject];
+    
+    [self showOrHiddenSubtitleTextView:NO];//一定是显示编辑框
+    
+    [self updateEditViewWithMediaObject:overlayObj];
+    
+    [self.subtitleOverlayView hideAllSubtitleExcludeMediaObject:nil];
+    
+    for (qxMediaObject *mediaObj in resultArray) {// 这里还没有为当前对象赋值
+        if (mediaObj == overlayObj) {
+            [self.subtitleOverlayView hideMediaObject:mediaObj flag:YES];
+        }else{
+            [self.subtitleOverlayView hideMediaObject:mediaObj flag:NO];
+        }
+    }
+    
+    if ((self.currentOverlayObj == nil && overlayObj == nil) || self.playing) {//没有text或者播放中
+        [self updateSelectionFont:nil Color:nil];
+        return;
+    }
+    
+    if(overlayObj==nil){//编辑框已经隐藏了不需要继续处理了
+        self.currentOverlayObj = overlayObj;
+        return;
+    }
+    
+    // 输入退出时,相同的对象也要绘制
+    if ([overlayObj isEqual:self.currentOverlayObj] && forceFlag == NO) {
+        return;
+    }
+    
+    currentOverlayObj = overlayObj;
+    
+    [self updateEditViewWithMediaObject:currentOverlayObj];
+}
+
+/** 更新编辑框 */
+-(void) updateEditViewWithMediaObject:(qxMediaObject *)mediaObject {
+    if(mediaObject == nil){
+        return;
+    }
+    
+    if (subtitleTextView.hidden) {
+        subtitleTextView.hidden = NO;
+    }
+    
+    [subtitleTextView setTextWithOverlayObj:mediaObject];
+    CGRect rect = [self displayRectOfText:mediaObject.overlayCustomObj];
+    
+    if(!CGRectIsEmpty(rect)){
+        subtitleTextView.frame = rect;
+    }
+    [self updateSelectionFont:((qxMediaObject*)mediaObject.overlayCustomObj).textFont Color:((qxMediaObject*)mediaObject.overlayCustomObj).textColor];
+}
+
+- (void)framesLoadDone
+{
+    [self enableEditing];
+}
+
+- (void)needRefreshVideo
+{
+    self.needRefreshVideoBeforePreview = YES;
+}
+
+#pragma mark OverlayScrollDelegate 裁剪时间点
+// 裁剪时间点---剪切后松手事件
+- (void)videoScrollView:(OverlayScrollView *)view start:(CGFloat)leftSecond end:(CGFloat)rightSecond index:(NSUInteger)index {
+    
+    NSMutableArray *resultArray = [self.timeline getTextObjectsAtTime:currentPosOnTrack];
+    
+    if (resultArray.count == 0) {
+        [self showOrHiddenSubtitleTextView:YES];
+        return;
+    }
+    
+    if ([resultArray containsObject:self.currentOverlayObj] == false) {
+        [self showOrHiddenSubtitleTextView:YES];
+    }else{
+        [self showOrHiddenSubtitleTextView:NO];
+    }
+    
+}
+
+//
+- (qxMediaObject*)getTextObjectAtTime:(CGFloat)timeInSecond
+{
+    qxMediaObject *stickerObj = nil;
+    if (self.timeline) {
+        NSMutableArray *resultArray = [self.timeline getTextObjectsAtTime:timeInSecond];
+        if (resultArray.count >= 1) {
+            stickerObj = resultArray.lastObject;
+        }
+    }
+    return stickerObj;
+}
+
+#pragma mark - Preview control
+-(void)stopPreview
+{
+    labelCurrent.text = [Util stringWithSeconds:0];
+    [self stopUpdatePlayStatus];
+    if(playbackHelper){
+        [playbackHelper stop];
+    }
+    self.playing = NO;
+    btPlay.selected=NO;
+}
+
+-(void)startPreview
+{
+    if(!self.playing && playbackHelper){
+        [playbackHelper rebuildForTextEdit:YES];
+        [self startUpdatePlayStatus];
+        [playbackHelper playPause:YES];
+        self.playing = YES;
+    }
+    btPlay.selected=YES;
+    [self showOrHiddenSubtitleTextView:YES];
+    if(mTimelineView){
+        [mTimelineView hiddenEditingView];
+        [mTimelineView refreshSubtitleView];
+    }
+}
+
+-(void)pausePreview
+{
+    if(self.playing && playbackHelper){
+        [playbackHelper playPause:NO];
+        [self stopUpdatePlayStatus];
+        self.playing = NO;
+    }
+    [playbackHelper rebuildForTextEdit:NO];
+    btPlay.selected=NO;
+
+}
+
+-(void)startUpdatePlayStatus
+{
+    if(![previewControlTimer isValid]){
+        previewControlTimer = [NSTimer scheduledTimerWithTimeInterval:0.05 target:self selector:@selector(updatePlayStatusTask) userInfo:nil repeats:YES];
+    }
+}
+
+-(void)stopUpdatePlayStatus
+{
+    if([previewControlTimer isValid]){
+        [previewControlTimer invalidate];
+    }
+}
+
+-(void)updatePlayStatusTask
+{
+    NSTimeInterval tm = [playbackHelper playbackProgress];
+    labelCurrent.text = [Util stringWithSeconds:round(tm/1000)];
+    [mTimelineView scrollToSecond:tm/1000];
+}
+
+- (void)seekTo:(float)second
+{
+    [playbackHelper.player seekToTime:CMTimeMakeWithSeconds(second, duration.timescale) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
+    labelCurrent.text = [Util stringWithSeconds:round(second)];
+    currentPosOnTrack = second;
+}
+
+#pragma mark -- 移动字幕事件
+-(void)handleSubtitlePanGestureRecognizer:(UIPanGestureRecognizer*)recognizer
+{
+    if(recognizer.state == UIGestureRecognizerStateChanged){//移动字幕
+        [self pausePreview];
+        CGPoint translation = [recognizer translationInView:recognizer.view.superview];
+        CGFloat x = recognizer.view.center.x + translation.x;
+        CGFloat y = recognizer.view.center.y + translation.y;
+        CGFloat minY = recognizer.view.frame.size.height/2;
+        CGFloat maxY = recognizer.view.superview.frame.size.height - recognizer.view.frame.size.height/2;
+        if(y < minY){
+            y = minY;
+        }else if(y > maxY){
+            y = maxY;
+        }
+        //这里将编辑视图指向移动到的点
+        recognizer.view.center = CGPointMake(x,y);
+        [recognizer setTranslation:CGPointZero inView:recognizer.view.superview];
+    }else if(recognizer.state == UIGestureRecognizerStateEnded){//初始化字幕
+        [self setTextDisplayRect:currentOverlayObj.overlayCustomObj];
+    }
+}
+
+- (void)subtitleTextSizeChanged:(UIFont*)font
+{
+    if(currentOverlayObj){
+        [(qxMediaObject*)currentOverlayObj.overlayCustomObj setTextFont:font.fontName size:font.pointSize];
+        [self setTextDisplayRect:currentOverlayObj.overlayCustomObj];
+    }
+}
+
+#pragma mark - ColorSelectorViewDelegate
+- (void)selectColor:(UIColor *)color
+{
+    [self pausePreview];
+    if(currentOverlayObj){
+        [subtitleTextView setTextColor:color];
+        [(qxMediaObject*)currentOverlayObj.overlayCustomObj setTextColor:color];
+        [self updateCurrentOverlayWithTextObj:currentOverlayObj.overlayCustomObj];
+        self.needRefreshVideoBeforePreview = YES;
+    }
+}
+
+#pragma mark - FontSelectorViewDelegate
+- (void)selectFont:(NSString *)fontName
+{
+    [self pausePreview];
+    if(currentOverlayObj && fontName){
+        UIFont *font = [subtitleTextView setTextFont:fontName];
+        if(font){
+            [currentOverlayObj.overlayCustomObj setTextFont:font.fontName size:font.pointSize];
+            [self updateCurrentOverlayWithTextObj:currentOverlayObj.overlayCustomObj];
+            
+            self.needRefreshVideoBeforePreview = YES;
+        }
+    }
+}
+
+#pragma mark 接收触摸屏幕通知
+-(void)screenTouchNotification:(NSNotification  *)notificatioin
+{
+
+}
+
+#pragma mark 更新字幕的大小
+-(void)updateCurrentOverlayWithTextObj:(qxMediaObject*)textObj
+{
+    if(textObj && currentOverlayObj){
+        CGSize size = [subtitleTextView subtitleRect].size;
+        NSString *imgFile = [textObj createTextImageWithSize:size];
+        if (imgFile == nil) {
+            return;
+        }
+        currentOverlayObj.overlayCustomObj = textObj;
+        [currentOverlayObj setDisplayRect:textObj.textDisplayRect];
+        [self deletePath:currentOverlayObj.strFilePath];
+        [currentOverlayObj setFilePath:imgFile withType:eMT_Overlay fromAssetLibrary:NO];
+        
+        [self.subtitleOverlayView updateMediaObject:currentOverlayObj hidden:YES];
+    }
+}
+
+/**
+ *  键盘发生改变执行
+ */
+- (void)keyboardWillChange:(NSNotification *)note
+{
+    //NSLog(@"%@", note.userInfo);
+    NSDictionary *userInfo = note.userInfo;
+    //获取键盘动画时间
+    CGFloat animDuration = [userInfo[@"UIKeyboardAnimationDurationUserInfoKey"] doubleValue];
+    //获取键盘大小
+    CGRect keyFrame = [userInfo[@"UIKeyboardFrameEndUserInfoKey"] CGRectValue];
+    
+    CGFloat starty = keyFrame.origin.y-inputToolbar.frame.size.height-self.statusHeight-self.naviHeight;//view是从导航栏开始绘制的
+    if(keyFrame.origin.y>=[UIScreen mainScreen].bounds.size.height){//键盘消失的情况
+        starty += inputToolbar.frame.size.height;
+    }
+    
+    CGSize size=inputToolbar.frame.size;
+    
+    __weak SubtitleViewController * weakSelf = self;
+    
+    [UIView animateWithDuration:animDuration animations:^{
+        weakSelf.inputToolbar.frame = CGRectMake(0, starty, size.width, size.height);
+    }];
+}
+
+/** 删除文件路径 --- 不允许删除预览界面传递过来的路径 */
+- (void)deletePath:(NSString *)path {
+    
+    if (path == nil) {
+        return;
+    }
+    
+    if (self.backupPaths.count != 0) {
+        for (NSString *tmpPath in self.backupPaths) {
+            if ([tmpPath isEqualToString:path]) {
+                NSLog(@"backup path!");
+                return;
+            }
+        }
+    }
+    
+    [Util deleteFile:path];
+}
+
+@end

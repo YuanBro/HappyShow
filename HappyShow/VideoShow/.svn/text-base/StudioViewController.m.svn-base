@@ -1,0 +1,1210 @@
+//
+//  StudioViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/5/13.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "StudioViewController.h"
+#import "PlayerViewController.h"
+#import "StudioVideoCell.h"
+
+#import "VideoPlayerViewController.h"
+#import <AssetsLibrary/AssetsLibrary.h>
+#import "Util.h"
+#import "MobClick.h"
+#import "VideoDraft.h"
+#import "DraftVideo+CoreData.h"
+#import "qxTimeline.h"
+#import "qxStickerObject.h"
+#import "SettingViewController.h"
+#import "MBProgressHUD.h"
+#import "AppMacros.h"
+#import "AppEvent.h"
+#import "RotateNavigationController.h"
+#import "ExportVideo+CoreData.h"
+#import "Toast+UIView.h"
+#import "UIImage+Util.h"
+#import "Prefs.h"
+#import "HYActivityView.h"
+#import "UIColor+Util.h"
+#import "NSString+Util.h"
+
+#import "UMSocial.h"
+#import "YouTubeHelper.h"
+#import "YoukuUploader.h"
+#import "YoukuUploaderDelegate.h"
+#import "AuthViewController.h"
+//#import <Accounts/Accounts.h>
+
+static NSUInteger perPage = 10;//每页10条记录
+static NSString *cellIdentifier = @"StudioVideoCell";
+
+@interface StudioViewController()<UITableViewDataSource,UITableViewDelegate,StudioVideoCellDelegate,UIAlertViewDelegate,YouTubeHelperDelegate,YoukuUploaderDelegate,AuthViewControllerDelegate,MBProgressHUDDelegate>
+{
+    
+    NSIndexPath * delPosition;//记录删除的位置
+    NSString * tmpVideoPath;
+    NSUInteger curPage;//当前页码
+}
+
+@property (nonatomic,assign) BOOL editFlag;//是否执行了编辑
+
+@property (nonatomic,strong) HYActivityView * activityView;
+@property (atomic,strong) MBProgressHUD * uploadHUD;
+@property (nonatomic,strong) ALAsset *shareAsset;//认证成功后需要用到
+@property (strong, atomic) NSMutableArray *myVideoArray;
+@property (strong, atomic) NSMutableArray *myDraftArray;
+@property (nonatomic,assign) CGRect screenBounds;
+@property (strong,nonatomic) YouTubeHelper *ytbHelper;
+//@property (strong,nonatomic)FBSDKShareDialog *shareDialog;
+@property (strong,nonatomic) UITableView *videoTableView;
+@property (nonatomic,strong) UIView * naviLine;
+@property (nonatomic,strong) UIButton * btnDraft;
+@property (nonatomic,strong) UIButton * btnMyVideo;
+@property (nonatomic,strong) UIRefreshControl * mRefreshControl;
+
+@end
+
+@implementation StudioViewController
+
+@synthesize studioMode;
+@synthesize pagerDelegate;
+
+@synthesize editFlag;
+@synthesize uploadHUD;
+@synthesize shareAsset;
+@synthesize videoTableView;
+@synthesize ytbHelper;
+
+@synthesize screenBounds;
+@synthesize naviLine;
+@synthesize btnDraft;
+@synthesize btnMyVideo;
+@synthesize mRefreshControl;
+#pragma mark - view life cycle
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor colorWithHexString:tableSectionColor];
+    self.myDraftArray = [[NSMutableArray alloc] init];
+    self.myVideoArray = [[NSMutableArray alloc] init];
+    
+    screenBounds = [UIScreen mainScreen].bounds;
+    
+    // UITableView---/-40tab
+    videoTableView = [[UITableView alloc] initWithFrame:CGRectMake(0, 0, screenBounds.size.width, screenBounds.size.height-64-40) style:UITableViewStylePlain];
+    videoTableView.backgroundColor=[UIColor colorWithHexString:tableSectionColor];
+    [self.view addSubview:videoTableView];
+    videoTableView.dataSource = self;
+    videoTableView.delegate = self;
+    videoTableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+    if (sysVersion >= 7) {
+        videoTableView.separatorInset = UIEdgeInsetsZero;
+    }
+    if ([videoTableView respondsToSelector:@selector(setLayoutMargins:)]) {
+        [videoTableView setLayoutMargins:UIEdgeInsetsZero];
+    }
+    
+    self.mRefreshControl=[[UIRefreshControl alloc] init];
+    self.mRefreshControl.tintColor = [UIColor redColor];
+    self.mRefreshControl.attributedTitle = [[NSAttributedString alloc] initWithString:NSLocalizedString(@"header_pull_refresh", nil)];
+    [self.mRefreshControl addTarget:self action:@selector(loadData) forControlEvents:UIControlEventValueChanged];
+    [self.videoTableView addSubview:self.mRefreshControl];
+    [self.videoTableView sendSubviewToBack:self.mRefreshControl];
+    
+    //load cell nib
+    UINib *nib = [UINib nibWithNibName:cellIdentifier bundle:nil];
+    [videoTableView registerNib:nib forCellReuseIdentifier:cellIdentifier];
+    
+    [self beginRefreshing];
+}
+
+-(void) cleanMemory
+{
+    self.videoTableView.dataSource=nil;
+    self.videoTableView.delegate=nil;
+    [self.myVideoArray removeAllObjects];
+    self.myVideoArray=nil;
+    [self.myDraftArray removeAllObjects];
+    self.myDraftArray=nil;
+}
+
+- (void)dealloc
+{
+    [self cleanMemory];
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    if ([self.pagerDelegate respondsToSelector:@selector(controllerDidAppear:)]) {
+        [self.pagerDelegate controllerDidAppear:self];
+    }
+    
+    if(editFlag){
+        [self beginRefreshing];
+    }
+}
+
+-(void) beginRefreshing {
+    
+    if (self.mRefreshControl.refreshing) {
+        //TODO: 已经在刷新数据了
+    } else {
+        if (self.videoTableView.contentOffset.y == 0) {
+            [UIView animateWithDuration:0.25
+                                  delay:0
+                                options:UIViewAnimationOptionBeginFromCurrentState
+                             animations:^(void){
+                                 self.videoTableView.contentOffset = CGPointMake(0, -self.mRefreshControl.frame.size.height);
+                             } completion:^(BOOL finished){
+                                 [self.mRefreshControl beginRefreshing];
+                                 [self.mRefreshControl sendActionsForControlEvents:UIControlEventValueChanged];
+                             }];
+        }
+    }
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    if ([self.pagerDelegate respondsToSelector:@selector(controllerDidDisappear:)]) {
+        [self.pagerDelegate controllerDidDisappear:self];
+    }
+    if (tmpVideoPath!=nil) {
+        [Util deleteFile:tmpVideoPath];
+        tmpVideoPath=nil;
+    }
+}
+
+#pragma mark - button acion
+- (void)closeButtonAction:(id)sender
+{
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (NSString*)localizedTime:(NSDate*)date
+{
+    NSString *str = @"";
+    if(date){
+        NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
+        [dateFormatter setDateFormat:@"yyyy-MM-dd HH:mm"];
+        str = [NSString stringWithFormat:@"%@",[dateFormatter stringFromDate:date]];
+    }
+    return str;
+}
+
+#pragma mark - UITableViewDataSource
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+{
+    return 1;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    if(self.studioMode==StudioModeVideo){
+        return self.myVideoArray.count;
+    }else{
+        return self.myDraftArray.count;
+    }
+    return 0;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    StudioVideoCell *cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier];
+    cell.videoImage.backgroundColor = [UIColor blackColor];
+    cell.videoImage.contentMode = UIViewContentModeScaleAspectFit;
+    if ([cell respondsToSelector:@selector(setLayoutMargins:)]) {
+        [cell setLayoutMargins:UIEdgeInsetsZero];
+    }
+    cell.delegate = self;
+    if(self.studioMode==StudioModeVideo){
+        cell.isDraft = NO;
+        cell.draft = nil;
+        cell.shareButton.hidden = NO;
+        ALAsset *asset = self.myVideoArray[indexPath.row];
+        cell.videoAsset = asset;
+        NSDate *date = [asset valueForProperty:ALAssetPropertyDate];
+        cell.timeLabel.text = [self localizedTime:date];
+        
+        __weak StudioVideoCell *weakCellRef = cell;
+        __weak StudioViewController *weakSelf = self;
+        //使用异步加载图片避免显示列表滑动不流畅
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            UIImage * image=[weakSelf imageFromALAsset:asset];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if(weakCellRef.videoImage!=nil){
+                    weakCellRef.videoImage.image = image;
+                }
+            });
+        });
+        [cell.controlButton setImage:[UIImage imageResource:@"bt_play.png"] forState:UIControlStateNormal];
+    }else{//这里消耗大量内存
+        DraftVideo *draft = self.myDraftArray[indexPath.row];
+        cell.timeLabel.text = [self localizedTime:draft.savetime];
+        cell.isDraft = YES;
+        cell.draft = draft;
+        cell.shareButton.hidden = YES;
+        [cell.controlButton setImage:[UIImage imageResource:@"bt_draft_edit.png"] forState:UIControlStateNormal];
+        ALAssetsLibrary *library = [Util defaultAssetsLibrary];
+        UIImage * defaultImage=[UIImage imageResource:@"ic_default_image.png"];
+        cell.videoImage.image=defaultImage;
+        NSLog(@"clips===%d   duration=%f",[draft.clips intValue],[draft.duration floatValue]);
+        __weak StudioVideoCell *weakCellRef = cell;
+        __weak StudioViewController *weakSelf = self;
+        
+        [library assetForURL:[NSURL URLWithString:draft.asseturl] resultBlock:^(ALAsset *asset){
+            
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                UIImage * image=[weakSelf imageFromALAsset:asset];
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if(weakCellRef.videoImage!=nil){
+                        weakCellRef.videoImage.image = image;
+                    }
+                });
+            });
+        } failureBlock:^(NSError *error){
+            weakCellRef.videoImage.image = defaultImage;
+        }];
+    }
+    return cell;
+}
+
+// 处理加载更多
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath;
+{
+    if(tableView.contentSize.height<=tableView.frame.size.height){
+        return;
+    }
+    __weak StudioViewController * weakSelf = self;
+    switch(self.studioMode){
+        case StudioModeVideo:
+        {
+            if(indexPath.row==self.myVideoArray.count-1){//查询下面10条记录
+                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                    NSArray * results = [ExportVideo queryWithLimit:perPage page:curPage+1];
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        if (results!=nil && results.count>0) {
+                            curPage++;
+                            [weakSelf.myVideoArray addObjectsFromArray:results];
+                            [weakSelf.videoTableView reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+                        }
+                        
+                    });
+                });
+            }
+                
+        }
+            break;
+        case StudioModeDraft:
+        {
+            if(indexPath.row==self.myDraftArray.count-1){//查询下面10条记录
+                
+                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                    NSArray * results = [DraftVideo queryWithLimit:perPage page:curPage+1];
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        if (results!=nil && results.count>0) {
+                            curPage++;
+                            [weakSelf.myDraftArray addObjectsFromArray:results];
+                            [weakSelf.videoTableView reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+                        }
+                        
+                    });
+                });
+            }
+        }
+            break;
+        default:
+            break;
+    }
+
+}
+
+/** 如果全尺寸图片太大这里必须缩放图片 */
+-(UIImage*)imageFromALAsset:(ALAsset*)asset
+{
+    UIImage *resultImage = nil;
+    if(asset){
+        float width=self.view.frame.size.width;
+        float scale=1.0;
+        ALAssetRepresentation *representation = [asset defaultRepresentation];
+        CGSize size=representation.dimensions;
+        float imagew=size.width;
+        float imageh=size.height;
+        if (imagew<=imageh) {//这里计算需要缩放的比例
+            if(imageh>width){
+                scale=imageh/width;
+            }
+        }else{
+            if(imagew>width){
+                scale=imagew/width;
+            }
+        }
+        if(representation){
+            @autoreleasepool {
+                UIImage *img = [UIImage imageWithCGImage:representation.fullScreenImage scale:scale orientation:UIImageOrientationUp];
+                
+                resultImage = [img copy];
+            }
+        }
+    }
+    
+    return resultImage;
+}
+
+#pragma mark - UITableViewDelegate
+-(CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    float aspectHeight = 10+40+self.view.frame.size.width+40;
+    return aspectHeight;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section
+{
+    return 0.001f;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section
+{
+    return 0.001;
+}
+
+//点击状态栏禁止滚动到顶部
+- (BOOL)scrollViewShouldScrollToTop:(UIScrollView *)scrollView
+{
+    return NO;
+}
+
+#pragma mark - MyStudioVideoCellDelegate
+- (void)playVideo:(NSURL *)videoUrl
+{
+    VideoPlayerViewController *control = [[VideoPlayerViewController alloc] initWithContentURL:videoUrl];
+    control.moviePlayer.shouldAutoplay = YES;
+    control.moviePlayer.controlStyle = MPMovieControlStyleFullscreen;
+    [control.moviePlayer prepareToPlay];
+    [self presentViewController:control animated:YES completion:nil];
+}
+
+- (void) deleteData:(StudioVideoCell*)cell
+{
+    delPosition = [self.videoTableView indexPathForCell:cell];
+    UIAlertView * alert = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"Confirm to Delete", nil) message:nil delegate:self cancelButtonTitle:NSLocalizedString(@"Cancel", nil) otherButtonTitles:NSLocalizedString(@"Confirm", nil), nil];
+    alert.tag=studioMode;
+    [alert show];
+}
+
+- (void)editDraft:(DraftVideo *)draft
+{
+    if(draft){
+        [self handleDraftEditing:draft];
+    }
+}
+
+//---这里得到的时系统相册路径
+- (void)shareVideo:(ALAsset *)videoAsset
+{
+    shareAsset = videoAsset;
+    [self showActionSheet];
+}
+
+- (void)showActionSheet
+{
+    __weak StudioViewController *weakSelf = self;
+    if (!self.activityView) {
+        self.activityView = [[HYActivityView alloc]initWithTitle:NSLocalizedString(@"Share To", nil) referView:self.view];
+        
+        //横屏会变成一行6个, 竖屏无法一行同时显示6个, 会自动使用默认一行4个的设置.
+        self.activityView.numberOfButtonPerLine = 6;
+//        ButtonView *bv = nil;
+        ButtonView *bv = [[ButtonView alloc]initWithText:@"Facebook" image:[UIImage imageResource:@"ic_facebook.png"] handler:^(ButtonView *buttonView){
+//           [weakSelf shareFBVideo];
+           [weakSelf shapeByFaceBook_2];
+
+        }];
+        [self.activityView addButtonView:bv];
+        
+        bv = [[ButtonView alloc]initWithText:@"Youtube" image:[UIImage imageResource:@"ic_youtube.png"] handler:^(ButtonView *buttonView){
+            [weakSelf shareToYTB];
+        }];
+        [self.activityView addButtonView:bv];
+        
+        bv = [[ButtonView alloc]initWithText:@"Instagram" image:[UIImage imageResource:@"ic_instagram.png"] handler:^(ButtonView *buttonView){
+            [weakSelf shareToInstagram];
+        }];
+        [self.activityView addButtonView:bv];
+        
+        bv = [[ButtonView alloc]initWithText:NSLocalizedString(@"SNS_youku", nil) image:[UIImage imageResource:@"ic_youku.png"] handler:^(ButtonView *buttonView){
+            [weakSelf shareToYouku];
+        }];
+        [self.activityView addButtonView:bv];
+//        bv = [[ButtonView alloc]initWithText:@"WhatsApp" image:[UIImage imageResource:@"ic_whatsapp.png"] handler:^(ButtonView *buttonView){
+//            [weakSelf shareWhatsApp];
+//        }];
+//        [self.activityView addButtonView:bv];
+        bv = [[ButtonView alloc]initWithText:NSLocalizedString(@"SNS_Email", nil) image:[UIImage imageResource:@"ic_mail.png"] handler:^(ButtonView *buttonView){
+            [weakSelf shareToEmail];
+        }];
+        [self.activityView addButtonView:bv];
+        bv = [[ButtonView alloc]initWithText:@"Messenger" image:[UIImage imageResource:@"ic_messenger.png"] handler:^(ButtonView *buttonView){
+            [weakSelf shareFBMessVideo];
+            
+        }];
+        [self.activityView addButtonView:bv];
+        bv = [[ButtonView alloc]initWithText:NSLocalizedString(@"SNS_More", nil) image:[UIImage imageResource:@"ic_more.png"] handler:^(ButtonView *buttonView){
+            [weakSelf moreShare];
+        }];
+        [self.activityView addButtonView:bv];
+
+    }
+    
+    [self.activityView show];
+    
+}
+
+- (void)didClickOnImageIndex:(NSInteger *)imageIndex
+{
+    switch ((int)imageIndex) {
+        case 0:
+//            [self shareToFB];
+//           [self shareFBVideo];
+            break;
+//        case 1:
+//            [self shareToYTB];
+//            break;
+        case 1:
+            [self shareToInstagram];
+            break;
+        case 2:
+            [self shareToYouku];
+            break;
+        case 3:
+            [self moreShare];
+            break;
+
+        default:
+            break;
+    }
+    
+}
+
+- (void)didClickOnCancelButton
+{
+    
+}
+-(void)shareWhatsApp{
+    //判断是否安装软件
+    BOOL isCunZai = [[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"whatsapp://"]];
+    if (!isCunZai) {
+        [Util showAlert:NSLocalizedString(@"SNS_whatsapp", nil) title:nil tag:0];
+        return;
+    }
+    [self moreShare];
+
+}
+-(void)moreShare{
+    NSURL *shareURL = [shareAsset valueForProperty:ALAssetPropertyAssetURL];
+   
+        UIActivityViewController *control = [[UIActivityViewController alloc] initWithActivityItems:@[shareURL] applicationActivities:nil];
+    
+    if (sysVersion >= 8) {
+        control.completionWithItemsHandler = ^(NSString *activityType, BOOL completed, NSArray *returnedItems, NSError *activityError) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (completed){
+                    [MobClick event: SHARE_VIA_OTHERS];
+                    NSLog(@"The Activity: %@ was completed  returnedItems = %@", activityType, returnedItems.description);
+                }else{
+                    NSLog(@"The Activity: %@ was NOT completed  returnedItems = %@", activityType, returnedItems.description);
+                }
+
+            });
+        };
+    }else{
+        control.completionHandler = ^(NSString * __nullable activityType, BOOL completed) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (completed){
+                    NSLog(@"The Activity: %@ was completed", activityType);
+                }else{
+                    NSLog(@"The Activity: %@ was NOT completed", activityType);
+                }
+
+            });
+        };
+    }
+    
+//    control.excludedActivityTypes = @[UIActivityTypeSaveToCameraRoll];// 这里已经保存过了,不需要再保存了
+    NSArray *excludedActivities = @[UIActivityTypePostToTwitter, UIActivityTypePostToFacebook,
+                                    UIActivityTypePostToWeibo,
+                                    UIActivityTypeMail,
+                                    UIActivityTypePrint, UIActivityTypeCopyToPasteboard,
+                                    UIActivityTypeAssignToContact, UIActivityTypeSaveToCameraRoll,
+                                    UIActivityTypeAddToReadingList, UIActivityTypePostToFlickr,
+                                    UIActivityTypePostToVimeo, UIActivityTypePostToTencentWeibo];
+    control.excludedActivityTypes = excludedActivities;
+    [self presentViewController:control animated:YES completion:nil];
+
+}
+// A function for parsing URL parameters returned by the Feed Dialog.
+- (NSDictionary*)parseURLParams:(NSString *)query {
+    NSArray *pairs = [query componentsSeparatedByString:@"&"];
+    NSMutableDictionary *params = [[NSMutableDictionary alloc] init];
+    for (NSString *pair in pairs) {
+        NSArray *kv = [pair componentsSeparatedByString:@"="];
+        NSString *val =
+        [kv[1] stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+        params[kv[0]] = val;
+    }
+    return params;
+}
+-(void)shareFBMessVideo
+{
+   
+    BOOL isCunZai = [[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"fb-messenger://"]];
+    if (!isCunZai) {
+        [Util showAlert:NSLocalizedString(@"SNS_no_messenger", nil) title:nil tag:0];
+        return;
+    }
+    
+    [MobClick event: SHARE_VIA_MESSENGER];
+    __weak StudioViewController * weakSelf=self;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        tmpVideoPath=[weakSelf shareVideoPath];
+        NSData *videoData = [NSData dataWithContentsOfFile:tmpVideoPath];
+        [FBSDKMessengerSharer shareVideo:videoData withOptions:nil];
+        
+//        if (videoData != nil) {
+//            dispatch_async(dispatch_get_main_queue(), ^{
+//                self.imageView.image = image;
+//            });
+//        }
+    });
+
+    
+//    NSString *filepath = [[NSBundle mainBundle] pathForResource:@"selfie_vid" ofType:@"mp4"];
+//    [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+  
+//    if (videoData) {
+//        if ( FBSDKMessengerPlatformCapabilityVideo) {
+//            [FBSDKMessengerSharer shareVideo:videoData withOptions:nil];
+//            [MBProgressHUD hideHUDForView:self.view animated:YES];
+//        }
+//    }else{
+//        
+//    }
+//    
+   }
+//分享到facebook
+- (void)shapeByFaceBook_2 {
+
+    //判断是否安装软件
+    BOOL isCunZai = [[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"fb://"]];
+    if (!isCunZai) {
+        [Util showAlert:NSLocalizedString(@"SNS_no_facebook", nil) title:nil tag:0];
+        return;
+    }
+    
+    [MobClick event: SHARE_VIA_FB];
+    __weak StudioViewController * weakSelf=self;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSURL *videoURL = [shareAsset valueForProperty:ALAssetPropertyAssetURL];
+        FBSDKShareVideo *video = [[FBSDKShareVideo alloc] init];
+        video.videoURL = videoURL;
+        FBSDKShareVideoContent *content = [[FBSDKShareVideoContent alloc] init];
+        content.video = video;
+        //    shareDialog.shareContent = content;
+        //    shareDialog.delegate = self;
+        //    [shareDialog show];
+        [FBSDKShareDialog showFromViewController:weakSelf
+                                     withContent:content
+                                        delegate:weakSelf];
+    });
+//    shareDialog = [[FBSDKShareDialog alloc] init];
+   
+}
+- (void)sharer:(id<FBSDKSharing>)sharer didFailWithError:(NSError *)error{
+     NSLog(@"FB: ERROR=%@\n",[error debugDescription]);
+    
+}
+- (void)sharerDidCancel:(id<FBSDKSharing>)sharer{
+    NSLog(@"FB: CANCELED SHARER=%@\n",[sharer debugDescription]);
+}
+- (void)sharer:(id<FBSDKSharing>)sharer didCompleteWithResults:(NSDictionary *)results{
+    NSLog(@"SHARED DONE= %@",results);
+}
+- (void)shareToFB
+{
+    
+    tmpVideoPath=[self shareVideoPath];
+    
+    
+    
+    //NSString *shareString = @"#VideoShow#";
+//    NSURL *shareURL = [shareAsset valueForProperty:ALAssetPropertyAssetURL];
+//    UIActivityViewController *control = [[UIActivityViewController alloc] initWithActivityItems:@[shareURL] applicationActivities:nil];
+//    
+//    if (sysVersion >= 8) {
+//        control.completionWithItemsHandler = ^(NSString *activityType, BOOL completed, NSArray *returnedItems, NSError *activityError) {
+//            dispatch_async(dispatch_get_main_queue(), ^{
+//                if (completed){
+//                    NSLog(@"The Activity: %@ was completed  returnedItems = %@", activityType, returnedItems.description);
+//                }else{
+//                    NSLog(@"The Activity: %@ was NOT completed  returnedItems = %@", activityType, returnedItems.description);
+//                }
+//                
+//            });
+//        };
+//    }else{
+//        control.completionHandler = ^(NSString * __nullable activityType, BOOL completed) {
+//            dispatch_async(dispatch_get_main_queue(), ^{
+//                if (completed){
+//                    NSLog(@"The Activity: %@ was completed", activityType);
+//                }else{
+//                    NSLog(@"The Activity: %@ was NOT completed", activityType);
+//                }
+//                
+//            });
+//        };
+//    }
+//    
+//    control.excludedActivityTypes = @[UIActivityTypeSaveToCameraRoll];// 这里已经保存过了,不需要再保存了
+//    [self presentViewController:control animated:YES completion:nil];
+    
+//    [Util uploadVideoALAssetToFacebook:tmpVideoPath forView:self.view];
+    ALAssetsLibrary *library = [Util defaultAssetsLibrary];
+        [library assetForURL:[NSURL URLWithString:tmpVideoPath] resultBlock:^(ALAsset *asset){
+            [Util uploadVideoALAssetToFacebook:tmpVideoPath forView:self.view];
+        } failureBlock:^(NSError *error){
+            [self.view makeToast:NSLocalizedString(@"Upload Failed", nil) duration:2.0 position:@"bottom"];
+        }];
+}
+
+- (void) shareToYTB
+{
+    [MobClick event: SHARE_VIA_YOUTUBE];
+    
+    if(!ytbHelper){
+        ytbHelper = [[YouTubeHelper alloc] initWithDelegate:self];
+    }
+    [ytbHelper storedAuth];
+    tmpVideoPath=[self shareVideoPath];
+    if([ytbHelper isAuthValid]){
+        [self uploadVideoToYTB:tmpVideoPath];
+    }else{
+        [ytbHelper authenticate];
+    }
+}
+
+- (void)shareToInstagram
+{
+    NSURL *appURL = [NSURL URLWithString:@"instagram://app"];
+    if ([[UIApplication sharedApplication] canOpenURL:appURL]) {
+        [MobClick event: SHARE_VIA_INSTAGRAM];
+        NSURL * assetURL = [shareAsset valueForProperty:ALAssetPropertyAssetURL];
+        
+        //media?id=
+        NSString *caption = NSLocalizedString(@"Instagram caption", nil);
+        //NSString *tmpUrl = [NSString stringWithFormat:@"instagram://media?id=%@",@""];
+        NSString *tmpUrl = [NSString stringWithFormat:@"instagram://library?AssetPath=%@&InstagramCaption=%@",[assetURL.absoluteString stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding],[caption stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding]];
+        NSURL *instagramURL = [NSURL URLWithString:tmpUrl];
+        [[UIApplication sharedApplication] openURL:instagramURL];
+    }else{
+        [Util showAlert:NSLocalizedString(@"Please install Instagram first", nil) title:nil tag:0];
+    }
+}
+
+//分享视频到优酷---这里需要先进行认证得到 access_token---视频只能转码成本地路径---不能是媒体库路径
+- (void)shareToYouku
+{
+    [MobClick event: SHARE_VIA_YOUKU];
+    NSString * access_token=[Prefs getYoukuToken];
+    if (access_token!=nil && ![access_token isEqualToString:@""]) {
+        tmpVideoPath=[self shareVideoPath];
+        [self execUpload:access_token title:[NSString stringWithFormat:@"VideoShow_%ld",(long)([NSDate date].timeIntervalSince1970)] fileName:tmpVideoPath tags:@"VideoShow"];
+    }else{
+        AuthViewController * control=[AuthViewController initFromStoryboard:[AuthViewController class]];
+        control.authType=AuthTypeYouku;
+        control.authDelegate=self;
+        [self presentViewController:control animated:YES completion:nil];
+    }
+    
+}
+//- (void)shareToWhatsApp{
+//    NSURL *shareURL = [shareAsset valueForProperty:ALAssetPropertyAssetURL];
+//    UIActivityViewController *control = [[UIActivityViewController alloc] initWithActivityItems:@[shareURL] applicationActivities:nil];
+//     control.excludedActivityTypes = @[UIActivityTypePostToFacebook];// 这里已经保存过了,不需要再保存了
+//    if (sysVersion >= 8) {
+//        control.completionWithItemsHandler = ^(NSString *activityType, BOOL completed, NSArray *returnedItems, NSError *activityError) {
+//            dispatch_async(dispatch_get_main_queue(), ^{
+//                if (completed){
+//                    NSLog(@"The Activity: %@ was completed  returnedItems = %@", activityType, returnedItems.description);
+//                }else{
+//                    NSLog(@"The Activity: %@ was NOT completed  returnedItems = %@", activityType, returnedItems.description);
+//                }
+//                
+//            });
+//        };
+//    }else{
+//        control.completionHandler = ^(NSString * __nullable activityType, BOOL completed) {
+//            dispatch_async(dispatch_get_main_queue(), ^{
+//                if (completed){
+//                    NSLog(@"The Activity: %@ was completed", activityType);
+//                }else{
+//                    NSLog(@"The Activity: %@ was NOT completed", activityType);
+//                }
+//                
+//            });
+//        };
+//    }
+//    
+//   
+//    [self presentViewController:control animated:YES completion:nil];
+//
+//}
+//验证是否开启邮件功能
+- (BOOL)sendMailInApp
+{
+    Class mailClass = (NSClassFromString(@"MFMailComposeViewController"));
+    if (!mailClass) {
+         [Util showAlert:NSLocalizedString(@"SNS_no_support_email", nil) title:nil tag:0];
+        return NO;
+    }
+    if (![mailClass canSendMail]) {
+        [Util showAlert:NSLocalizedString(@"SNS_no_set_emal", nil) title:nil tag:0];
+        
+        return NO;
+    }
+
+    return YES;
+}
+//上传视频到邮件
+- (void)shareToEmail
+{
+    if (![self sendMailInApp]) {
+        return;
+    }
+    MFMailComposeViewController *mailPicker = [[MFMailComposeViewController alloc] init];
+    mailPicker.mailComposeDelegate = self;
+
+    [MobClick event: SHARE_VIA_EMAL];
+//    NSData *data = [NSData dataWithContentsOfFile:[self shareVideoPath]];
+//    [mc addAttachmentData:data mimeType:@"videos/mp4" fileName:@"tempVideo"];
+//    NSString *path=[NSString stringWithFormat:@"%@/Documents/%@",NSHomeDirectory(),@"20121219.avi"];
+    NSData *video = [NSData dataWithContentsOfFile:[self shareVideoPath]];
+    [mailPicker setSubject: @"Share my video"];
+    [mailPicker addAttachmentData:video mimeType: @"" fileName:@"Video.mp4"];
+//    NSString *emailBody = @"eMail 正文";
+//    [mailPicker setMessageBody:emailBody isHTML:YES];
+    [self presentViewController:mailPicker animated:YES completion:nil];
+}
+- (void)mailComposeController:(MFMailComposeViewController*)controller
+          didFinishWithResult:(MFMailComposeResult)result
+                        error:(NSError*)error {
+    switch (result)
+    {
+        case MFMailComposeResultCancelled:
+            NSLog(@"Mail send canceled...");
+            break;
+        case MFMailComposeResultSaved:
+            NSLog(@"Mail saved...");
+            break;
+        case MFMailComposeResultSent:
+            NSLog(@"Mail sent...");
+            break;
+        case MFMailComposeResultFailed:
+            NSLog(@"Mail send errored: %@...", [error localizedDescription]);
+            break;
+        default:
+            break;
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+//同时要检查文件是否存在
+-(NSString*) shareVideoPath
+{
+    if(tmpVideoPath==nil || [[NSFileManager defaultManager] fileExistsAtPath:tmpVideoPath isDirectory:nil]==NO)
+    {
+        tmpVideoPath = [Util generateTempFileFromALAsset:shareAsset];
+    }
+    
+    return tmpVideoPath;
+}
+
+-(void) authFinish:(BOOL)isAuthed authType:(AuthType)type
+{
+    if(isAuthed){
+        switch (type) {
+            case AuthTypeInstagram:
+                
+                break;
+                
+            case AuthTypeYouku:
+            {
+                NSString * access_token=[Prefs getYoukuToken];
+                tmpVideoPath=[self shareVideoPath];
+                [self execUpload:access_token title:[NSString stringWithFormat:@"VideoShow_%ld",(long)([NSDate date].timeIntervalSince1970)] fileName:tmpVideoPath tags:@"VideoShow"];
+            }
+                break;
+            default:
+                break;
+        }
+        
+    }
+}
+
+- (void) execUpload:(NSString *)access_token title:(NSString*)title fileName:(NSString*)fileName tags:(NSString*)tags
+{
+    NSMutableDictionary * params = [NSMutableDictionary dictionaryWithObjectsAndKeys:access_token,@"access_token", nil];
+    NSMutableDictionary * info = [NSMutableDictionary dictionaryWithObjectsAndKeys:title,@"title",fileName,@"file_name",tags,@"tags", nil];
+    [[YoukuUploader sharedInstance] setClientID:youku_client_id andClientSecret:youku_client_secret];
+    [[YoukuUploader sharedInstance] upload:params uploadInfo:info uploadDelegate:self dispatchQueue:nil];
+}
+
+#pragma mark - YoukuUploaderDelegate
+- (void) onStart//这里没有被执行
+{
+    NSLog(@"start---");
+}
+
+- (void) onProgressUpdate:(int)progress
+{
+    if (uploadHUD==nil) {
+        uploadHUD = [[MBProgressHUD alloc] initWithView:self.view];
+        [self.view addSubview:uploadHUD];
+        uploadHUD.mode = MBProgressHUDModeDeterminate;
+        uploadHUD.delegate = self;
+        uploadHUD.labelText = NSLocalizedString(@"Uploading", nil);
+        [uploadHUD show:YES];
+    }else{
+        __weak StudioViewController * weakSelf=self;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (weakSelf.uploadHUD.progress*100<progress) {//优酷sdk传递的进度不准确
+                weakSelf.uploadHUD.progress=progress/100.0;
+            }
+        });
+    }
+    
+    NSLog(@"progress---%d",progress);
+}
+
+// 返回的vid用于分享到社交平台
+- (void) onSuccess:(NSString*)vid
+{
+    
+    [uploadHUD removeFromSuperview];
+    uploadHUD=nil;
+    uploadHUD = [[MBProgressHUD alloc] initWithView:self.view];
+    [self.view addSubview:uploadHUD];
+    uploadHUD.customView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"checkmark.png"]];
+    uploadHUD.mode = MBProgressHUDModeCustomView;
+    [MobClick event: SHARE_SUCESS_YOUKU];
+    uploadHUD.delegate = self;
+    uploadHUD.labelText = NSLocalizedString(@"Upload success", nil);
+    
+    [uploadHUD show:YES];
+    [uploadHUD hide:YES afterDelay:3];
+}
+
+- (void) onFailure:(NSDictionary*)response
+{
+    [Util showAlert:NSLocalizedString(@"Upload failure", nil) title:nil tag:0];
+}
+
+#pragma mark 点击编辑草稿箱---先检查片段是否都存在
+- (void)handleDraftEditing:(DraftVideo*)draftParams
+{
+    __block BOOL flag=YES;
+    __weak StudioViewController * weakSelf=self;
+    ALAssetsLibrary *alLibrary = [Util defaultAssetsLibrary];
+    dispatch_semaphore_t semapthore = dispatch_semaphore_create(0);
+    dispatch_async(dispatch_queue_create("serial_queue", NULL), ^{
+        NSString * path=[Util relativeSandboxDocPath:draftParams.draftpath];
+        VideoDraft *draft = [Util unArchiveDraft:path];
+        
+        qxTrack *videoTrack = [draft.timeline getTrackFromTimeline:0];
+        NSArray * arr = videoTrack.mpMediaObjArray;
+        for (int i = 0; i < arr.count; i++) {//检查草稿是否损坏
+            qxMediaObject *mediaObj = arr[i];
+            //检查片段是否存在
+            [alLibrary assetForURL:[NSURL URLWithString:mediaObj.strFilePath] resultBlock:^(ALAsset *asset){
+                if (asset==nil) {
+                    flag=NO;
+                }
+                dispatch_semaphore_signal(semapthore);
+            } failureBlock:^(NSError *error){
+                dispatch_semaphore_signal(semapthore);
+            }];
+            if(flag==NO){
+                break;
+            }
+            dispatch_semaphore_wait(semapthore, DISPATCH_TIME_FOREVER);
+        }
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (flag==NO) {
+                [Util showAlert:NSLocalizedString(@"Draft is damaged", nil) title:nil tag:0];
+                return;
+            }else{
+                editFlag=YES;
+                PlayerViewController *control = [PlayerViewController initFromStoryboard:[PlayerViewController class]];
+                control.timeline = draft.timeline;
+                control.videoMode = draft.videoMode;
+                UINavigationController * naviControl = [[UINavigationController alloc] initWithRootViewController:control];
+                [weakSelf presentViewController:naviControl animated:YES completion:nil];
+            }
+        });
+        
+    });
+}
+
+
+#pragma mark - data handler
+- (void)loadData
+{
+    self.mRefreshControl.attributedTitle = [[NSAttributedString alloc] initWithString:NSLocalizedString(@"load_refreshing", nil)];
+    __weak StudioViewController *weakSelf = self;
+    [UIApplication sharedApplication].networkActivityIndicatorVisible = YES;
+    if ([self.pagerDelegate respondsToSelector:@selector(controllerLoadData:)]) {
+        [self.pagerDelegate controllerLoadData:YES];
+    }
+    curPage=0;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        if (weakSelf.studioMode==StudioModeVideo) {
+            [weakSelf loadMyVideo];
+        }else{
+            [weakSelf.myDraftArray removeAllObjects];
+            weakSelf.myDraftArray = [NSMutableArray arrayWithArray:[DraftVideo queryWithLimit:perPage page:0]];
+            editFlag=NO;
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [UIApplication sharedApplication].networkActivityIndicatorVisible = NO;
+            
+            if ([self.pagerDelegate respondsToSelector:@selector(controllerLoadData:)]) {
+                [self.pagerDelegate controllerLoadData:NO];
+            }
+            [weakSelf.videoTableView reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+            self.mRefreshControl.attributedTitle = [[NSAttributedString alloc] initWithString:NSLocalizedString(@"header_pull_refresh", nil)];
+            [self.mRefreshControl endRefreshing];
+        });
+    });
+}
+
+/** 加载所有草稿的路径 */
+- (NSMutableArray *) loadDraftPaths {
+    NSMutableArray * results = [NSMutableArray array];
+    NSString *draftDir = [Util draftDir];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if(draftDir && [fileManager fileExistsAtPath:draftDir]){
+        NSDirectoryEnumerator *dirEnumerator = [fileManager enumeratorAtPath:draftDir];
+        NSString * filename = nil;
+        while (filename = [dirEnumerator nextObject]) {
+            filename = [draftDir stringByAppendingPathComponent:filename];
+            [results addObject:filename];
+        }
+    }
+    return results;
+}
+
+
+- (void)loadMyVideo
+{
+    NSArray * videos=[ExportVideo queryWithLimit:perPage page:0];
+    if (videos.count>0) {
+        NSMutableArray * tmpVideoArr = [NSMutableArray array];
+        __weak NSMutableArray * weakTmpVideoArr = tmpVideoArr;
+        __weak StudioViewController *weakSelf = self;
+        ALAssetsLibrary *assetsLibrary = [Util defaultAssetsLibrary];
+        dispatch_semaphore_t semapthore = dispatch_semaphore_create(0);
+        for(ExportVideo *obj in videos){
+            NSURL * assetUrl = [NSURL URLWithString:obj.asseturl];
+            if(assetUrl){
+                [assetsLibrary assetForURL:assetUrl resultBlock:^(ALAsset *asset){
+                    if(asset){
+                        [weakTmpVideoArr addObject:asset];
+                    }else{
+                        [ExportVideo deleteWithAsseturl:assetUrl.absoluteString];
+                    }
+                    dispatch_semaphore_signal(semapthore);
+                } failureBlock:^(NSError *error){
+                    if(error){
+                        //delete db item
+                        [ExportVideo deleteWithAsseturl:assetUrl.absoluteString];
+                    }
+                    dispatch_semaphore_signal(semapthore);
+                }];
+            }else{
+                dispatch_semaphore_signal(semapthore);
+            }
+            dispatch_semaphore_wait(semapthore, DISPATCH_TIME_FOREVER);
+        }
+        
+        if(tmpVideoArr && tmpVideoArr.count > 0){
+            NSArray *tmp = [tmpVideoArr sortedArrayUsingComparator:^(ALAsset *asset1, ALAsset *asset2){
+                NSComparisonResult result = NSOrderedSame;
+                NSDate *date1 = [asset1 valueForProperty:ALAssetPropertyDate];
+                NSDate *date2 = [asset2 valueForProperty:ALAssetPropertyDate];
+                if([date1 laterDate:date2]){
+                    result = NSOrderedAscending;
+                }else if([date1 earlierDate:date2]){
+                    result = NSOrderedDescending;
+                }
+                return result;
+            }];
+            [self.myVideoArray removeAllObjects];
+            [self.myVideoArray addObjectsFromArray:tmp];
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                [UIApplication sharedApplication].networkActivityIndicatorVisible = NO;
+                [weakSelf.videoTableView reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+            });
+        }
+
+    }
+    
+}
+
+#pragma mark - UIAlertViewDelegate
+- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+    if(buttonIndex == 1){//confirm
+        if(alertView.tag == StudioModeVideo){//删除本地视频
+            ALAsset *asset=[self.myVideoArray objectAtIndex:delPosition.row];
+            NSURL * deleteURL = [asset valueForProperty:ALAssetPropertyAssetURL];
+            __weak StudioViewController * weakSelf = self;
+            ALAssetsLibrary *assetsLibrary = [Util defaultAssetsLibrary];
+            [assetsLibrary assetForURL:deleteURL resultBlock:^(ALAsset *asset){//如果存在就删除它
+                if(asset){
+                    [asset setImageData:nil metadata:nil completionBlock:nil];//删除相册中得数据
+                }else{
+                    
+                }
+                [ExportVideo deleteWithAsseturl:deleteURL.absoluteString];
+                [weakSelf.myVideoArray removeObjectAtIndex:delPosition.row];
+                [weakSelf.videoTableView deleteRowsAtIndexPaths:@[delPosition] withRowAnimation:UITableViewRowAnimationMiddle];
+            } failureBlock:nil];
+        }else if(alertView.tag == StudioModeDraft){//执行草稿箱
+            DraftVideo * draft = [self.myDraftArray objectAtIndex:delPosition.row];
+            [Util deleteDraft:[draft.draftpath relativeSandboxDocPath]];
+            [DraftVideo deleteWithPath:draft.draftpath];//删除数据库中的数据
+            [self.myDraftArray removeObjectAtIndex:delPosition.row];
+            [videoTableView deleteRowsAtIndexPaths:@[delPosition] withRowAnimation:UITableViewRowAnimationMiddle];
+        }
+    }
+}
+
+#pragma mark - YouTubeHelperDelegate
+- (NSString *)youtubeAPIClientID
+{
+   return youtube_key;
+// return @"1035956121160-5o90pi1vg6ms37g4f5geshlonnoo1p9p.apps.googleusercontent.com";
+    
+}
+
+- (NSString *)youtubeAPIClientSecret
+{
+    return youtube_secret;
+// return @"AIzaSyD4aPah5-8WnrkOtn636Hq9hiCkSwY7bJ8";
+}
+
+- (void)showAuthenticationViewController:(UIViewController *)authView
+{
+    [self presentViewController:authView animated:YES completion:nil];
+//    [self.navigationController pushViewController:authView animated:YES];
+}
+
+- (void)authenticationEndedWithError:(NSError *)error
+{
+    [self dismissViewControllerAnimated:YES completion:nil];
+    if(error){
+        [Util showAlert:NSLocalizedString(@"Authorization Failure", nil) title:nil tag:0];
+    }else{
+        tmpVideoPath=[self shareVideoPath];
+        [self uploadVideoToYTB:tmpVideoPath];
+    }
+}
+
+- (void)uploadProgressPercentage:(int)percentage
+{
+    if (uploadHUD==nil) {
+        uploadHUD = [[MBProgressHUD alloc] initWithView:self.view];
+        [self.view addSubview:uploadHUD];
+        uploadHUD.mode = MBProgressHUDModeDeterminate;
+        uploadHUD.delegate = self;
+        uploadHUD.labelText = NSLocalizedString(@"Uploading", nil);
+        [uploadHUD show:YES];
+    }else{
+        
+        __weak StudioViewController * weakSelf=self;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (weakSelf.uploadHUD.progress*100<percentage) {//优酷sdk传递的进度不准确
+                weakSelf.uploadHUD.progress=percentage/100.0;
+            }
+        });
+    }
+    
+
+    if(percentage >= 100){
+        [MBProgressHUD hideHUDForView:self.view animated:YES];
+        
+        [MobClick event: SHARE_SUCESS_YOUTUBE];
+        //[self.view makeToast:NSLocalizedString(@"Upload Success", nil) duration:2.0 position:@"bottom"];
+//        [MBProgressHUD showHUDAddedTo:self.view animated:YES].labelText=NSLocalizedString(@"Upload Success", nil);
+         uploadHUD.labelText = NSLocalizedString(@"Upload Success", nil);
+        [uploadHUD hide:YES afterDelay:2000];
+    }
+}
+
+- (void)uploadVideoDoneWithError:(NSError *)error
+
+{
+     [MBProgressHUD hideAllHUDsForView:self.view animated:YES];
+    if(error){
+        NSLog(@"upload to youtube error %@", error.description);
+        [self.view makeToast:NSLocalizedString(@"Upload Failed", nil) duration:2.0 position:@"bottom"];
+        [MBProgressHUD hideAllHUDsForView:self.view animated:YES];
+    }
+}
+
+- (void)uploadVideoToYTB:(NSString*)videoPath
+{
+    if(!ytbHelper){
+        ytbHelper = [[YouTubeHelper alloc] initWithDelegate:self];
+    }
+//    [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+    [ytbHelper uploadPrivateVideoWithTitle:@"VideoShow" description:@"" commaSeperatedTags:@"#VideoShow#" andPath:videoPath];
+    
+//    ALAssetsLibrary *library = [Util defaultAssetsLibrary];
+//    __weak YouTubeHelper *weakHelper = ytbHelper;
+//    NSURL *shareURL = [NSURL fileURLWithPath:videoPath];
+//    [library assetForURL:shareURL resultBlock:^(ALAsset *asset){
+//        NSString *file = [Util generateTempFileFromALAsset:asset];
+//        if(file){
+//            [weakHelper uploadPrivateVideoWithTitle:@"VideoShow" description:nil commaSeperatedTags:@"#VideoShow#" andPath:file];
+//        }else{
+//            [MBProgressHUD hideAllHUDsForView:self.view animated:YES];
+//            [Util showAlert:NSLocalizedString(@"Upload Failed", nil) title:nil tag:0];
+//        }
+//    } failureBlock:^(NSError *error){
+//        [MBProgressHUD hideAllHUDsForView:self.view animated:YES];
+//        [Util showAlert:NSLocalizedString(@"Upload Failed", nil) title:nil tag:0];
+//    }];
+}
+
+#pragma mark -
+#pragma mark MBProgressHUDDelegate methods
+
+- (void)hudWasHidden:(MBProgressHUD *)hud {
+    // Remove HUD from screen when the HUD was hidded
+    if (uploadHUD!=nil) {
+        [uploadHUD removeFromSuperview];
+        uploadHUD = nil;
+    }
+}
+
+@end

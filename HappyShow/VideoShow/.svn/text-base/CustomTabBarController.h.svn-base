@@ -1,0 +1,19 @@
+//
+//  CustomTabBarController.h
+//  VideoShow
+//
+//  Created by lance on 15/5/8.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+@interface CustomTabBarController : UITabBarController
+
+@property (nonatomic,strong) UIImageView * centerImageView;
+
+-(UIViewController *) viewWithController:(UIViewController *)control image:(UIImage *)normalImage highlightedImage:(UIImage *)highlightedImage;
+
+-(void) addCenterImage:(UIImage *)normalImage highlightedImage:(UIImage *)highlightedImage;
+
+@end

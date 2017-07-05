@@ -1,0 +1,47 @@
+//
+//  MusicCategoryViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/12/2.
+//  Copyright © 2015年 energy. All rights reserved.
+//
+
+#import "MusicCategoryViewController.h"
+
+@interface MusicCategoryViewController ()
+
+@end
+
+@implementation MusicCategoryViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    
+}
+
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    
+    
+}
+
+-(void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    if ([self.mainDelegate respondsToSelector:@selector(controllerDidAppear:)]) {
+        [self.mainDelegate controllerDidAppear:self];
+    }
+    
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    if ([self.mainDelegate respondsToSelector:@selector(controllerDidDisappear:)]) {
+        [self.mainDelegate controllerDidDisappear:self];
+    }
+}
+
+
+@end

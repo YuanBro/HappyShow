@@ -1,0 +1,50 @@
+//
+//  MyStudioVideoCell.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-8-23.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "StudioVideoCell.h"
+#import <AssetsLibrary/AssetsLibrary.h>
+#import "UIColor+Util.h"
+
+
+@implementation StudioVideoCell
+
+- (void)awakeFromNib
+{
+    self.timeLabel.textColor=[UIColor colorWithHexString:@"#707070"];
+    
+}
+
+- (IBAction)controlAction:(id)sender {
+    if(self.isDraft){
+        if([self.delegate respondsToSelector:@selector(editDraft:)]){
+            [self.delegate editDraft:self.draft];
+        }
+    }else{
+        if([self.delegate respondsToSelector:@selector(playVideo:)]){
+            NSURL *videoURL=[self.videoAsset valueForProperty:ALAssetPropertyAssetURL];
+            [self.delegate playVideo:videoURL];
+        }
+    }
+}
+
+- (IBAction)shareAction:(id)sender {
+    if(!self.isDraft){
+        if([self.delegate respondsToSelector:@selector(shareVideo:)]){
+            [self.delegate shareVideo:self.videoAsset];
+        }
+    }
+    
+}
+
+- (IBAction)deleteAction:(id)sender {
+    if([self.delegate respondsToSelector:@selector(deleteData:)]){
+        [self.delegate deleteData:self];
+    }
+}
+
+@end

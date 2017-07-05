@@ -1,0 +1,61 @@
+//
+//  StickerInf.m
+//  VideoShow
+//
+//  Created by lance on 15/4/20.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "MaterialInf.h"
+#import "StickerInf.h"
+
+@implementation MaterialInf
+
+@synthesize id;
+@synthesize material_name;
+@synthesize material_paper;
+@synthesize is_new;
+@synthesize pub_time;
+@synthesize price;
+@synthesize material_detail;
+@synthesize is_pro;
+@synthesize material_type;
+@synthesize material_icon;
+@synthesize material_pic;
+@synthesize ver_code;
+@synthesize status;
+//@synthesize icon_url;
+
+@synthesize itemlist;//sticker列表
+
++(NSMutableArray *) initFromArr:(NSArray *)arr
+{
+    NSMutableArray * results = [NSMutableArray array];
+    for (NSDictionary * dict in arr) {
+        MaterialInf * inf=[MaterialInf initFromDict:dict];
+        [results addObject:inf];
+    }
+    
+    return results;
+}
+
++(MaterialInf *) initFromDict:(NSDictionary *)dictp
+{
+    MaterialInf * inf = [[MaterialInf alloc] init];
+    inf.id=[dictp[@"id"] intValue];
+    inf.material_name=dictp[@"material_name"];
+    inf.material_paper=dictp[@"material_paper"];
+    inf.is_new=[dictp[@"is_new"] boolValue];
+    inf.pub_time=dictp[@"pub_time"];
+    inf.price=[dictp[@"price"] floatValue];
+    inf.material_detail=dictp[@"naterial_detail"];
+    inf.is_pro=[dictp[@"is_pro"] boolValue];
+    inf.material_type=[dictp[@"material_type"] intValue];
+    inf.material_icon=dictp[@"material_icon"];
+    inf.material_pic=dictp[@"material_pic"];
+    inf.ver_code=[dictp[@"ver_code"] intValue];
+//    inf.icon_url=dictp[@"icon_url"];
+    return inf;
+}
+
+@end

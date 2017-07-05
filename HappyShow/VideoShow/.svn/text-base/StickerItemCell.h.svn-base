@@ -1,0 +1,36 @@
+//
+//  StickerItemCell.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/8.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+@class StickerItemCell;
+@protocol StickerItemCellDelegate <NSObject>
+@optional
+- (void)stickerItemAction:(StickerItemCell*)item;
+
+@end
+
+@class MaterialInf;
+
+/** 之前的版本---现在未使用 */
+@interface StickerItemCell : UITableViewCell
+
+@property (weak, nonatomic) IBOutlet UIProgressView *progressView;
+@property (weak, nonatomic) IBOutlet UIImageView *statusIcon;
+@property (weak, nonatomic) IBOutlet UIImageView *stickerIcon;
+@property (weak, nonatomic) IBOutlet UILabel *titleLabel;
+@property (weak, nonatomic) IBOutlet UILabel *detailLabel;
+@property (weak, nonatomic) IBOutlet UIImageView *finishedStatusIcon;
+@property (weak, nonatomic) IBOutlet UILabel *button;
+@property (weak, nonatomic) id<StickerItemCellDelegate> delegate;
+@property (assign, nonatomic) int materialID;
+@property (assign, nonatomic) int status;
+@property (weak,nonatomic) MaterialInf * materialInf;
+
+@end
+

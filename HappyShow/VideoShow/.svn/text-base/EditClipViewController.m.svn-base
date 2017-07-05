@@ -1,0 +1,965 @@
+//
+//  EditClipViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/6/5.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "EditClipViewController.h"
+#import <AssetsLibrary/AssetsLibrary.h>
+#import "Util.h"
+#import "UIColor+Util.h"
+#import "UIImage+Util.h"
+#import "qxMediaObject.h"
+#import "qxTimeline.h"
+//#import "qxPlaybackHelper.h"
+#import "qxFxPlaybackHelper.h"
+#import "SAVideoRangeSlider.h"
+#import "ASValueTrackingSlider.h"
+#import "AppMacros.h"
+//#import "qxPlaybackView+Util.h"
+#import "StoryboardViewController.h"
+#import "AssetsCell.h"
+#import "LXReorderableCollectionViewFlowLayout.h"
+static float offset_time=0.25;//计时器
+static NSString * assetsIdentifier = @"AssetsCell";
+@interface EditClipViewController ()<qxFxPlaybackDelegate,SAVideoRangeSliderDelegate,ASValueTrackingSliderDataSource,UICollectionViewDataSource,UICollectionViewDelegate,StoryboardViewDelegate,LXReorderableCollectionViewDataSource, LXReorderableCollectionViewDelegateFlowLayout,UIActionSheetDelegate>
+{
+    CMTime duration;
+
+    qxFxPlaybackHelper *playbackHelper;
+    NSTimer *previewTimer;
+    
+    CGFloat videoLeftPosition;//视频左边的时间点
+    CGFloat videoRightPosition;//右边的时间点
+    CGFloat sliderPosition;
+    
+    //用于撤销时恢复设置
+    CGFloat videoPreLeftPosition;
+    CGFloat videoPreRightPosition;
+    CGFloat preDuration;
+    float ToolboxHeight;
+}
+
+@property (nonatomic,strong) qxTimeline *timeline;
+@property (nonatomic, assign) enum QxMediaType mediaType;
+@property (nonatomic,assign) BOOL playing;
+@property (nonatomic,assign) CMTimeRange videoActualRange;//视频的实际长度---先保留---点击取消的时候使用这个属性
+
+@property (nonatomic,strong) IBOutlet UIView *videoFrame;//视频剪切视图
+@property (nonatomic,strong) IBOutlet UILabel *labelLeftTime;
+@property (nonatomic,strong) IBOutlet UILabel *labelRightTime;
+@property (nonatomic,strong) SAVideoRangeSlider *videoRangeSlider;//裁剪视频的滑块
+
+@property (nonatomic,strong) IBOutlet UIView *videoView;
+@property (nonatomic,strong) IBOutlet UIButton *btPlay;
+
+@property (nonatomic,strong) IBOutlet UIButton *batchBtn;
+@property (nonatomic,strong) IBOutlet UIView *toolView;
+@property (nonatomic,strong) IBOutlet UIView *editView;
+@property (nonatomic,strong) IBOutlet UIImageView *spliteImageView;
+@property (nonatomic,strong) IBOutlet UIView *photoFrame;
+@property (nonatomic,strong) ASValueTrackingSlider *photoDurationSlider;
+
+@property (nonatomic,strong) IBOutlet UIScrollView *editScrollView;
+@property (nonatomic,strong) IBOutlet ASValueTrackingSlider *previewSlider;
+@property (nonatomic,strong) IBOutlet UILabel *labelPhotoDuration;
+@property (nonatomic,strong) StoryboardViewController * storyPanel;//排序面板
+@property (nonatomic,strong) IBOutlet UIButton *editBut;
+@property (nonatomic, assign) BOOL needRefreshVideoBeforePreview;
+@property (atomic, assign) NSUInteger loadCount;
+@property (nonatomic,strong) NSMutableArray * mAssets;//相册中的内容
+@property (nonatomic,strong)UILabel * videoRangeLeftLable ;
+@property (nonatomic,strong)UILabel * videoRangeRightLable ;
+@property (nonatomic,strong)UILabel * videoRangeCenterLable ;
+@property (nonatomic)int lastVideo;
+@property (nonatomic)float videoStartTime;
+@property (nonatomic,strong)NSMutableArray * clipArray;
+- (IBAction)playAction:(id)sender;
+
+@end
+
+@implementation EditClipViewController
+
+@synthesize timeline;
+@synthesize mediaType;
+@synthesize playing;
+@synthesize storyPanel;
+@synthesize videoView;
+@synthesize btPlay;
+
+@synthesize videoFrame;
+@synthesize labelLeftTime;
+@synthesize labelRightTime;
+@synthesize videoRangeSlider;
+@synthesize videoActualRange;
+@synthesize editView;
+
+@synthesize photoFrame;
+@synthesize photoDurationSlider;
+@synthesize labelPhotoDuration;
+
+@synthesize toolView;
+@synthesize spliteImageView;
+@synthesize previewSlider;
+@synthesize mAssets;
+@synthesize mtimeline;
+@synthesize editScrollView;
+@synthesize editBut;
+@synthesize photoTimeBgView;
+@synthesize batchBtn;
+@synthesize videoRangeLeftLable,videoRangeRightLable,videoRangeCenterLable;
+@synthesize videoStartTime,lastVideo,clipArray;
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    mAssets=[NSMutableArray array];
+    self.view.backgroundColor = [UIColor colorWithHexString:homeColor];
+    NSString * titleStr=nil;
+    self.mediaType = self.mediaObj.eType;
+    if (self.mediaObj.eType==eMT_Video) {
+        titleStr = NSLocalizedString(@"Video Clip", nil);
+    }else{
+        titleStr = NSLocalizedString(@"Duration", nil);
+    }
+//    ToolboxHeight = [UIScreen mainScreen].bounds.size.height*0.17;
+    ToolboxHeight = toolView.frame.size.height - editView.frame.size.height;
+    [self.navigationController.navigationBar initWithViewController:self title:titleStr];
+    [self.navigationController.navigationBar initWithViewController:self leftText:NSLocalizedString(@"Back", nil) leftImageName:@"ic_back_arrow.png" action:@selector(cancelAction:)];
+    [self.navigationController.navigationBar initWithViewController:self rightImageName:@"bt_ok.png" action:@selector(confirmAction:)];
+    UITapGestureRecognizer *playbackTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(playbackViewTap:)];
+    [videoView addGestureRecognizer:playbackTap];
+    toolView.backgroundColor=[UIColor colorWithHexString:bottomViewColor];
+    spliteImageView.backgroundColor=[UIColor colorWithHexString:bottomViewSpliteColor];
+    storyPanel = [[StoryboardViewController alloc] init];
+    // 内部会自动对齐底部
+    //storyPanel=[[StoryboardView alloc] initWithFrame:CGRectMake(0, self.view.frame.size.height-self.statusHeight-self.naviHeight-ToolboxHeight, self.view.frame.size.width, ToolboxHeight)];
+    storyPanel.delegate=self;
+    storyPanel.storyType = @"editClip";
+    storyPanel.target=self;
+    //    storyPanel.createAction=@selector(nextAction:);
+    
+    
+    //[self.view addSubview:storyPanel];
+    [storyPanel attachToController:self superview:self.view frame:CGRectMake(0, self.view.frame.size.height-ToolboxHeight, self.view.frame.size.width, ToolboxHeight)];
+//    storyPanel.view.hidden=YES;
+    //video range slider 视频裁剪控件---此处会计算出视频的时长
+    
+    //
+//    labelPhotoDuration.text = NSLocalizedString(@"Photo Duration", nil);
+    
+    videoFrame.hidden=YES;
+    photoFrame.hidden=YES;
+//    if (self.mediaType == eMT_Video) {
+//        videoFrame.hidden=YES;
+//        photoFrame.hidden=YES;
+//        CGFloat start = CMTimeGetSeconds(self.mediaObj.actualTimeRange.start);
+//        CGFloat end = CMTimeGetSeconds(self.mediaObj.actualTimeRange.start) + CMTimeGetSeconds(self.mediaObj.actualTimeRange.duration);
+//        labelLeftTime.text = [Util stringWithSeconds:round(start)];
+//        labelRightTime.text = [Util stringWithSeconds:round(end)];
+//        
+//        [videoRangeSlider setLeftSec:start rightSec:end];
+//        videoLeftPosition=videoRangeSlider.leftPosition;
+//        videoRightPosition=videoRangeSlider.rightPosition;
+//        videoPreLeftPosition=videoRangeSlider.leftPosition;
+//        videoPreRightPosition=videoRangeSlider.rightPosition;
+//    }else{
+//        labelLeftTime.hidden=YES;
+//        labelRightTime.hidden=YES;
+//        videoFrame.hidden=YES;
+//        photoFrame.hidden=NO;
+//        photoDurationSlider.value=CMTimeGetSeconds(self.mediaObj.mediaOriginalDuration)/10;
+//        preDuration=CMTimeGetSeconds(self.mediaObj.mediaOriginalDuration)*1000;
+//    }
+    previewSlider.tag=1;
+    previewSlider.dataSource=self;
+    [previewSlider addTarget:self action:@selector(sliderValueChanged:) forControlEvents:UIControlEventValueChanged];
+    [previewSlider addTarget:self action:@selector(sliderTouchUpInside:) forControlEvents:UIControlEventTouchUpInside];
+    //previewSlider.maximumValue = 100.0;
+    previewSlider.font = [UIFont systemFontOfSize:14];
+    previewSlider.textColor = [UIColor whiteColor];
+    previewSlider.popUpViewWidthPaddingFactor = 1.5;
+    previewSlider.popUpViewColor = [UIColor colorWithHexString:themeColor];
+    previewSlider.popUpViewArrowLength = 12.0;
+    previewSlider.tintColor  = [UIColor colorWithHexString:themeColor];
+    [previewSlider setThumbImage:[UIImage imageResource:@"slider_handle.png"] forState:UIControlStateNormal];
+    [previewSlider setThumbImage:[UIImage imageResource:@"slider_handle.png"] forState:UIControlStateHighlighted];
+    //[previewSlider popUpViewVisible:NO];
+    previewSlider.autoAdjustTrackColor=NO;
+//    videoActualRange = self.mediaObj.actualTimeRange;
+//    [self setMediaBegin:0 End:CMTimeGetSeconds(self.mediaObj.mediaOriginalDuration)]; //note_1
+    
+    
+    
+   
+}
+
+-(void) viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    clipArray = [[NSMutableArray alloc]init];
+    if (self.mtimeline!=nil && [self.mtimeline getTrackCount]>0) {
+        [self.storyPanel clearMedias];
+        qxTrack *videoTrack = [self.mtimeline getTrackFromTimeline:0];
+        ALAssetsLibrary *assetsLibrary = [Util defaultAssetsLibrary];
+        __weak EditClipViewController *weakSelf = self;
+        
+        for (int i=0; i<videoTrack.mpMediaObjArray.count; i++) {
+            qxMediaObject *obj = [videoTrack.mpMediaObjArray objectAtIndex:i];
+            //这里得到所有的asset,添加到story中
+            [assetsLibrary assetForURL:[NSURL URLWithString:obj.strFilePath] resultBlock:^(ALAsset *asset){
+                if(asset!=nil){
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        [clipArray addObject:[[NSString alloc]initWithFormat:@"%i",i]];
+                        [weakSelf.storyPanel addMedia:asset];
+//                        [weakSelf.backupMedias addObject:asset];
+                    });
+                }
+            } failureBlock:^(NSError *error) {//被禁止访问
+                
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (error==nil) {
+                        [Util showAlert:NSLocalizedString(@"Photo library access deny", nil) title:NSLocalizedString(@"Access deny", nil) tag:0];
+                    } else {
+                        [Util showAlert:error.localizedDescription title:nil tag:0];
+                    }
+                });
+            }];
+            
+        }
+    }
+}
+
+
+#pragma mark - qxFxPlaybackDelegate 应用切回前台时回调
+- (void)readyForPlayback
+{
+    if (!self.playing) {
+        btPlay.hidden = NO;
+        //        duration = playbackHelper.playerItem.duration;
+        duration = playbackHelper.mpTimeline.timelineDuration;
+        previewSlider.maximumValue = CMTimeGetSeconds(duration) - self.videoStartTime;
+        labelLeftTime.text = [Util stringWithSeconds:0];
+        labelRightTime.text = [Util stringWithSeconds:round(previewSlider.maximumValue)];
+//        [self seekTo:0];
+//        [playbackHelper seekToTime:self.videoStartTime];
+        previewSlider.value = 0;
+        
+    }
+    
+    if (self.needRefreshVideoBeforePreview) {
+        self.needRefreshVideoBeforePreview=NO;
+        [self startPreview];
+    }
+    
+    // 0.5秒之后移除旧视图
+    [self performSelector:@selector(removeOldVideoView) withObject:nil afterDelay:0.5];
+}
+
+- (void)removeOldVideoView
+{
+//    __weak EditClipViewController * weakSelf = self;
+//    dispatch_async(dispatch_get_main_queue(), ^{
+//        if(weakSelf.tmpPlaybackHelper){
+//            [weakSelf.tmpVideoView removeFromSuperview];
+//            [weakSelf.tmpPlaybackHelper destroy];
+//            weakSelf.tmpPlaybackHelper = nil;
+//            weakSelf.tmpVideoView = nil;
+//        }
+//    });
+}
+/** 打开编辑 当执行完预览和加载图片帧---两个都加载完成之后才开启---速度不一定 */
+- (void) enableEditing {
+    self.loadCount += 1;
+    if (self.loadCount < 2) {
+        return;
+    }
+    
+}
+
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+-(UIInterfaceOrientationMask) supportedInterfaceOrientations
+{
+    return UIInterfaceOrientationMaskPortrait;
+}
+
+- (void)updateTimeLabelValue
+{
+//    labelLeftTime.text = [Util stringWithSeconds:round(previewSlider.leftPosition)];
+//    labelRightTime.text = [Util stringWithSeconds:round(videoRangeSlider.rightPosition)];
+}
+
+- (void)cancelAction:(id)sender
+{
+    [self stopPreview];
+    if (self.mediaType==eMT_Video) {//由于qxMediaObject没有实现拷贝功能需要恢复之前的设置
+        [self setMediaBegin:videoPreLeftPosition End:videoPreRightPosition];
+    }else{
+        [self.mediaObj setDuration:preDuration];
+    }
+    if([self.delegate respondsToSelector:@selector(videoEdit:type:editFlag:)]){
+        [self.delegate videoEdit:self type:EditTypeVideoClip editFlag:NO];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)confirmAction:(id)sender
+{
+    [self stopPreview];
+//    if (self.mediaType==eMT_Video) {
+//        [self setMediaBegin:videoRangeSlider.leftPosition End:videoRangeSlider.rightPosition];
+//    }else{
+//        [self.mediaObj setDuration:previewSlider.value * 10 * 1000];
+//    }
+//    
+    if([self.delegate respondsToSelector:@selector(videoEdit:type:editFlag:)]){
+        [self.delegate videoEdit:self type:EditTypeVideoClip editFlag:YES];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (IBAction)playAction:(id)sender
+{
+    if(!self.playing){
+        [self startPreview];
+    }else{
+        [self pausePreview];
+    }
+}
+
+- (void)playbackViewTap:(id)sender
+{
+    if(playing){
+        [self pausePreview];
+    }
+}
+
+- (void)startPreview
+{
+    if (self.editView.hidden) {
+        if (self.mediaType==eMT_Video) {
+//            [self seekTo:videoRangeSlider.leftPosition];
+            [videoRangeSlider playVideoAction];
+            }
+    }
+//    if (self.mediaType==eMT_Video) {
+//        [self seekTo:videoRangeSlider.leftPosition];
+//    }
+
+    playing = YES;
+    btPlay.selected=YES;
+    btPlay.hidden = YES;
+    [playbackHelper playPause:YES];
+    [self startPreviewTask];
+}
+
+- (void)pausePreview
+{
+    if (self.editView.hidden) {
+        if (self.mediaType==eMT_Video) {
+//            [self seekTo:videoRangeSlider.leftPosition];
+            [videoRangeSlider stopVideoAction];
+        }
+    }
+
+    playing = NO;
+    btPlay.selected=NO;
+    btPlay.hidden = NO;
+    [playbackHelper playPause:NO];
+    [self stopPreviewTask];
+}
+
+- (void) stopPreview
+{
+    playing = NO;
+    if(playbackHelper){
+        [playbackHelper stop];
+        playbackHelper.delegate = nil;
+        [playbackHelper destroy];
+    }
+    [self stopPreviewTask];
+}
+
+- (void)stopPreviewTask
+{
+    if([previewTimer isValid]){
+        [previewTimer invalidate];
+    }
+    previewTimer = nil;
+}
+
+- (void)startPreviewTask
+{
+//    [self stopPreviewTask];
+    if (self.editView.hidden) {
+        if (self.mediaType==eMT_Video) {
+            previewTimer = [NSTimer scheduledTimerWithTimeInterval:0.01 target:self selector:@selector(previewTask) userInfo:nil repeats:YES];
+        }
+    }else{
+        previewTimer = [NSTimer scheduledTimerWithTimeInterval:0.01 target:self selector:@selector(updatePlayStatusTask) userInfo:nil repeats:YES];
+    }
+    
+}
+#pragma mark - Timer
+-(void)updatePlayStatusTask
+{
+    NSTimeInterval tm = [playbackHelper playbackProgress];
+    float time = tm/1000;
+    NSString *str = [Util stringWithSeconds:round(time - self.videoStartTime)];
+    previewSlider.value = time - videoStartTime;
+    labelLeftTime.text = str;
+//    [self updateCurrentMediaObject];
+}
+-(void)updateVideoEditStatusTask
+{
+    NSTimeInterval tm = [playbackHelper playbackProgress];
+    float time = tm/1000;
+//    NSString *str = [Util stringWithSeconds:round(time)];
+    if (time != sliderPosition) {
+        time = sliderPosition;
+    }
+    [videoRangeSlider startSliderAction:time];
+   // videoRangeSlider.value = time;
+//    labelLeftTime.text = str;
+//    [self updateCurrentMediaObject];
+}
+- (void)updateCurrentMediaObject
+{
+    NSTimeInterval tm = [playbackHelper playbackProgress];
+    qxMediaObject *obj = [[self.timeline getTrackFromTimeline:0] findMediaObjectAtSecond:tm/1000];
+    if (obj!=nil) {
+//        currentMediaObject = obj;
+    }
+}
+
+- (void)previewTask
+{
+    if (self.mediaType==eMT_Video) {
+        NSTimeInterval tm = [playbackHelper playbackProgress];
+        float time = tm/1000;
+        if(playbackHelper.playbackProgress/1000 >= videoRangeSlider.rightPosition-offset_time){
+            [self pausePreview];
+            [self seekTo:0];
+        }
+        [videoRangeSlider startSliderAction:time];
+    }else{//播放照片的时长
+        if(playbackHelper.playbackProgress/1000 >= previewSlider.value*10){
+            [self pausePreview];
+            [self seekTo:0];
+        }
+    }
+
+}
+
+//#pragma mark - qxPlaybackDelegate
+//- (void)readyForPlayback
+//{
+//    
+//}
+
+- (void)FinishPlayback
+{
+    [self pausePreview];
+    if (self.mediaType==eMT_Video) {
+        [self seekTo:videoRangeSlider.leftPosition];
+    }else{
+        [self seekTo:0];
+    }
+    
+}
+
+-(void)prepareForPreview
+{
+    if(playbackHelper){
+        playbackHelper.delegate=nil;
+        [playbackHelper stop];
+        [playbackHelper destroy];
+        playbackHelper=nil;
+    }
+    
+    NSLog(@"rect preview = %@",NSStringFromCGRect(self.videoViewRect));
+    self.videoView.frame=self.videoViewRect;
+    playbackHelper = [[qxFxPlaybackHelper alloc] init];
+    playbackHelper.delegate=self;
+    
+    float scale = [UIScreen mainScreen].scale;
+    self.timeline.timelineSize = CGSizeMake(videoView.frame.size.width*scale, videoView.frame.size.height*scale);
+    playbackHelper.mpTimeline = self.timeline;
+    
+    [playbackHelper initWithUIView:videoView];
+//    duration = playbackHelper.playerItem.duration;
+    duration = playbackHelper.mpTimeline.timelineDuration;
+    
+//    [qxPlaybackView bringFromVideoView:videoView];
+}
+
+- (void)seekTo:(float)second
+{
+    if(CMTimeGetSeconds(duration) > 0){
+        //        [playbackHelper.player seekToTime:CMTimeMakeWithSeconds(second/previewSlider.maximumValue*CMTimeGetSeconds(duration), duration.timescale) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
+        //        NSString *timeStr = [Util stringWithSeconds:round(second)];
+        //        labelCurrent.text = timeStr;
+        //        previewSlider.value = second;
+        //        [self updateCurrentMediaObject];
+        [playbackHelper seekToTime:second];
+        //        [playbackHelper refreshView];
+        
+        NSString *timeStr = [Util stringWithSeconds:round(second)];
+        labelLeftTime.text = timeStr;
+        previewSlider.value = second;
+    }
+
+}
+- (void)videoClipCancel
+{
+    self.needRefreshVideoBeforePreview = YES;
+}
+/* 设置视频的起始和结束时间 */
+-(void)setMediaBegin:(CGFloat)begin End:(CGFloat)end
+{
+    float right = (long)(CMTimeGetSeconds(self.mediaObj.mediaOriginalDuration) - end);
+    [self.mediaObj setTrim:(long)(begin*1000) withRight:(long)(right*1000)];
+}
+
+#pragma mark SAVideoRangeSliderDelegate
+- (void)videoRange:(SAVideoRangeSlider *)videoRange didChangeLeftPosition:(CGFloat)leftPosition rightPosition:(CGFloat)rightPosition
+{
+    if(playing){
+        [self pausePreview];
+    }
+    if (leftPosition==videoLeftPosition && rightPosition==videoRightPosition) {//float计算误差
+        return;
+    }
+    
+    [self updateTimeLabelValue];
+    if(leftPosition!=videoLeftPosition){
+        [playbackHelper seekToTime:leftPosition];
+        videoRangeLeftLable.text =  [self timeToStr:leftPosition];
+        videoRangeCenterLable.text = [self timeToStr:rightPosition - leftPosition];
+//       [self seekTo:leftPosition];
+    }
+    if(rightPosition!=videoRightPosition){
+        [playbackHelper seekToTime:rightPosition];
+        videoRangeRightLable.text =  [self timeToStr:rightPosition];
+        videoRangeCenterLable.text = [self timeToStr:rightPosition - leftPosition];
+    }
+    videoLeftPosition=leftPosition;
+    videoRightPosition=rightPosition;
+}
+- (void)videoRange:(SAVideoRangeSlider *)videoRange didChangeSilerPosition:(CGFloat)silerPosition{
+    sliderPosition = silerPosition;
+    if(playing){
+        playing = NO;
+        [playbackHelper playPause:NO];
+        [self stopPreviewTask];
+    }
+    [playbackHelper seekToTime:silerPosition];
+}
+-(void)videoRange:(SAVideoRangeSlider *)videoRange didGestureStateEndedSilerPosition:(CGFloat)silerPosition{
+    playing = YES;
+    [playbackHelper playPause:YES];
+    [self startPreviewTask];
+    [videoRangeSlider startSliderAction:silerPosition];
+}
+/*
+ *编辑过程中不能设置视频range并刷新视频，这样做之后，后续range操作会出现黑屏
+ */
+- (void)videoRange:(SAVideoRangeSlider *)videoRange didGestureStateEndedLeftPosition:(CGFloat)leftPosition rightPosition:(CGFloat)rightPosition
+{
+}
+
+#pragma mark ASValueTrackingSliderDataSource
+- (NSString *)slider:(ASValueTrackingSlider *)slider stringForValue:(float)value
+{
+//    NSString * popString = [NSString stringWithFormat:@"%.1fs",slider.value * 10];
+//    return popString;
+//    if (slider.tag==1) {
+//        if (self.playing==NO) {
+//            //            [playbackHelper.player seekToTime:CMTimeMakeWithSeconds(value/previewSlider.maximumValue*CMTimeGetSeconds(duration), duration.timescale) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
+//            [playbackHelper seekToTime:value/previewSlider.maximumValue*CMTimeGetSeconds(duration)];
+//            
+//            NSString *timeStr = [Util stringWithSeconds:round(value)];
+//            return timeStr;
+//        }
+//        return @"00:00";
+//    }
+    NSString * popString = [NSString stringWithFormat:@"%.1fs",slider.value * 10];
+    return popString;
+}
+
+#pragma mark ASValueTrackingSlider touch event
+- (void)sliderValueChanged:(ASValueTrackingSlider*)sender
+{
+    if (sender.tag == 1) {
+        if(self.playing){
+            [self pausePreview];
+        }
+    }else if(sender.tag == 2){
+        if (sender.value >= 1) {
+            if (self.photoTimeBgView == nil) {
+                [self photoTimeTextField];
+            }
+            [self.navigationController.view addSubview:photoTimeBgView];
+        }
+    }
+    
+}
+
+- (void)sliderTouchUpInside:(ASValueTrackingSlider*)sender
+{
+    
+}
+
+- (void)dealloc
+{
+    self.timeline = nil;
+}
+
+-(void)editPrepare:(int)assetIndex{
+    
+    self.needRefreshVideoBeforePreview = YES;
+    self.playing = NO;
+    self.lastVideo = assetIndex;
+    qxTrack *videoTrack = [self.mtimeline getTrackFromTimeline:0];
+    int clipIndex = [[clipArray objectAtIndex:assetIndex]intValue];
+    qxMediaObject * obj=[videoTrack.mpMediaObjArray objectAtIndex:clipIndex];
+    self.mediaObj = obj;
+    self.mediaType = obj.eType;
+    
+    UIButton * calsePhotoBut = [[UIButton alloc] initWithFrame:CGRectMake(70, photoFrame.frame.size.height - 50, 50,50)];
+    [calsePhotoBut setTitle:@"取消" forState:UIControlStateNormal];
+    calsePhotoBut.titleLabel.font = [UIFont systemFontOfSize:14];
+    //[exportBtn setImageEdgeInsets:UIEdgeInsetsMake(0,0,0,0)];
+    calsePhotoBut.imageView.contentMode=UIViewContentModeScaleAspectFit;
+    [calsePhotoBut addTarget:self action:@selector(colsePhotoButAction:) forControlEvents:UIControlEventTouchUpInside];
+    UIButton * commitPhotoBut = [[UIButton alloc] initWithFrame:CGRectMake(photoFrame.frame.size.width - 120, photoFrame.frame.size.height - 50, 50,50)];
+    [commitPhotoBut setTitle:@"确定" forState:UIControlStateNormal];
+    commitPhotoBut.titleLabel.font = [UIFont systemFontOfSize:14];
+    //[exportBtn setImageEdgeInsets:UIEdgeInsetsMake(0,0,0,0)];
+    commitPhotoBut.imageView.contentMode=UIViewContentModeScaleAspectFit;
+    [commitPhotoBut addTarget:self action:@selector(commitButAction:) forControlEvents:UIControlEventTouchUpInside];
+    if (obj.eType==eMT_Photo) {
+        if (!videoFrame.hidden) {
+            self.videoFrame.hidden = YES;
+            self.photoFrame.hidden = NO;
+        }
+        [self.editBut setTitle:@"时长" forState:UIControlStateNormal];//设置button的title
+        self.editBut.tag = 1;
+//        videoRangeSlider = [[SAVideoRangeSlider alloc] initWithFrame:CGRectMake(10, 20, self.view.frame.size.width - 20, 51) videoUrl:url];
+        [photoDurationSlider removeFromSuperview];
+        photoDurationSlider = [[ASValueTrackingSlider alloc]initWithFrame:CGRectMake(15, 35, self.view.frame.size.width - 30, 11)];
+        photoDurationSlider.tag = 2;
+        photoDurationSlider.dataSource=self;
+        photoDurationSlider.minimumValue = 0.1;
+        photoDurationSlider.maximumValue = 1;
+        //    duration = playbackHelper.mpTimeline.timelineDuration;
+        //    photoDurationSlider.maximumValue = CMTimeGetSeconds(duration);
+        photoDurationSlider.font = [UIFont systemFontOfSize:14];
+        photoDurationSlider.textColor = [UIColor whiteColor];
+        photoDurationSlider.popUpViewWidthPaddingFactor = 1.5;
+        photoDurationSlider.tintColor = [UIColor colorWithHexString:themeColor];
+        photoDurationSlider.popUpViewArrowLength = 12.0;
+        photoDurationSlider.autoAdjustTrackColor=NO;
+        [photoDurationSlider addTarget:self action:@selector(sliderValueChanged:) forControlEvents:UIControlEventValueChanged];
+        [photoDurationSlider addTarget:self action:@selector(sliderTouchUpInside:) forControlEvents:UIControlEventTouchUpInside];
+        photoDurationSlider.popUpViewColor = [UIColor colorWithHexString:themeColor];
+        [photoDurationSlider setThumbImage:[UIImage imageResource:@"slider_handle.png"] forState:UIControlStateNormal];
+        [photoDurationSlider setThumbImage:[UIImage imageResource:@"slider_handle.png"] forState:UIControlStateHighlighted];
+        [photoDurationSlider showPopUpViewAnimated:YES];
+         photoDurationSlider.value=CMTimeGetSeconds(self.mediaObj.mediaOriginalDuration)/10;
+        [photoFrame addSubview:photoDurationSlider];
+        calsePhotoBut.tag = 1;
+        commitPhotoBut.tag = 1;
+        [photoFrame addSubview:calsePhotoBut];
+        [photoFrame addSubview:commitPhotoBut];
+
+    }else if(obj.eType==eMT_Video){//初始化视频的范围
+        if (!photoFrame.hidden) {
+            self.videoFrame.hidden = NO;
+            self.photoFrame.hidden = YES;
+        }
+        [self.editBut setTitle:@"编辑" forState:UIControlStateNormal];//设置button的title
+        self.editBut.tag = 2;
+        CGFloat start = CMTimeGetSeconds(self.mediaObj.actualTimeRange.start);
+        CGFloat end = CMTimeGetSeconds(self.mediaObj.actualTimeRange.start)+CMTimeGetSeconds(self.mediaObj.actualTimeRange.duration);//
+        CGFloat centerStr = CMTimeGetSeconds(self.mediaObj.actualTimeRange.duration);
+        [self setMediaBegin:0 End:end];
+//        self.mediaObj.startTimeOfTrack = self.mediaObj.actualTimeRange.start;
+        self.videoStartTime = start;
+        if (videoRangeLeftLable == nil) {
+            videoRangeLeftLable = [[UILabel alloc]initWithFrame:CGRectMake(16, 6, 60, 20)];
+            videoRangeLeftLable.font = [UIFont systemFontOfSize:14];
+            videoRangeLeftLable.textColor = [UIColor whiteColor];
+            [videoFrame addSubview:videoRangeLeftLable];
+        }
+        videoRangeLeftLable.text = [self timeToStr:start];
+        
+        
+        if (videoRangeRightLable == nil) {
+            videoRangeRightLable = [[UILabel alloc]initWithFrame:CGRectMake(self.view.frame.size.width -70, 6, 60, 20)];
+            videoRangeRightLable.font = [UIFont systemFontOfSize:14];
+            videoRangeRightLable.textColor = [UIColor whiteColor];
+            [videoFrame addSubview:videoRangeRightLable];
+        }
+        videoRangeRightLable.text = [self timeToStr:end ];
+        if (videoRangeCenterLable == nil) {
+            videoRangeCenterLable = [[UILabel alloc]initWithFrame:CGRectMake(self.view.frame.size.width/2 -30, 6, 60, 20)];
+            videoRangeCenterLable.font = [UIFont systemFontOfSize:14];
+            videoRangeCenterLable.textColor = [UIColor whiteColor];
+            [videoFrame addSubview:videoRangeCenterLable];
+        }
+        videoRangeCenterLable.text = [self timeToStr:centerStr];
+        
+        [videoRangeSlider removeFromSuperview];
+        videoRangeSlider = [[SAVideoRangeSlider alloc] initWithFrame:CGRectMake(10, 30, self.view.frame.size.width - 20, 41) videoUrl:[NSURL URLWithString:self.mediaObj.strFilePath]];
+        videoRangeSlider.delegate = self;
+//        [videoRangeSlider setPopoverBubbleSize:120 height:60];
+        [videoFrame addSubview:videoRangeSlider];
+        videoRangeSlider.center=CGPointMake(videoRangeSlider.center.x, videoFrame.center.y);
+        
+       
+//        labelLeftTime.text = [Util stringWithSeconds:round(start)];
+//        labelRightTime.text = [Util stringWithSeconds:round(end)];
+
+        [videoRangeSlider setLeftSec:start rightSec:end];
+//        [videoRangeSlider setSliderSec:start];
+        videoLeftPosition=videoRangeSlider.leftPosition;
+        videoRightPosition=videoRangeSlider.rightPosition;
+        [videoRangeSlider setPutLeftView];
+        [videoRangeSlider setPutRightView];
+        videoPreLeftPosition=videoRangeSlider.leftPosition;
+        videoPreRightPosition=videoRangeSlider.rightPosition;
+        calsePhotoBut.tag = 2;
+        commitPhotoBut.tag = 2;
+        [videoFrame addSubview:calsePhotoBut];
+        [videoFrame addSubview:commitPhotoBut];
+        
+    }
+    if(self.timeline != nil){
+
+        [timeline clearTrans];
+        [[timeline getTrackFromTimeline:0] delMediaObject:0];
+        [[timeline getTrackFromTimeline:0] addMediaObject:self.mediaObj];
+        
+    }else{
+        self.timeline = [[qxTimeline alloc] init];
+        qxTrack *track = [[qxTrack alloc] initWithTrackType:eMT_Video];
+        [track addMediaObject:self.mediaObj];
+        [self.timeline addTrack:track];
+
+    }
+    __weak EditClipViewController * weakSelf = self;
+
+    [[timeline getTrackFromTimeline:0] reloadPhoto:self.screenRect.size block:^{
+        [weakSelf prepareForPreview];
+        [weakSelf enableEditing];
+    }];
+
+}
+
+-(IBAction)editButAction:(UIButton *)sender{
+    if(playing){
+        [self pausePreview];
+    }
+    if (sender.tag == 1) {
+        self.editView.hidden = YES;
+        self.photoFrame.hidden = NO;
+        self.videoFrame.hidden = YES;
+        self.batchBtn.hidden = NO;
+//        self.batchBtn.tag = 1;
+    }else{
+        self.editView.hidden = YES;
+        self.photoFrame.hidden = YES;
+        self.videoFrame.hidden = NO;
+        self.batchBtn.hidden = YES;
+//        [self.batchBtn setTitle:<#(nullable NSString *)#> forState:<#(UIControlState)#>]
+    }
+}
+- (void)colsePhotoButAction:(id)sender{
+    self.editView.hidden = NO;
+    self.photoFrame.hidden = YES;
+    self.batchBtn.hidden = YES;
+    self.videoFrame.hidden = YES;
+    self.batchBtn.hidden = YES;
+}
+-(void)commitButAction : (id)sender{
+//    qxTrack *videoTrack = [self.mtimeline getTrackFromTimeline:0];
+//    qxMediaObject *obj = [videoTrack.mpMediaObjArray objectAtIndex:lastVideo];
+    [self stopPreview];
+    [timeline clearTrans];
+    if (self.mediaObj.eType == eMT_Photo) {
+        if (photoBatchTime) {
+            qxTrack *mVideoTrack = [self.mtimeline getTrackFromTimeline:0];
+            for (int i = 0; i < [mVideoTrack.mpMediaObjArray count]; i++) {
+                qxMediaObject *mObj = [mVideoTrack.mpMediaObjArray objectAtIndex:i];
+                if (mObj.eType != eMT_Transition) {
+                    [mObj setDuration:photoDurationSlider.value * 10 * 1000];
+                }
+            }
+        }
+         [self.mediaObj setDuration:photoDurationSlider.value * 10 * 1000];
+        self.photoFrame.hidden = YES;
+        self.editView.hidden = NO;
+    }else{
+        [self setMediaBegin:videoRangeSlider.leftPosition End:videoRangeSlider.rightPosition];
+//        [self.mediaObj setTrim:(long)(videoRangeSlider.leftPosition*1000) withRight:(long)(right*1000)];
+//         [obj setTrim:(long)(videoRangeSlider.leftPosition*1000) withRight:(long)(right*1000)];
+        self.videoFrame.hidden = YES;
+        self.editView.hidden = NO;
+    }
+    
+
+    __weak EditClipViewController * weakSelf = self;
+    
+    
+    
+//    [[timeline getTrackFromTimeline:0] delMediaObject:0];
+//    [[timeline getTrackFromTimeline:0] addMediaObject:self.mediaObj];
+    [[self.timeline getTrackFromTimeline:0] reloadPhoto:self.screenRect.size block:^{
+        self.needRefreshVideoBeforePreview = YES;
+        [weakSelf prepareForPreview];
+        [weakSelf enableEditing];
+    }];
+//    [self editPrepare:lastVideo];
+}
+
+-(void)photoTimeTextField{
+    photoTimeBgView = [[UIView alloc]initWithFrame:self.navigationController.view.bounds];
+    photoTimeBgView.backgroundColor = [UIColor colorWithRed:0 green:0 blue:0 alpha:0.5];
+    UIView * photoTimeView = [[UIView alloc]initWithFrame:CGRectMake(30, self.view.frame.size.width/2,  self.view.frame.size.width - 60, self.view.frame.size.width/2)];
+    photoTimeView.backgroundColor = [UIColor whiteColor];
+    [photoTimeBgView addSubview:photoTimeView];
+    
+    UILabel * titleLable = [[UILabel alloc]initWithFrame:CGRectMake(30, 20, 50 , 40)];
+    titleLable.text = @"title";
+    titleLable.backgroundColor= [UIColor clearColor];
+    [photoTimeView addSubview:titleLable];
+    UIButton * firstBut = [[UIButton alloc]initWithFrame:CGRectMake(30, 70, 60 , 40)];
+    [firstBut setTitle:@"-" forState:UIControlStateNormal];
+    [firstBut setTitleColor:[UIColor blackColor]forState:UIControlStateNormal];
+    firstBut.backgroundColor= [UIColor clearColor];
+    
+    [photoTimeView addSubview:firstBut];
+    
+    UITextField * timeText = [[UITextField alloc]initWithFrame:CGRectMake(100 , 70, photoTimeView.frame.size.width - 200 , 40)];
+    timeText.contentHorizontalAlignment=UIControlContentHorizontalAlignmentCenter;//设置其输入内容竖直居中
+    timeText.layer.cornerRadius=8.0f;
+    timeText.layer.masksToBounds=YES;
+    timeText.layer.borderColor=[[UIColor blackColor]CGColor];
+    timeText.layer.borderWidth= 1.0f;
+    timeText.keyboardType = UIKeyboardTypeNumberPad;
+    [photoTimeView addSubview:timeText];
+    
+    UIButton * secseBut = [[UIButton alloc]initWithFrame:CGRectMake(timeText.frame.size.width + timeText.frame.origin.x +20, 70, 60 , 40)];
+    [secseBut setTitle:@"+" forState:UIControlStateNormal];
+    [secseBut setTitleColor:[UIColor blackColor]forState:UIControlStateNormal];
+//    [secseBut setBackgroundImage:[UIImage imageNamed:@"111.png"]forState:UIControlStateNormal];
+    secseBut.backgroundColor= [UIColor clearColor];
+    [photoTimeView addSubview:secseBut];
+    
+    UIButton *cacelBut=[UIButton buttonWithType:UIButtonTypeCustom];
+    [cacelBut setFrame:CGRectMake(timeText.frame.size.width, timeText.frame.size.height + timeText.frame.origin.y + 10, 60, 60)];
+    [cacelBut setTitleColor:[UIColor blackColor]forState:UIControlStateNormal];
+    cacelBut.titleLabel.font = [UIFont systemFontOfSize:14];
+    [cacelBut setTitle:@"CANCEL" forState:UIControlStateNormal];
+    //button点击事件
+    cacelBut.backgroundColor= [UIColor clearColor];
+    [cacelBut addTarget:self action:@selector(photoTimeCancel:)forControlEvents:UIControlEventTouchUpInside];
+    [photoTimeView addSubview:cacelBut];
+    
+    
+    UIButton *OkBut=[UIButton buttonWithType:UIButtonTypeCustom];
+    [OkBut setFrame:CGRectMake(cacelBut.frame.size.width + cacelBut.frame.origin.y + 30, timeText.frame.size.height + timeText.frame.origin.y + 10, 60, 60)];
+    [OkBut setTitleColor:[UIColor blackColor]forState:UIControlStateNormal];
+    OkBut.titleLabel.font = [UIFont systemFontOfSize:14];
+    [OkBut setTitle:@"OK" forState:UIControlStateNormal];
+    //button点击事件
+    OkBut.backgroundColor= [UIColor clearColor];
+    //    [cacelBut addTarget:self action:@selector(btnShort:)forControlEvents:UIControlEventTouchUpInside];
+    [photoTimeView addSubview:OkBut];
+
+
+}
+-(void)photoTimeCancel : (UIButton *)sender{
+    [photoTimeBgView removeFromSuperview];
+
+}
+-(IBAction)copyClip:(id)sender{
+    qxTrack *videoTrack = [self.mtimeline getTrackFromTimeline:0];
+    qxMediaObject *obj = [videoTrack.mpMediaObjArray objectAtIndex:self.storyPanel.lastIndexPath.row];
+    qxMediaObject *qxObj = [[qxMediaObject alloc] init];
+    [qxObj setFilePath:obj.strFilePath withType:obj.eType fromAssetLibrary:YES];
+    [videoTrack addMediaObject:qxObj];
+    ALAssetsLibrary *assetsLibrary = [Util defaultAssetsLibrary];
+    __weak EditClipViewController *weakSelf = self;
+
+    [assetsLibrary assetForURL:[NSURL URLWithString:obj.strFilePath] resultBlock:^(ALAsset *asset){
+        if(asset!=nil){
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [weakSelf.storyPanel addMedia:asset];
+                //                        [weakSelf.backupMedias addObject:asset];
+            });
+        }
+    } failureBlock:^(NSError *error) {//被禁止访问
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (error==nil) {
+                [Util showAlert:NSLocalizedString(@"Photo library access deny", nil) title:NSLocalizedString(@"Access deny", nil) tag:0];
+            } else {
+                [Util showAlert:error.localizedDescription title:nil tag:0];
+            }
+        });
+    }];
+}
+
+
+-(void)deleteAsset:(NSInteger)indexOfSelected {
+    UIAlertView *alter = [[UIAlertView alloc] initWithTitle:@"提示" message:@"确定要删除吗？" delegate:self cancelButtonTitle:@"取消" otherButtonTitles:@"确定",nil];
+    
+    [alter show];
+}
+- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex{
+    if (buttonIndex == 1) {
+        [self.storyPanel deleteObjectMedia];
+    }
+}
+-(IBAction) batchSetAction:(id)sender
+{
+    UIActionSheet * sheet=[[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:NSLocalizedString(@"Cancel", nil) destructiveButtonTitle:nil otherButtonTitles:@"当前照片时长",@"所有照片时长", nil];
+    
+    [sheet showInView:self.view];
+}
+- (void)actionSheet:(UIActionSheet *)actionSheet clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+    switch (buttonIndex) {
+        case 0:
+            photoBatchTime = false;
+            break;
+        case 1:
+            photoBatchTime = true;
+            break;
+        default:
+            return;
+    }
+}
+- (NSString *)timeToStr:(CGFloat)time
+{
+    double min = floor(time / 60);
+    double sec = floor(time - min * 60);
+    double mec = floor((time - min * 60 - sec)*10);
+    NSString *minStr = [NSString stringWithFormat:min >= 10 ? @"%g" : @"0%g", min];
+    NSString *secStr = [NSString stringWithFormat:sec >= 10 ? @"%g" : @"0%g", sec];
+    NSString *mecStr = [NSString stringWithFormat: @"%g", mec];
+    return [NSString stringWithFormat:@"%@:%@.%@", minStr, secStr,mecStr];
+}
+@end

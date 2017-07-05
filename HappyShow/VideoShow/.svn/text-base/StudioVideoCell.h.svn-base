@@ -1,0 +1,39 @@
+//
+//  MyStudioVideoCell.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-8-23.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+@class ALAsset;
+@class DraftVideo;
+@class StudioVideoCell;
+@protocol StudioVideoCellDelegate <NSObject>
+
+- (void)editDraft:(DraftVideo*)draft;
+- (void)playVideo:(NSURL*)videoUrl;
+- (void)shareVideo:(ALAsset *)videoAsset;
+- (void) deleteData:(StudioVideoCell*)cell;
+
+@end
+
+@interface StudioVideoCell : UITableViewCell
+
+@property (weak,nonatomic) id<StudioVideoCellDelegate> delegate;
+@property (weak, nonatomic) IBOutlet UIButton *controlButton;
+@property (weak, nonatomic) IBOutlet UIButton *shareButton;
+@property (weak, nonatomic) IBOutlet UIButton *deleteButton;
+@property (weak, nonatomic) IBOutlet UILabel *timeLabel;
+@property (weak, nonatomic) IBOutlet UIImageView *videoImage;
+@property (assign,nonatomic) BOOL isDraft;
+@property (strong,nonatomic) ALAsset *videoAsset;
+@property (strong,nonatomic) DraftVideo *draft;
+
+- (IBAction)controlAction:(id)sender;
+- (IBAction)shareAction:(id)sender;
+- (IBAction)deleteAction:(id)sender;
+
+@end

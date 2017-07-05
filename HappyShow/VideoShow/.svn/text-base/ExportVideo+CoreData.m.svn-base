@@ -1,0 +1,149 @@
+//
+//  ExportVideo+CoreData.m
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-10-22.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "ExportVideo+CoreData.h"
+#import "AppDelegate.h"
+
+#define MODEL @"ExportVideo"
+#define SORT @"savetime"
+
+@implementation ExportVideo (CoreData)
+
+/** 保存导出的视频路径及时间到数据库 */
++(ExportVideo *)saveExport:(NSString *)assetUrl
+{
+    ExportVideo * export=[NSEntityDescription insertNewObjectForEntityForName:MODEL
+                                                   inManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+    export.id=[NSNumber numberWithInt:0];//该字段基本没有用
+    export.savetime=[NSDate date];
+    export.asseturl=assetUrl;
+    
+    [[AppDelegate shareInstance].managedObjectContext performSelectorOnMainThread:@selector(save:) withObject:nil waitUntilDone:YES];
+    return export;
+}
+
+/** 是否存在该记录 */
++(BOOL) isExistAsset:(NSString *)assetUrl
+{
+    NSArray * results=[ExportVideo queryWithAttr:@"asseturl" value:assetUrl limit:0];
+    if (results.count>0) {
+        return YES;
+    }
+    return NO;
+}
+
+/** 删除指定地址的数据 */
++(BOOL)deleteWithAsseturl:(NSString *)assetUrl
+{
+    NSManagedObjectContext * context  = [[AppDelegate shareInstance] managedObjectContext];
+
+    NSArray * results=[ExportVideo queryWithAttr:@"asseturl" value:assetUrl limit:0];
+    if (results.count>0) {
+        for (NSManagedObject *obj in results){
+            [context deleteObject:obj];
+        }
+    }
+    [[AppDelegate shareInstance].managedObjectContext performSelectorOnMainThread:@selector(save:) withObject:nil waitUntilDone:YES];
+    
+    return YES;
+}
+
+/** 查询所有记录 */
++(NSArray*)queryAll
+{
+    NSManagedObjectContext * context  = [[AppDelegate shareInstance] managedObjectContext];
+    NSManagedObjectModel   * model    = [[AppDelegate shareInstance] managedObjectModel];
+    NSDictionary           * entities = [model entitiesByName];
+    NSEntityDescription    * entity   = [entities valueForKey:MODEL];
+    
+    NSSortDescriptor * sort = [[NSSortDescriptor alloc] initWithKey:SORT ascending:NO];
+    NSArray * sortDescriptors = [NSArray arrayWithObject: sort];
+    
+    NSFetchRequest * req = [[NSFetchRequest alloc] init];
+    [req setEntity: entity];
+    [req setSortDescriptors: sortDescriptors];
+    
+    NSArray * results = [context executeFetchRequest:req error:nil];
+    
+    return results;
+}
+
++(NSArray*)queryWithLimit:(NSUInteger)count page:(NSUInteger)page
+{
+    NSManagedObjectContext * context  = [[AppDelegate shareInstance] managedObjectContext];
+    NSManagedObjectModel   * model    = [[AppDelegate shareInstance] managedObjectModel];
+    NSDictionary           * entities = [model entitiesByName];
+    NSEntityDescription    * entity   = [entities valueForKey:MODEL];
+    
+    NSSortDescriptor * sort = [[NSSortDescriptor alloc] initWithKey:SORT ascending:NO];
+    NSArray * sortDescriptors = [NSArray arrayWithObject: sort];
+    
+    NSFetchRequest * req = [[NSFetchRequest alloc] init];
+    [req setEntity: entity];
+    [req setSortDescriptors: sortDescriptors];
+    [req setFetchLimit:count];
+    [req setFetchOffset:page*count];
+    
+    NSArray * results = [context executeFetchRequest:req error:nil];
+    return results;
+}
+
+/** 根据属性和值查询 */
++(NSArray*)queryWithAttr:(NSString*)attr value:(NSString*)value limit:(int)count
+{
+    NSManagedObjectContext * context=[[AppDelegate shareInstance] managedObjectContext];
+    NSManagedObjectModel * model=[[AppDelegate shareInstance] managedObjectModel];
+    NSDictionary * entities=[model entitiesByName];
+    NSEntityDescription *entity=[entities valueForKey:MODEL];
+    
+    NSSortDescriptor * sort=[[NSSortDescriptor alloc] initWithKey:SORT ascending:NO];
+    NSArray * sortDescriptors=[NSArray arrayWithObject:sort];
+    
+    NSFetchRequest * req=[[NSFetchRequest alloc] init];
+    NSPredicate *predicate=[NSPredicate predicateWithFormat:[NSString stringWithFormat:@"%@=='%@'",attr,value]];
+    [req setEntity:entity];
+    [req setSortDescriptors:sortDescriptors];
+    [req setPredicate:predicate];
+    if (count>0) {
+        [req setFetchLimit:count];
+    }
+    
+    NSError * error;
+    NSArray * results=[context executeFetchRequest:req error:&error];
+    
+    return results;
+}
+
+/** 根据属性值模糊查询 */
++(NSArray*)queryObscureWithAttr:(NSString*)attr value:(NSString*)value limit:(int)count
+{
+    NSManagedObjectContext * context  = [[AppDelegate shareInstance] managedObjectContext];
+    NSManagedObjectModel   * model    = [[AppDelegate shareInstance] managedObjectModel];
+    NSDictionary           * entities = [model entitiesByName];
+    NSEntityDescription    * entity   = [entities valueForKey:MODEL];
+    
+    
+    NSSortDescriptor * sort = [[NSSortDescriptor alloc] initWithKey:SORT ascending:NO];
+    NSArray * sortDescriptors = [NSArray arrayWithObject: sort];
+    NSLog(@"%@ LIKE[c] '*%@*'",attr, value);
+    NSFetchRequest * req = [[NSFetchRequest alloc] init];
+    NSPredicate * predicate=[NSPredicate predicateWithFormat:[NSString stringWithFormat:@"%@ LIKE[c] '%@*'", attr, value]];
+    
+    [req setEntity: entity];
+    [req setSortDescriptors: sortDescriptors];
+    [req setPredicate:predicate];
+    if (count>0) {
+        [req setFetchLimit:count];
+    }
+    
+    NSArray * results = [context executeFetchRequest:req error:nil];
+    
+    return results;
+}
+
+@end

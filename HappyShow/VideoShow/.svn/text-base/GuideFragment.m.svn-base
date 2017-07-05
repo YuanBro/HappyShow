@@ -1,0 +1,60 @@
+//
+//  GuideFragment.m
+//  VideoShow
+//
+//  Created by lance on 15/5/9.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "GuideFragment.h"
+#import "UIImage+Util.h"
+#import "CustomTabBarController.h"
+
+#define entryBtnWidth 100
+#define entryBtnHeight 40
+
+@interface GuideFragment ()
+
+@property (nonatomic,strong) UIImageView * guideImageView;
+
+@end
+
+@implementation GuideFragment
+
+@synthesize guideControl;
+@synthesize imageName;
+@synthesize entryFlag;
+@synthesize guideImageView;
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.navigationController.navigationBar.hidden=YES;
+    self.guideImageView=[[UIImageView alloc] initWithFrame:self.view.frame];
+    self.guideImageView.contentMode=UIViewContentModeScaleAspectFill;
+    [self.view addSubview:self.guideImageView];
+    
+    if (entryFlag) {
+        UIButton * btnEntry = [UIButton buttonWithType:UIButtonTypeCustom];
+        btnEntry.backgroundColor=[UIColor redColor];
+        [btnEntry setTitle:NSLocalizedString(@"entry_btn_text", nil) forState:UIControlStateNormal];
+        CGSize size=self.view.frame.size;
+        btnEntry.frame=CGRectMake((size.width-entryBtnWidth)/2, size.height-entryBtnHeight-30, entryBtnWidth, entryBtnHeight);
+        [btnEntry addTarget:self action:@selector(entryAction:) forControlEvents:UIControlEventTouchUpInside];
+        [self.view addSubview:btnEntry];
+    }
+    
+    self.guideImageView.image=[UIImage imageResource:self.imageName];
+}
+
+-(void) entryAction:(id)sender
+{
+    CustomTabBarController * control = [[CustomTabBarController alloc] init];
+    [self.guideControl.navigationController pushViewController:control animated:YES];
+    [self.guideControl removeFromParentViewController];
+}
+
+- (void)dealloc {
+    
+}
+
+@end

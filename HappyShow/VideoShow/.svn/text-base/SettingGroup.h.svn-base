@@ -1,0 +1,18 @@
+//
+//  SettingInf.h
+//  VideoShow
+//
+//  Created by lance on 15/5/6.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+
+@interface SettingGroup : NSObject
+
+@property (nonatomic,assign) int type;
+@property (nonatomic,assign) int section;//所属块
+@property (nonatomic,strong) NSString * groupName;
+@property (nonatomic,strong) NSMutableArray * data;//分组数据
+
+@end

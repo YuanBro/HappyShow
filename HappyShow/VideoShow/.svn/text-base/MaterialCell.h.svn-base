@@ -1,0 +1,30 @@
+//
+//  MaterialCell.h
+//  VideoShow
+//
+//  Created by Mac on 16/1/12.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+@class MaterialInf;
+@class MaterialCell;
+@protocol MaterialCellDelegate <NSObject>
+
+- (void)downAction:(UIButton*)item;
+
+@end
+@interface MaterialCell : UITableViewCell
+
+@property (weak, nonatomic) IBOutlet UIImageView *Sound;
+@property (weak, nonatomic) IBOutlet UIImageView *imagev;
+@property (weak, nonatomic) IBOutlet UIProgressView *progressView;
+@property (weak, nonatomic) IBOutlet UILabel *titleLabel;
+@property (assign, nonatomic) BOOL  isChecked;
+@property (weak, nonatomic) IBOutlet UIButton *downbutton;
+@property (weak, nonatomic) IBOutlet UIButton *finishedStatus;
+@property (assign, nonatomic) int materialID;
+@property (assign, nonatomic) int status;
+@property (weak,nonatomic) MaterialInf * materialInf;
+@property (assign, nonatomic) id<MaterialCellDelegate> cellDelegate;
+@end

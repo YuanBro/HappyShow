@@ -1,0 +1,21 @@
+//
+//  DownloadedSticker+CoreData.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/5.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "DownloadedSticker.h"
+
+@interface DownloadedSticker (CoreData)
+
++ (void)saveDownloadedSticker:(DownloadedSticker*)sticker;
++ (void)deleteDownloadedSticker:(int)ID;
++ (NSMutableArray*)queryAll;
++ (NSArray*)queryByID:(int)stickerID;
++ (DownloadedSticker*)queryByMaterialID:(int)materialID;
++ (void)resortStickers:(NSArray*)stickers;
++ (NSMutableArray*)queryWithType:(NSString*)type;
+
+@end

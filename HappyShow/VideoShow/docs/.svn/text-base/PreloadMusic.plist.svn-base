@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+	<dict>
+		<key>DisplayName</key>
+		<string>Music Love</string>
+		<key>FileName</key>
+		<string>music_new_york_love</string>
+		<key>Icon</key>
+		<string>music_love.png</string>
+	</dict>
+	<dict>
+		<key>DisplayName</key>
+		<string>Music Remember</string>
+		<key>FileName</key>
+		<string>music_i_remember_that_day</string>
+		<key>Icon</key>
+		<string>music_remember.png</string>
+	</dict>
+	<dict>
+		<key>DisplayName</key>
+		<string>Music Party</string>
+		<key>FileName</key>
+		<string>music_kids_party</string>
+		<key>Icon</key>
+		<string>music_party.png</string>
+	</dict>
+	<dict>
+		<key>DisplayName</key>
+		<string>Music Smile</string>
+		<key>FileName</key>
+		<string>music_a_laugh_smile_kiss</string>
+		<key>Icon</key>
+		<string>music_smile.png</string>
+	</dict>
+	<dict>
+		<key>DisplayName</key>
+		<string>Music Happy</string>
+		<key>FileName</key>
+		<string>music_a_state_of_happiness</string>
+		<key>Icon</key>
+		<string>music_happy.png</string>
+	</dict>
+</array>
+</plist>

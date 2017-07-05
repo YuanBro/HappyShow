@@ -1,0 +1,32 @@
+//
+//  CommonViewController.h
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-10-23.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "UINavigationBar+Util.h"
+
+#define CustomTabbarHeight 49
+
+@interface BaseViewController : UIViewController
+
+@property (nonatomic,assign) CGRect screenRect;
+@property (nonatomic,assign) int statusHeight;
+@property (nonatomic,assign) int naviHeight;
+@property (nonatomic,assign) int tabbarHeight;
+
+//app 进入前台
+-(void) applicationBecomeActive:(NSNotification *)notify;
+//app 进入后台
+-(void) applicationEnterBackground:(NSNotification *)notify;
+- (void)applicationWillResignActive:(NSNotification*)notify;
+
+/** 从故事板中获取视图控制器 */
++(instancetype) initFromStoryboard:(Class) aClass;
+
+- (BOOL) heightLessThan480;
+
+@end

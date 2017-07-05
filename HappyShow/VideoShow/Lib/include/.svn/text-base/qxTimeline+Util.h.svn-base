@@ -1,0 +1,48 @@
+//
+//  qxTimeline+Util.h
+//  VideoShow
+//
+//  Created by lance on 15/6/2.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "qxTimeline.h"
+
+@interface qxTimeline (Util)
+
+// 返回视频通道
+- (qxTrack *)getTrackForVideo;
+
+// 返回配乐通道
+- (qxTrack *)getTrackForMusic;
+
+// 返回音频通道
+- (qxTrack *)getTrackForAudio;
+
+// 返回字幕或者sticker
+- (qxTrack *)getTrackForOverlay;
+
+/** 获取所有的sticker集合 */
+- (NSMutableArray *)getAllStickers;
+
+/** 获取所有的字幕集合 */
+- (NSMutableArray *)getAllSubtitles;
+
+// 获取指定时间的sticker列表
+- (NSMutableArray*) getStickerObjectsAtTime:(CGFloat)second;
+
+// 获取指定时间的text列表
+- (NSMutableArray *)getTextObjectsAtTime:(CGFloat)second;
+
+/** 是否包含字幕信息 */
+- (BOOL)hasSubtitle;
+/** 默认添加拍摄的视频后初始化对象 */
++ (qxTimeline*)timelineWithVideoPath:(NSString*)videoPath;
+
+/** 利用反序列化的timeline重建---与底层关联 */
++ (qxTimeline *) createTimelineForTimeline:(qxTimeline *)timelinep;
+
+/** 设置视频与音频的音量---按百分比计算 */
+- (void) setAudioPercent:(float) audioPercent;
+
+@end

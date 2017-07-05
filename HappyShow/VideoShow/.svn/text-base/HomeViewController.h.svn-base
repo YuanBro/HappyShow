@@ -1,0 +1,18 @@
+//
+//  HomeViewController.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-7-15.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "BaseViewController.h"
+#import "PagerViewControllerDelegate.h"
+
+// 首页
+@interface HomeViewController : BaseViewController
+
+@property (nonatomic,weak) id<PagerViewControllerDelegate> mainDelegate;
+
+@end

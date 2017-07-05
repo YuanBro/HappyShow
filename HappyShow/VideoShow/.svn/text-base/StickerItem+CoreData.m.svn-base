@@ -1,0 +1,109 @@
+//
+//  StickerItem+CoreData.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/17.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "StickerItem+CoreData.h"
+#import "AppDelegate.h"
+#import "Util.h"
+
+#define MODEL @"StickerItem"
+#define SORT @"lastUsedTime"
+
+//默认保存最近的最大记录数
+#define DefaultRecentCount 20
+
+@implementation StickerItem (CoreData)
+
++ (void)saveRecentSticker:(StickerItem*)item
+{
+    StickerItem *rSticker = item;
+    NSArray *arr = [StickerItem queryWithPredicate:[NSPredicate predicateWithFormat:@"image = %@",item.image] limit:0];
+    if (arr.count > 0) {
+        rSticker = [arr objectAtIndex:0];
+        rSticker.lastUsedTime = [NSDate date];
+    }else{
+        rSticker=[NSEntityDescription insertNewObjectForEntityForName:MODEL
+                                                               inManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+        rSticker.stickerID = item.stickerID;
+        rSticker.lastUsedTime = [NSDate date];
+        rSticker.image = item.image;
+        rSticker.type = item.type;
+    }
+    [[AppDelegate shareInstance].managedObjectContext performSelectorOnMainThread:@selector(save:) withObject:nil waitUntilDone:YES];
+}
+
++ (NSArray*)queryRecent
+{
+    [StickerItem deleteInvalidStickers];
+    return [self queryWithPredicate:nil limit:DefaultRecentCount];
+}
+
+/** 删除无效的sticker */
++ (void)deleteInvalidStickers
+{
+    NSManagedObjectContext * context  = [[AppDelegate shareInstance] managedObjectContext];
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"lastUsedTime = %@",[NSDate dateWithTimeIntervalSince1970:0]];
+    NSArray *results1 = [StickerItem queryWithPredicate:predicate limit:0];
+    NSMutableArray *results = [NSMutableArray arrayWithArray:results1];
+    NSArray *results2 = [StickerItem queryWithPredicate:nil limit:0];
+    StickerItem *item = nil;
+    for(int i = 0; i < results2.count; i++){
+        item = results2[i];
+        if(item.stickerID.intValue > 0 && ![Util fileExists:item.image]){
+            [context deleteObject:item];
+        }
+    }
+    results2 = [StickerItem queryWithPredicate:nil limit:0];
+    if(results2.count > 20){
+        for(int i = 20; i < results2.count; i ++){
+            [results addObject:results2[i]];
+        }
+    }
+    //
+    if (results.count>0){
+        for(NSManagedObject *obj in results){
+            [context deleteObject:obj];
+        }
+    }
+    [[AppDelegate shareInstance].managedObjectContext performSelectorOnMainThread:@selector(save:) withObject:nil waitUntilDone:YES];
+}
+
++ (NSArray*)queryWithPredicate:(NSPredicate*)predicate limit:(int)limit
+{
+    NSManagedObjectContext * context=[[AppDelegate shareInstance] managedObjectContext];
+    NSManagedObjectModel * model=[[AppDelegate shareInstance] managedObjectModel];
+    NSDictionary * entities=[model entitiesByName];
+    NSEntityDescription *entity=[entities valueForKey:MODEL];
+    
+    NSSortDescriptor * sort=[[NSSortDescriptor alloc] initWithKey:SORT ascending:NO];
+    NSArray * sortDescriptors=[NSArray arrayWithObject:sort];
+    
+    NSFetchRequest * req=[[NSFetchRequest alloc] init];
+    [req setEntity:entity];
+    [req setSortDescriptors:sortDescriptors];
+    if(predicate){
+        [req setPredicate:predicate];
+    }
+    if(limit > 0){
+        [req setFetchLimit:limit];
+    }
+    return [context executeFetchRequest:req error:nil];
+}
+
++ (void)deleteRecentSticker:(int)stickerID
+{
+    NSArray *result = [StickerItem queryWithPredicate:[NSPredicate predicateWithFormat:@"stickerID = %d",stickerID] limit:0];
+    if(result && result.count > 0){
+        NSManagedObjectContext * context  = [[AppDelegate shareInstance] managedObjectContext];
+        NSLog(@"delete recent : %d",(int)result.count);
+        for(StickerItem *item in result){
+            [context deleteObject:item];
+        }
+        [[AppDelegate shareInstance].managedObjectContext performSelectorOnMainThread:@selector(save:) withObject:nil waitUntilDone:YES];
+    }
+}
+@end

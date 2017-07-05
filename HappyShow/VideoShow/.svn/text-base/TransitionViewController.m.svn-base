@@ -1,0 +1,1130 @@
+//
+//  TransitionViewController.m
+//  VideoShow
+//
+//  Created by Mac on 16/3/1.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+//  此文件主要用于转场效果的编辑
+//
+//
+
+#import "TransitionViewController.h"
+#import "qxFxPlaybackHelper.h"
+#import "qxPlaybackView+Util.h"
+#import "StoryboardViewController.h"
+#import "UIColor+Util.h"
+#import "ToolbarExternCell.h"
+#import "UIImage+Util.h"
+#import "Util.h"
+#import "MBProgressHUD.h"
+#import "qxEffectMgr.h"
+
+static float transitionTime = 1000; //用于控制每一段转场效果的时间
+
+@interface TransitionViewController () <UICollectionViewDataSource, UICollectionViewDelegate, qxFxPlaybackDelegate, StoryboardViewDelegate, UIActionSheetDelegate>
+
+
+@property (weak, nonatomic) IBOutlet UIView *videoView;
+@property (weak, nonatomic) IBOutlet UIButton *btPlay;
+@property (weak, nonatomic) IBOutlet UIButton *batchBtn;
+
+@property (weak, nonatomic) IBOutlet UIView *bottomPanel;
+@property (weak, nonatomic) IBOutlet UIView *toolView;
+@property (weak, nonatomic) IBOutlet UICollectionView *transitionCollectionView;
+@property (assign, nonatomic) NSInteger currentSelectedIndexOfTransition; //当前选中的transition的下标,主要针对转场要进行预览过程中，解决用户点击其他转场cell进行预览出现的尴尬
+@property (strong, nonatomic) qxMediaObject *currentObj; //最新的对象,用于记录当前播放中的obj
+@property (assign, nonatomic) BOOL isChangeToTransition; //是否重新设置了playbackHelper的开始时间,在播放时作为是否前置到转场的一个因素
+
+@property (strong, nonatomic) NSMutableArray *transitionMarks; //相应转场的标志, 是：是否有边框的数据(transitionCollectionView)
+//@property (assign, nonatomic) NSInteger indexOfSelectedTransition; //选中的转场
+
+@property (strong, nonatomic) NSMutableArray *objs; //按顺序保存非转场的对象
+
+@property (strong, nonatomic) StoryboardViewController *storyPanel; //排序面板
+@property (assign, nonatomic) float storyPanelHeight; //排序面板的高度
+@property (assign, nonatomic) NSInteger startIndexOfStoryPanel; //
+
+@property (assign, nonatomic) BOOL isPlaying; //是否正在播放
+@property (strong, nonatomic) qxFxPlaybackHelper *playbackHelper; //用于播放
+
+@property (strong, nonatomic) NSMutableArray *recordTransitionsOfObjs; //保存所有片段对应的转场，以片段下标作为key, eg: @(0)
+
+@property (strong, nonatomic) NSTimer *timer; //由于没有给 播放完通道内一个对象后的协议方法，所以这里只能通过自定义一个定时器来控制
+
+////////////暂时先用这个////////////////////////////////////////////
+//工具栏数据源
+@property (nonatomic,strong) NSArray *toolIcons;
+@property (nonatomic,strong) NSArray *toolLabels;
+//////////////////////////////////////////////////////////////////
+
+
+- (IBAction)playAction:(UIButton *)sender;
+- (IBAction)batch:(UIButton *)sender;
+
+@end
+
+@implementation TransitionViewController
+
+#pragma -mark Private Methods
+
+- (void)dealloc {
+
+    self.currentObj = nil;
+    self.objs = nil;
+    self.timeline = nil;
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    [self allInit];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    
+    if (_timeline!=nil && [self.timeline getTrackCount]>0) {
+        
+        [self.storyPanel clearMedias]; //清空片段框中的数据
+        qxTrack *videoTrack = [self.timeline getTrackFromTimeline:0];
+        ALAssetsLibrary *assetsLibrary = [Util defaultAssetsLibrary];
+        __weak typeof(self) weakSelf = self;
+        
+        for (int i=0; i<videoTrack.mpMediaObjArray.count; i++) {
+            qxMediaObject *obj = [videoTrack.mpMediaObjArray objectAtIndex:i];
+            //这里得到所有的asset,添加到storyPanel中
+            [assetsLibrary assetForURL:[NSURL URLWithString:obj.strFilePath] resultBlock:^(ALAsset *asset){
+                if (asset!=nil) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        //
+                        [weakSelf.storyPanel addMedia:asset];
+                        
+                    });
+                }
+            } failureBlock:^(NSError *error) {//被禁止访问
+                
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (error==nil) {
+                        [Util showAlert:NSLocalizedString(@"Photo library access deny", nil) title:NSLocalizedString(@"Access deny", nil) tag:0];
+                    } else {
+                        [Util showAlert:error.localizedDescription title:nil tag:0];
+                    }
+                });
+            }];
+        }
+    }
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    
+    //注销定时器
+    if (_timer.isValid) {
+        [_timer invalidate];
+    }
+    _timer = nil;
+}
+
+- (void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+}
+
+#pragma mark - 初始化
+/**
+ *  初始化
+ *
+ */
+- (void)allInit {
+    
+    self.view.backgroundColor = [UIColor colorWithHexString:homeColor];
+    self.bottomPanel.backgroundColor = [UIColor colorWithHexString:bottomViewColor];
+    
+    [self dataInit];
+    [self navInit];
+    [self videoViewInit];
+    [self transitionCollectionViewInit];
+    [self storyPanelInit];
+}
+
+/**
+ * 数据初始化
+ *
+ */
+- (void)dataInit {
+    //
+    qxTrack *track = [[qxTrack alloc] initWithTrackType:eMT_Video];
+    [[self.timeline getTrackFromTimeline:0].mpMediaObjArray enumerateObjectsUsingBlock:^(qxMediaObject *obj, NSUInteger idx, BOOL *stop) {
+        
+        if (obj.eType != eMT_Transition) {
+            [self.objs addObject:obj];
+            [track addMediaObject:obj];
+        }
+    }];
+#if 0 //删除转场的对象
+    //
+    qxTimeline *tempTimeline = [self.timeline clone:YES];
+    self.timeline = [[qxTimeline alloc] init];
+    [self.timeline addTrack:track];
+    [self.timeline addTrack:[tempTimeline getTrackFromTimeline:1]];
+    [self.timeline addTrack:[tempTimeline getTrackFromTimeline:2]];
+    [self.timeline addTrack:[tempTimeline getTrackFromTimeline:3]];
+#endif
+    //
+    typeof(self) selfWeak = self;
+    [self showToast:nil];
+    [self.timeline clearTrans];
+    [[self.timeline getTrackFromTimeline:0] reloadPhoto:self.screenRect.size block:^{
+        [selfWeak hideHud];
+        [selfWeak prepareForPreview];
+    }];
+}
+
+/**
+ * 导航初始化
+ *
+ */
+- (void)navInit {
+    
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"Transition", nil)];
+    [self.navigationController.navigationBar initWithViewController:self leftText:NSLocalizedString(@"Back", nil) leftImageName:@"ic_back_arrow.png" action:@selector(cancelAction:)];
+    [self.navigationController.navigationBar initWithViewController:self rightImageName:@"bt_ok.png" action:@selector(confirmAction:)];
+}
+
+/**
+ * 播放视图初始化
+ *
+ */
+- (void)videoViewInit {
+    
+    UITapGestureRecognizer *playbackTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapVideoView:)];
+    [self.videoView addGestureRecognizer:playbackTap];
+    
+    //
+    self.batchBtn.titleLabel.font = [UIFont boldSystemFontOfSize:15];
+    self.batchBtn.layer.cornerRadius = self.batchBtn.frame.size.height/2;
+    self.batchBtn.layer.borderWidth = 2.0;
+    self.batchBtn.layer.borderColor = [UIColor colorWithRed:227/255. green:39/255. blue:78/255. alpha:1].CGColor;
+    self.batchBtn.clipsToBounds = YES;
+}
+
+/**
+ * 排序面板初始化
+ *
+ */
+- (void)storyPanelInit {
+ 
+    [self.storyPanel attachToController:self superview:self.view frame:CGRectMake(0, self.screenRect.size.height-self.storyPanelHeight, self.view.frame.size.width, self.storyPanelHeight - 64)];
+}
+
+/**
+ * 转场集合视图初始化
+ *
+ */
+- (void)transitionCollectionViewInit {
+    
+    UICollectionViewFlowLayout *layout = [[UICollectionViewFlowLayout alloc] init];
+    layout.minimumLineSpacing = 15;
+    CGFloat itemSizeHeight = self.transitionCollectionView.frame.size.height;
+    layout.itemSize = CGSizeMake(itemSizeHeight*3/4, itemSizeHeight); //图片宽，高相同，且占cell高度的3/4
+    layout.scrollDirection = UICollectionViewScrollDirectionHorizontal;
+    self.transitionCollectionView.collectionViewLayout = layout;
+    self.transitionCollectionView.backgroundColor=[UIColor colorWithHexString:navigationBarColor];
+    [self.transitionCollectionView registerClass:[ToolbarExternCell class] forCellWithReuseIdentifier:toolbarExternCellID];
+}
+
+
+#pragma mark - 弹框
+
+- (void)showToast:(NSString*)str {
+    
+    MBProgressHUD* hud = [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+    hud.labelText = str;
+    hud.mode = MBProgressHUDModeText;
+    [self performSelector:@selector(hideHud) withObject:self afterDelay:1.5];
+}
+
+- (void)hideHud {
+    
+    [MBProgressHUD hideHUDForView:self.view animated:NO];
+}
+
+#pragma mark - events
+
+/**
+ * 点击屏幕事件(点击就暂停播放)
+ *
+ */
+- (void)tapVideoView:(UITapGestureRecognizer *)tap {
+    
+    if (self.isPlaying) {
+        [self pausePreview];
+    }
+}
+
+/**
+ * 确定（对号）事件
+ *
+ */
+- (void)confirmAction:(id)sender {
+    
+    [self stopPreview];
+    if (_delegate) {
+        [_delegate videoEdit:self type:EditTypeTransition editFlag:YES];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+/**
+ * 返回，取消事件
+ *
+ */
+- (void)cancelAction:(id)sender {
+    
+    [self stopPreview];
+    if (_delegate) {
+        [_delegate videoEdit:self type:EditTypeTransition editFlag:NO];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+/**
+ * 播放事件
+ *
+ */
+- (IBAction)playAction:(UIButton *)sender {
+    
+    if (self.currentObj.eType != eMT_Transition) {
+        if (self.isBefore) {
+            //未知
+        } else {
+            if (self.isChangeToTransition) {
+            
+                //???这个需要追一下看看,对象时间的变化
+                //进行重置时间
+                self.isChangeToTransition = NO;
+                
+                qxMediaObject *obj = [[self.timeline getTrackFromTimeline:0] getMediaObjectFromTrack:(int)[self indexOfObj:self.startIndexOfStoryPanel track:[self.timeline getTrackFromTimeline:0]]];
+                NSInteger transitionIdx = [self indexOfTransitionObjOfObj:obj timeline:self.timeline isBefore:self.isBefore];
+                if (transitionIdx != NSNotFound) {
+                    qxMediaObject *transitionObj = [[self.timeline getTrackFromTimeline:0] getMediaObjectFromTrack:(int)transitionIdx];
+                    if (transitionObj.transition_def != eTrans_None) {
+                        //[self.playbackHelper seekToTime:CMTimeGetSeconds(self.currentObj.startTimeOfTrack)];
+                        NSLog(@"%f", CMTimeGetSeconds(obj.startTimeOfTrack));
+                        NSLog(@"%f", CMTimeGetSeconds(obj.endTimeOfTrack));
+                        NSLog(@"%f", CMTimeGetSeconds(obj.startTimeOfTrack_BesideTrans));
+                        NSLog(@"%f", CMTimeGetSeconds(obj.mediaOriginalDuration));
+                        [self.playbackHelper seekToTime:CMTimeGetSeconds(obj.startTimeOfTrack)];
+                    }
+                }
+            }
+        }
+    }
+    
+    if(!self.isPlaying){
+        [self startPreview];
+    }else{
+        [self pausePreview];
+    }
+}
+    
+/**
+ * 批量设置事件
+ *
+ */
+- (IBAction)batch:(UIButton *)sender {
+    
+    if (self.isPlaying) {
+        [self showToast:@"正在播放，请停止播放"];
+        return;
+    }
+    
+    if (self.objs.count <= 1) {
+        [self showToast:@"片段数不能少于2张"];
+        return;
+    }
+    
+    UIActionSheet *sheet = nil;
+    if (self.currentSelectedIndexOfTransition != 0) {
+        
+        sheet = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:nil destructiveButtonTitle:nil otherButtonTitles:@"所有镜头随机设置转场",  [NSString stringWithFormat:@"\"%@\": 适用所有镜头", [self.transitionMarks[self.currentSelectedIndexOfTransition] title]], @"清除所有的值", nil];
+    } else {
+        
+        sheet = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:nil destructiveButtonTitle:nil otherButtonTitles:@"所有镜头随机设置转场", @"清除所有的值", nil];
+    }
+    [sheet showInView:self.view];
+}
+
+
+#pragma mark - Preview control Methods
+
+- (void)prepareForPreview {
+    
+    if (self.playbackHelper) {
+        self.playbackHelper.delegate = nil;
+        [self.playbackHelper stop];
+        [self.playbackHelper destroy];
+        self.playbackHelper = nil;
+    }
+    
+    self.playbackHelper = [[qxFxPlaybackHelper alloc] init];
+    self.playbackHelper.delegate = self;
+    
+    float scale = [UIScreen mainScreen].scale;
+    self.timeline.timelineSize = CGSizeMake(self.videoView.frame.size.width*scale, self.videoView.frame.size.height*scale);
+    [self.timeline clearTrans];
+    self.playbackHelper.mpTimeline = self.timeline;
+    
+    [self.playbackHelper initWithUIView:self.videoView];
+    [qxPlaybackView bringFromVideoView:self.videoView];
+}
+
+- (void)startPreview {
+    
+    if (!self.isPlaying && self.playbackHelper) {
+        [self.playbackHelper playPause:YES];
+        self.isPlaying = YES;
+        //打开定时器,监测播放到通道的哪个对象了.然后对transitionCollectionView 和 storyPanel 进行刷新;
+        [self.timer setFireDate:[NSDate distantPast]];
+    }
+    self.btPlay.hidden = YES;
+}
+
+- (void)pausePreview {
+    
+    if (self.isPlaying && self.playbackHelper) {
+        [self.playbackHelper playPause:NO];
+        self.isPlaying = NO;
+        //关闭定时器
+        [self.timer setFireDate:[NSDate distantFuture]];
+    }
+    self.btPlay.hidden = NO;
+}
+
+- (void)stopPreview {
+    
+    if (self.playbackHelper) {
+        self.playbackHelper.delegate = nil;
+        [self.playbackHelper stop];
+        [self.playbackHelper destroy];
+        self.playbackHelper = nil;
+    }
+    self.isPlaying = NO;
+}
+
+- (void)startTransitionPreview {
+    
+}
+
+- (void)stopTransitionPreview:(NSDictionary *)dict {
+    
+    [self pausePreview];
+    NSLog(@"%f", CMTimeGetSeconds([dict[@"transitionObj"] startTimeOfTrack]));
+    float startTime = CMTimeGetSeconds([dict[@"transitionObj"] startTimeOfTrack]);
+    if (self.isBefore) {
+        
+        //未知
+    } else {
+        
+        startTime = CMTimeGetSeconds([dict[@"transitionObj"] endTimeOfTrack]);
+    }
+    
+    [self seekToTime:startTime];
+}
+
+#pragma -mark Member Vars
+
+- (float)storyPanelHeight {
+    
+    if (!_storyPanelHeight) {
+        
+        _storyPanelHeight = self.screenRect.size.height - self.screenRect.size.width - self.toolView.frame.size.height;
+    }
+    return _storyPanelHeight;
+}
+
+- (StoryboardViewController *)storyPanel {
+    
+    if (!_storyPanel) {
+        _storyPanel = [[StoryboardViewController alloc] init];
+        _storyPanel.editType = EditTypeTransition; //新添加的类型，表示是哪种编辑类型，以在其内部进行调整
+        _storyPanel.target = self;
+        _storyPanel.delegate = self;
+    }
+    return _storyPanel;
+}
+
+- (qxFxPlaybackHelper *)playbackHelper {
+    
+    if (!_playbackHelper) {
+    
+    }
+    return _playbackHelper;
+}
+
+- (NSMutableArray *)transitionMarks {
+    
+    if (!_transitionMarks) {
+        _transitionMarks = [NSMutableArray array];
+        self.toolIcons = @[@"toolbar_media.png",@"toolbar_duration.png",@"toolbar_subtitle.png",@"toolbar_sticker.png",@"toolbar_music.png",@"toolbar_record.png",@"toolbar_record.png"];
+        self.toolLabels = @[@"Tool_clip_add",@"Tool_clip_duration",@"Tool_subtitle",@"Tool_sticker",@"Tool_music",@"Tool_record",@"Tool_transition"];
+        
+        self.currentSelectedIndexOfTransition = 0;
+        for (NSInteger i=0; i<self.toolIcons.count; i++) {
+            
+            ToolbarExternModel *model = [[ToolbarExternModel alloc] init];
+            model.iconImage = [UIImage imageResource:self.toolIcons[i]];
+            model.title     = NSLocalizedString(self.toolLabels[i], nil);
+            model.hasBorder = (i==self.currentSelectedIndexOfTransition); //边框的颜色直接用默认值就可以了，所以这里没有添加颜色属性;
+            [_transitionMarks addObject:model];
+        }
+    }
+    return _transitionMarks;
+}
+
+- (NSMutableArray *)recordTransitionsOfObjs {
+    if (!_recordTransitionsOfObjs) {
+        _recordTransitionsOfObjs = [NSMutableArray array];
+#if 0
+        //这里实验一下，直接改变_recordTransitionsOfObjs就可以控制在播放时边框的设置问题，OK.
+        int index = 0;
+        for (qxMediaObject *obj in [self.timeline getTrackFromTimeline:0].mpMediaObjArray) {
+            if (obj.eType != eMT_Transition) {
+                [_recordTransitionsOfObjs addObject:@(index)];
+            }
+            index++;
+        }
+#else
+        //对进来就已经加了转场的对象进行处理一下
+        qxTrack *track = [self.timeline getTrackFromTimeline:0];
+        int index = 0;
+        for (qxMediaObject *obj in track.mpMediaObjArray) {
+            
+            if (obj.eType != eMT_Transition) {
+                
+                if (self.isBefore) {
+                    //未知
+                } else {
+                    
+                    if (index && [track getMediaObjectFromTrack:index-1].eType==eMT_Transition) {
+                        
+                        [_recordTransitionsOfObjs addObject:@([track getMediaObjectFromTrack:index-1].transition_def)];
+                    } else {
+                        [_recordTransitionsOfObjs addObject:@(0)];
+                    }
+                }
+            }
+            index++;
+        }
+        
+#endif
+    }
+    return _recordTransitionsOfObjs;
+}
+
+- (NSMutableArray *)objs {
+    if (!_objs) {
+        _objs = [NSMutableArray array];
+    }
+    return _objs;
+}
+
+- (NSTimer *)timer {
+    if (!_timer.isValid) {
+        _timer = [NSTimer scheduledTimerWithTimeInterval:0.05 target:self selector:@selector(observeProgressOfPlayForObject:) userInfo:nil repeats:YES];
+        [_timer setFireDate:[NSDate distantFuture]];
+    }
+    return _timer;
+}
+
+#pragma mark - timer
+
+/**
+ *  动态更新片段边框 和 转场边框
+ *
+ */
+- (void)observeProgressOfPlayForObject:(NSTimer *)timer {
+    
+    NSTimeInterval tm = [self.playbackHelper playbackProgress];
+    qxMediaObject *obj = [[self.timeline getTrackFromTimeline:0] findMediaObjectAtSecond:tm/1000];
+    
+    if (obj && (obj != self.currentObj) && (obj.eType != eMT_Transition)) {
+        
+        self.currentObj = obj;
+        
+        //根据recordTransitionsOfObjs更新UI
+        NSInteger objIdx = [self.objs indexOfObject:obj];
+        [self updateBoderForObject:objIdx transition:[self.recordTransitionsOfObjs[objIdx] integerValue]];
+    }
+}
+
+#pragma mark - CollectionView Delegate
+
+- (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section {
+    return self.transitionMarks.count;
+}
+
+- (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath {
+    
+    ToolbarExternCell * cell = [collectionView dequeueReusableCellWithReuseIdentifier:toolbarExternCellID forIndexPath:indexPath];
+    return [cell setCellWithData:self.transitionMarks[indexPath.row]];
+}
+
+- (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
+    
+    //
+    if (self.storyPanel.currentSelectedIndexPath.row==0 && indexPath.row!=0) {
+        [self showToast:@"第一张不支持设置转场"];
+        return;
+    }
+    //
+    if (self.isPlaying) {
+        [self showToast:@"正在播放，请停止播放"];
+        return;
+    }
+    
+    //刷新 transitionCollectionView
+    [self setSelectedTransitionMarksWithIndex:indexPath.row isAutoReload:YES];
+    
+    //设置转场，成功后再刷新collectionView
+    qxTrack *track = [self.timeline getTrackFromTimeline:0];
+    NSInteger index = [self indexOfObj:self.storyPanel.currentSelectedIndexPath.row track:track isBefore:self.isBefore];
+    
+    [self setTransition:(enum Transition_Def)indexPath.row forObj:[track getMediaObjectFromTrack:(int)index] timeline:self.timeline isPrepareview:(indexPath.row)];
+}
+
+#pragma mark - StoryPanel Delegate
+
+/**
+ *  选中storyPanel中的cell时会调用
+ *
+ */
+- (void)editPrepare:(int)assetIndex {
+
+    //
+    self.startIndexOfStoryPanel = assetIndex;
+    //
+    [self pausePreview];
+    [self updateBoderForObject:assetIndex transition:[self.recordTransitionsOfObjs[assetIndex] integerValue]];
+    //
+    qxMediaObject *obj = [[self.timeline getTrackFromTimeline:0] getMediaObjectFromTrack:(int)[self indexOfObj:assetIndex track:[self.timeline getTrackFromTimeline:0]]];
+    [self seekToTime:CMTimeGetSeconds(obj.startTimeOfTrack_BesideTrans)];
+}
+
+/**
+ *  数据改变(删除或添加，不包括移动)后回调
+ *
+ */
+- (void)didDataChange:(StoryboardViewController *)story {
+    //更新timeline
+}
+
+- (void)movefromIndexPath:(NSIndexPath *)fromIndexPath toIndexPath:(NSIndexPath *)toIndexPath {
+    
+    //暂停播放
+    [self pausePreview];
+    
+    //更新recordFiltersOfObjs
+    id fromFilter = self.recordTransitionsOfObjs[fromIndexPath.row];
+    [self.recordTransitionsOfObjs removeObjectAtIndex:fromIndexPath.row];
+    [self.recordTransitionsOfObjs insertObject:fromFilter atIndex:toIndexPath.row];
+    self.recordTransitionsOfObjs[0] = @(0); //第0个是没有转场的,所以这里置位一下
+    
+    //更新startIndexOfStoryPanel
+    if (fromIndexPath.row == self.startIndexOfStoryPanel){
+        self.startIndexOfStoryPanel  = toIndexPath.row;
+    } else if (toIndexPath.row == self.startIndexOfStoryPanel) {
+        self.startIndexOfStoryPanel = fromIndexPath.row;
+    }
+    
+    //更新timeline
+    //需要先删除,移动后再添加
+
+    qxTrack *track = [self.timeline getTrackFromTimeline:0];
+    //先删除滤镜 (fromIndexPath == toIndexPath 就不会进入这里)
+//    if (self.isBefore) {
+//    } else {
+//    
+//        
+//        NSInteger min = fromIndexPath.row;
+//        NSInteger max = toIndexPath.row;
+//        if (min == max) {
+//            return;
+//        } else if (min > max) {
+//            NSInteger temp = min;
+//            min = max;
+//            max = temp;
+//        }
+//        
+//        NSMutableArray *transitionObjs = [NSMutableArray array];
+//        for (int i=0; i<3; i++) {
+//            [transitionObjs addObject:@(0)];
+//        }
+//        
+//        min = [self indexOfTransitionObjOfObj:self.objs[min] timeline:self.timeline isBefore:self.isBefore];
+//        if (min != NSNotFound) {
+//            transitionObjs[2] = @([track getMediaObjectFromTrack:(int)min].transition_def);
+//            [track removeTransition:[track getMediaObjectFromTrack:(int)min]];
+//        }
+//        
+//        max = [self indexOfTransitionObjOfObj:self.objs[max] timeline:self.timeline isBefore:self.isBefore];
+//        if (max != NSNotFound) {
+//            transitionObjs[1] = @([track getMediaObjectFromTrack:(int)min].transition_def);
+//            [track removeTransition:[track getMediaObjectFromTrack:(int)max]];
+//        }
+//        
+//
+//    }
+    
+    //清除所有的转场，下面添加，一个一个清除太麻烦了，所以全部清除！
+    for (int i=0; i<self.objs.count; i++) {
+        NSInteger idxTransitonObj = [self indexOfTransitionObjOfObj:self.objs[i] timeline:self.timeline isBefore:self.isBefore];
+        if (idxTransitonObj != NSNotFound) {
+            [track removeTransition:[track getMediaObjectFromTrack:(int)idxTransitonObj]];
+        }
+    }
+    
+    //
+    qxMediaObject *fromObj = [track getMediaObjectFromTrack:(int)fromIndexPath.row];
+    [track delMediaObject:(int)fromIndexPath.row];
+    [track insertMediaObject:fromObj atIndex:(int)toIndexPath.row];
+    
+    //更新objs
+    [self.objs removeObject:fromObj];
+    [self.objs insertObject:fromObj atIndex:toIndexPath.row];
+    
+    //添加转场
+    for (int i=1; i<self.recordTransitionsOfObjs.count; i++) {
+        [self setTransition:(enum Transition_Def)[self.recordTransitionsOfObjs[i] integerValue] forObj:self.objs[i-1] timeline:self.timeline isPrepareview:NO];
+        //[track setTranstion:(enum Transition_Def)[self.recordTransitionsOfObjs[i] integerValue] duration:transitionTime atClip:self.objs[i-1] beforeOrAfter:self.isBefore];
+    }
+    
+    //找到开始的位置
+    qxMediaObject *obj = [[self.timeline getTrackFromTimeline:0] getMediaObjectFromTrack:(int)[self indexOfObj:self.startIndexOfStoryPanel track:[self.timeline getTrackFromTimeline:0]]];
+    NSLog(@"%f", CMTimeGetSeconds(obj.startTimeOfTrack));
+    NSLog(@"%f", CMTimeGetSeconds(obj.endTimeOfTrack));
+    NSLog(@"%f", CMTimeGetSeconds(obj.startTimeOfTrack_BesideTrans));
+    NSLog(@"%f/n########", CMTimeGetSeconds(obj.mediaOriginalDuration));
+    
+    
+    for (qxMediaObject *object in track.mpMediaObjArray) {
+        NSLog(@"%lf", CMTimeGetSeconds(object.startTimeOfTrack));
+        NSLog(@"%lf", CMTimeGetSeconds(object.endTimeOfTrack));
+        NSLog(@"%lf", CMTimeGetSeconds(object.startTimeOfTrack_BesideTrans));
+        NSLog(@"%lf/n**********", CMTimeGetSeconds(object.mediaOriginalDuration));
+    }
+
+    [self prepareForPreview];
+    [self seekToTime:CMTimeGetSeconds(obj.startTimeOfTrack_BesideTrans)];
+}
+
+#pragma mark - qxFxPlaybackDelegate
+
+/**
+ * 应用切回前台时和第一次进入播放时回调
+ */
+- (void)readyForPlayback {
+    
+//    if (!self.isPlaying) {
+//        self.btPlay.hidden = NO;
+//        [self seekToTime:0];
+//    }
+}
+
+/**
+ * 播放完成时回调
+ */
+- (void)FinishPlayback {
+    //
+    [self pausePreview];
+    
+    //设置开始时间
+    qxMediaObject *obj = [[self.timeline getTrackFromTimeline:0] getMediaObjectFromTrack:(int)[self indexOfObj:self.startIndexOfStoryPanel track:[self.timeline getTrackFromTimeline:0]]];
+    
+    NSLog(@"%f", CMTimeGetSeconds(self.currentObj.startTimeOfTrack));
+    NSLog(@"%f", CMTimeGetSeconds(self.currentObj.endTimeOfTrack));
+    NSLog(@"%f", CMTimeGetSeconds(self.currentObj.startTimeOfTrack_BesideTrans));
+    NSLog(@"%f", CMTimeGetSeconds(self.currentObj.mediaOriginalDuration));
+    //[self.playbackHelper seekToTime:CMTimeGetSeconds(self.currentObj.startTimeOfTrack)];
+    
+    [self seekToTime:CMTimeGetSeconds(obj.startTimeOfTrack_BesideTrans)];
+    //刷新边框
+    [self updateBoderForObject:self.startIndexOfStoryPanel transition:[self.recordTransitionsOfObjs[self.startIndexOfStoryPanel] integerValue]];
+}
+
+#pragma mark - UIActionSheet Delegate
+
+- (void)actionSheet:(UIActionSheet *)actionSheet clickedButtonAtIndex:(NSInteger)buttonIndex {
+    
+    NSInteger max = self.recordTransitionsOfObjs.count-1;
+    if (self.isBefore) {
+        //未知
+    } else {
+        max--;
+    }
+    
+    if (buttonIndex == 0) { //所有镜头随机设置滤镜
+        NSLog(@"所有镜头随机设置滤镜");
+        
+        for (NSInteger i=0; i<=max; i++) {
+            
+            NSInteger transitionIdx = (arc4random()%(self.transitionMarks.count-2)+1);
+            [self setTransition:(enum Transition_Def)transitionIdx forObj:self.objs[i] timeline:self.timeline isPrepareview:NO];
+            if (self.isBefore) {
+               
+            } else {
+                self.recordTransitionsOfObjs[i+1] = @(transitionIdx);
+            }
+        }
+        
+        [self setSelectedTransitionMarksWithIndex:[self.recordTransitionsOfObjs[self.storyPanel.currentSelectedIndexPath.row] integerValue] isAutoReload:NO];
+        
+        qxTrack *track = [self.timeline getTrackFromTimeline:0];
+        
+        qxMediaObject *transitionObj = [track getMediaObjectFromTrack:(int)[self indexOfTransitionObjOfObj:self.objs[(self.storyPanel.currentSelectedIndexPath.row ? self.storyPanel.currentSelectedIndexPath.row-1: 0)] timeline:self.timeline isBefore:self.isBefore]];
+        
+        NSLog(@"%f", CMTimeGetSeconds(transitionObj.startTimeOfTrack));
+        NSLog(@"%f", CMTimeGetSeconds(transitionObj.startTimeOfTrack_BesideTrans));
+        NSLog(@"%f", CMTimeGetSeconds(transitionObj.endTimeOfTrack));
+        NSLog(@"%f", CMTimeGetSeconds(transitionObj.mediaOriginalDuration));
+        
+        [self prepareForPreview];
+        [self seekToTime:CMTimeGetSeconds(transitionObj.endTimeOfTrack)];
+        
+    } else if (buttonIndex == (actionSheet.numberOfButtons-1)) { //清除所有值
+        NSLog(@"清除所有值");
+        
+        for (NSInteger i=0; i<=max; i++) {
+            NSLog(@"%@", self.objs[i]);
+            [self deleteTransitionObjOfObj:self.objs[i] timeline:self.timeline isBefore:self.isBefore];
+            self.recordTransitionsOfObjs[i+1] = @(0);
+        }
+        [self setSelectedTransitionMarksWithIndex:0 isAutoReload:NO];
+        [self prepareForPreview];
+        
+    } else { //"xx":适用所有镜头
+        NSLog(@"适用所有镜头");
+
+        NSInteger transitionIdx = self.currentSelectedIndexOfTransition;
+        for (NSInteger i=0; i<=max; i++) {
+            
+            [self setTransition:(enum Transition_Def)transitionIdx forObj:self.objs[i] timeline:self.timeline isPrepareview:NO];
+            if (self.isBefore) {
+                
+            } else {
+                self.recordTransitionsOfObjs[i+1] = @(transitionIdx);
+            }
+        }
+        qxTrack *track = [self.timeline getTrackFromTimeline:0];
+        qxMediaObject *transitionObj = [track getMediaObjectFromTrack:(int)[self indexOfTransitionObjOfObj:self.objs[(self.storyPanel.currentSelectedIndexPath.row ? self.storyPanel.currentSelectedIndexPath.row-1: 0)] timeline:self.timeline isBefore:self.isBefore]];
+        [self prepareForPreview];
+        [self seekToTime:CMTimeGetSeconds(transitionObj.endTimeOfTrack)];
+    }
+    
+    //
+    [self.transitionCollectionView reloadData];
+    //
+    [self playAction:nil];
+    //
+    [actionSheet removeFromSuperview];
+}
+
+#pragma mark - 设置转场的周期函数
+/**
+ *  设置转场
+ */
+- (void)setTransition:(enum Transition_Def)transitionType forObj:(qxMediaObject *)obj timeline:(qxTimeline *)timeline isPrepareview:(BOOL)isPrepareview {
+    
+    if ([self willSetTransition:transitionType forObj:obj timeline:timeline isPrepareview:isPrepareview]) {
+        [self settingTransition:transitionType forObj:obj timeline:timeline isBefore:self.isBefore isPrepareview:isPrepareview];
+    }
+}
+
+/**
+ *  将要进行设置
+ */
+- (BOOL)willSetTransition:(enum Transition_Def)transitionType forObj:(qxMediaObject *)obj timeline:(qxTimeline *)timeline isPrepareview:(BOOL)isPrepareview {
+    //先暂停
+    [self pausePreview];
+
+    if (transitionType < eTrans_None || transitionType >= eTrans_Count) {
+        return NO;
+    }
+    return YES;
+}
+
+/**
+ *  正在进行设置
+ */
+- (void)settingTransition:(enum Transition_Def)transitionType forObj:(qxMediaObject *)obj timeline:(qxTimeline *)timeline isBefore:(BOOL)isBefore isPrepareview:(BOOL)isPrepareview {
+    
+    qxTrack *track = [timeline getTrackFromTimeline:0];
+    [self deleteTransitionObjOfObj:obj timeline:timeline isBefore:isBefore];
+
+    if ((transitionType != eTrans_None) && [track setTranstion:transitionType duration:transitionTime atClip:obj beforeOrAfter:isBefore]) {
+        
+        [self didSuccessSetTransition:transitionType forObj:obj timeline:timeline isBefore:isBefore isPrepareview:isPrepareview];
+    } else {
+        
+        [self didFailSetTransition:transitionType forObj:obj timeline:timeline isBefore:isBefore isPrepareview:isPrepareview];
+    }
+}
+
+/**
+ *  已经成功完成设置
+ */
+- (void)didSuccessSetTransition:(NSInteger)transitionIdx forObj:(qxMediaObject *)obj timeline:(qxTimeline *)timeline isBefore:(BOOL)isBefore isPrepareview:(BOOL)isPrepareview {
+    
+    //
+    self.currentSelectedIndexOfTransition = transitionIdx;
+    
+    NSLog(@"转场已经设置成功!");
+    //[timeline clearTrans];
+    
+    //删除对象的上一个转场,改为了在添加之前删除
+    //[self deleteTransitionObjOfObj:obj timeline:timeline isBefore:isBefore];
+    
+    if (isPrepareview) {
+        //
+        self.recordTransitionsOfObjs[self.startIndexOfStoryPanel] = @(transitionIdx);
+        
+        //播放一下转场效果
+        qxTrack *track = [timeline getTrackFromTimeline:0];
+        qxMediaObject *transitionObj = [track getMediaObjectFromTrack:(int)[self indexOfTransitionObjOfObj:obj timeline:timeline isBefore:isBefore]];
+        NSLog(@"%f", CMTimeGetSeconds(obj.startTimeOfTrack));
+        NSLog(@"%f", CMTimeGetSeconds(obj.startTimeOfTrack_BesideTrans));
+        NSLog(@"%f", CMTimeGetSeconds(obj.mediaOriginalDuration));
+        NSLog(@"%f", CMTimeGetSeconds(transitionObj.startTimeOfTrack)); //取这个时间就可以了
+        NSLog(@"%f", CMTimeGetSeconds(transitionObj.startTimeOfTrack_BesideTrans));
+        NSLog(@"%f", CMTimeGetSeconds(transitionObj.endTimeOfTrack));
+        
+        [self prepareForPreview];
+        [self seekToTime:CMTimeGetSeconds(transitionObj.startTimeOfTrack)];
+        [self startPreview];
+        NSDictionary *dict = @{@"transitionObj" : transitionObj, @"transitionIdx" : @(transitionIdx)};
+        [self performSelector:@selector(stopTransitionPreview:) withObject:dict afterDelay:CMTimeGetSeconds(transitionObj.endTimeOfTrack)-CMTimeGetSeconds(transitionObj.startTimeOfTrack)];
+    } else {
+        //先放在了sheet弹出框中处理
+        //self.recordTransitionsOfObjs[0] = @(transitionIdx);
+    }
+}
+
+/**
+ *  已经设置设置失败
+ */
+- (void)didFailSetTransition:(NSInteger)transitionIdx forObj:(qxMediaObject *)obj timeline:(qxTimeline *)timeline isBefore:(BOOL)isBefore isPrepareview:(BOOL)isPrepareview{
+    
+    //[self showToast:@"转场设置失败!"];
+    NSLog(@"转场设置失败");
+}
+
+//- (void)autoToPlay:(BOOL)isAutoToPlay obj:(qxMediaObject *)obj timeline:(qxTimeline *)timeline {
+//    //播放一下转场效果
+//    qxTrack *track = [timeline getTrackFromTimeline:0];
+//    qxMediaObject *transitionObj = [track getMediaObjectFromTrack:(int)[self indexOfTransitionObjOfObj:obj timeline:timeline isBefore:self.isBefore]];
+//    NSLog(@"%f", CMTimeGetSeconds(obj.startTimeOfTrack));
+//    NSLog(@"%f", CMTimeGetSeconds(obj.startTimeOfTrack_BesideTrans));
+//    NSLog(@"%f", CMTimeGetSeconds(obj.mediaOriginalDuration));
+//    NSLog(@"%f", CMTimeGetSeconds(transitionObj.startTimeOfTrack)); //取这个时间就可以了
+//    NSLog(@"%f", CMTimeGetSeconds(transitionObj.startTimeOfTrack_BesideTrans));
+//    NSLog(@"%f", CMTimeGetSeconds(transitionObj.endTimeOfTrack));
+//    
+//    [self prepareForPreview];
+//    [self seekToTime:CMTimeGetSeconds(transitionObj.startTimeOfTrack)];
+//    [self startPreview];
+//    NSDictionary *dict = @{@"transitionObj" : transitionObj, @"transitionIdx" : @(0)};
+//    [self performSelector:@selector(stopTransitionPreview:) withObject:dict afterDelay:CMTimeGetSeconds(transitionObj.endTimeOfTrack)-CMTimeGetSeconds(transitionObj.startTimeOfTrack)];
+//}
+
+#pragma - mark other methods
+
+/**
+ *  获取timeline实际下标 of (当前选中对象)
+ *  由于在timeline中添加了类型为eMT_Transition的对象所以要把这些东西过滤一下
+ *  @index : 是storyPanel中当前选中的cell的 index
+ *  return : 返回要插入转场的对象的下标
+ */
+- (NSInteger)indexOfObj:(NSInteger)index track:(qxTrack *)track isBefore:(BOOL)isBefore {
+    
+    NSInteger objIdx = 0;
+    for (qxMediaObject *obj in track.mpMediaObjArray) {
+        
+        if (obj.eType != eMT_Transition) {
+            if ((--index) == -1) {
+                break;
+            }
+        }
+        objIdx++;
+    }
+    //在后面添加的话实际是在前一个对象进行添加然后放到其后面
+    if (isBefore) {
+        
+    } else {
+        objIdx--;
+        if (eMT_Transition == [[self.timeline getTrackFromTimeline:0] getMediaObjectFromTrack:(int)objIdx].eType) {
+            objIdx--;
+        }
+    }
+    return objIdx;
+}
+
+/**
+ *  获取timeline实际下标 of (当前选中对象)
+ *  由于在timeline中添加了类型为eMT_Transition的对象所以要把这些东西过滤一下
+ *  @index: self.storyPanel.currentSelectedIndexPath.row的值
+ *  return: 获取非转场对象的下标
+ */
+- (NSInteger)indexOfObj:(NSInteger)index track:(qxTrack *)track {
+    
+    NSInteger flag = 0;
+    for (qxMediaObject *obj in track.mpMediaObjArray) {
+        
+        if (obj.eType != eMT_Transition) {
+            if ((--index) == -1) {
+                return flag;
+            }
+        }
+        flag++;
+    }
+    return flag;
+}
+
+/**
+ *  删除obj 对象的上一个转场对象,这里只能在添加后用，暂时不支持其他情况!
+ */
+- (void)deleteTransitionObjOfObj:(qxMediaObject *)obj timeline:(qxTimeline *)timeline isBefore:(BOOL)isBefore {
+    
+    qxTrack *track = [timeline getTrackFromTimeline:0];
+    NSInteger objIdx = 0;
+
+    if (isBefore) {
+        objIdx = [track findMediaObject:obj]-1;
+    } else {
+        objIdx = [track findMediaObject:obj]+1;
+    }
+
+    //转场对象
+    qxMediaObject *tempObj = [track getMediaObjectFromTrack:(int)objIdx];
+
+    if (tempObj.eType == eMT_Transition) {
+        if ([track removeTransition:tempObj]) {
+            NSLog(@"删除成功");
+        } else {
+            NSLog(@"删除失败");
+        }
+    }
+}
+
+///**
+// *  删除obj 对象的上一个转场对象,这里只能在添加后用，暂时不支持其他情况!
+// */
+//- (void)deleteTransitionObjOfObj:(qxMediaObject *)obj timeline:(qxTimeline *)timeline isBefore:(BOOL)isBefore {
+//    
+//    qxTrack *track = [timeline getTrackFromTimeline:0];
+//    NSInteger objIdx = 0;
+//    
+//    if (isBefore) {
+//        objIdx = [track findMediaObject:obj]-2;
+//    } else {
+//        objIdx = [track findMediaObject:obj]+2;
+//    }
+//    
+//    //转场对象
+//    qxMediaObject *tempObj = [track getMediaObjectFromTrack:(int)objIdx];
+//    
+//    if (tempObj.eType == eMT_Transition) {
+//        if ([track removeTransition:tempObj]) {
+//            NSLog(@"删除成功");
+//        } else {
+//            NSLog(@"删除失败");
+//        }
+//    }
+//}
+
+/**
+ *  获取obj对象的转场对象的下标
+ */
+- (NSInteger)indexOfTransitionObjOfObj:(qxMediaObject *)obj timeline:(qxTimeline *)timeline isBefore:(BOOL)isBefore {
+    
+    if (obj.eType == eMT_Transition) {
+        NSLog(@"对象不能为转场对象");
+        return NSNotFound;
+    }
+    
+    qxTrack *track = [timeline getTrackFromTimeline:0];
+    NSInteger objIdx = 0;
+    
+    if (isBefore) {
+        //未知
+        objIdx = [track findMediaObject:obj]-1;
+    } else {
+        objIdx = [track findMediaObject:obj]+1;
+    }
+    
+    if (objIdx < 0 || objIdx > track.mpMediaObjArray.count-1 || [track getMediaObjectFromTrack:(int)objIdx].eType!=eMT_Transition) {
+        NSLog(@"没有转场");
+        return NSNotFound;
+    }
+    return objIdx;
+}
+
+/**
+ *  设置选中的转场的cell的数据
+ *  主要设置边框
+ */
+- (void)setSelectedTransitionMarksWithIndex:(NSInteger)index isAutoReload:(BOOL)isAutoReload {
+    
+    self.currentSelectedIndexOfTransition = index;
+    //
+    [self.transitionMarks enumerateObjectsUsingBlock:^(ToolbarExternModel *model, NSUInteger idx, BOOL *stop) {
+        model.hasBorder = (idx == index);
+    }];
+    //
+    if (isAutoReload) {
+        [self.transitionCollectionView reloadData];
+    }
+}
+
+/**
+ *  更新片段cell边框 和 转场cell的边框
+ *  objIdx 不是实际的timeline中的下标
+ */
+- (void)updateBoderForObject:(NSInteger)objIdx transition:(NSInteger)transitionIdx {
+    
+    [self setSelectedTransitionMarksWithIndex:transitionIdx isAutoReload:YES];
+    [self.storyPanel setBoder:objIdx];
+}
+
+- (void)seekToTime:(double)time {
+    /* 获取当前最新的非转场对象
+    qxTrack *track = [self.timeline getTrackFromTimeline:0];
+    qxMediaObject *obj = [track findAudioObjAtSecond:time];
+    int objIdx = [track findMediaObject:obj];
+    if (obj.eType == eMT_Transition) {
+    
+        if (self.isBefore) {
+            
+            obj = [[self.timeline getTrackFromTimeline:0] getMediaObjectFromTrack:++objIdx];
+        } else {
+            
+            obj = [[self.timeline getTrackFromTimeline:0] getMediaObjectFromTrack:--objIdx];
+        }
+    }
+     self.currentObj = obj;
+     */
+
+    self.currentObj = [[self.playbackHelper.mpTimeline getTrackFromTimeline:0] findMediaObjectAtSecond:time];
+    NSLog(@"%f", CMTimeGetSeconds(self.currentObj.startTimeOfTrack));
+    NSLog(@"%f", CMTimeGetSeconds(self.currentObj.startTimeOfTrack_BesideTrans));
+    NSLog(@"%f", CMTimeGetSeconds(self.currentObj.endTimeOfTrack));
+    NSLog(@"%f", CMTimeGetSeconds(self.currentObj.endTimeOfTrack_BesideTrans));
+    NSLog(@"%f", CMTimeGetSeconds(self.currentObj.mediaOriginalDuration));
+    [self.playbackHelper seekToTime:time];
+    
+    self.isChangeToTransition = YES;
+}
+
+@end

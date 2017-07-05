@@ -1,0 +1,17 @@
+//
+//  MusicCategoryViewController.h
+//  VideoShow
+//
+//  Created by lance on 15/12/2.
+//  Copyright © 2015年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+#import "PagerViewControllerDelegate.h"
+
+/** 音乐分类列表 */
+@interface MusicCategoryViewController : BaseViewController
+
+@property (nonatomic,weak) id<PagerViewControllerDelegate> mainDelegate;
+
+@end

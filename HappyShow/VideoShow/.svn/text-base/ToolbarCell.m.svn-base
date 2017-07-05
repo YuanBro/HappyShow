@@ -1,0 +1,36 @@
+//
+//  ToolbarCellCollectionViewCell.m
+//  VideoShow
+//
+//  Created by lance on 15/4/30.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "ToolbarCell.h"
+
+@implementation ToolbarCell
+
+@synthesize toolIcon;
+@synthesize toolLabel;
+
+- (void)awakeFromNib {
+    // Initialization code
+}
+
+-(instancetype)initWithFrame:(CGRect)frame
+{
+    self=[super initWithFrame:frame];
+    if (self) {
+        NSArray * nibs = [[NSBundle mainBundle] loadNibNamed:@"ToolbarCell" owner:self options:nil];
+        for (id obj in nibs) {
+            if ([obj isKindOfClass:[ToolbarCell class]]) {
+                self = obj;
+                break;
+            }
+        }
+        
+    }
+    return self;
+}
+
+@end

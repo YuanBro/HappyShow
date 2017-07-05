@@ -1,0 +1,75 @@
+//
+//  NavigationBarUtil.m
+//  VideoShow
+//
+//  Created by lance on 15/4/13.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "NavigationBarUtil.h"
+#import "UIImage+Util.h"
+#import "Colors.h"
+#import "UIColor+Util.h"
+
+@implementation NavigationBarUtil
+
++(UINavigationItem*) initNavigationBar:(UIViewController *)control leftAction:(SEL)leftAction rightAction:(SEL)rightAction;
+{
+    [NavigationBarUtil initNavigationBar:control title:NSLocalizedString(@"Select Clip", nil) leftTitle:NSLocalizedString(@"Back", nil) rightTitle:NSLocalizedString(@"Next", nil) leftAction:leftAction rightAction:rightAction];
+    
+    return control.navigationItem;
+}
+
++(UINavigationItem*) initNavigationBar:(UIViewController *)control title:(NSString*)title leftTitle:(NSString*)leftTitle rightTitle:(NSString*)rightTitle leftAction:(SEL)leftAction rightAction:(SEL)rightAction;
+{
+    //navigation bar
+    [control.navigationController setToolbarHidden:YES animated:YES];
+    [control.navigationController.navigationBar setBackgroundImage:nil forBarMetrics:UIBarMetricsDefault];
+    control.navigationController.navigationBar.barStyle=UIBarStyleDefault;
+    control.navigationController.navigationBar.translucent = YES;
+    
+    //title
+    UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 80, 30)];
+    titleLabel.backgroundColor = [UIColor clearColor];
+    titleLabel.text = title;
+    titleLabel.font = [UIFont boldSystemFontOfSize:17];
+    titleLabel.textAlignment = NSTextAlignmentCenter;
+    titleLabel.textColor = [UIColor whiteColor];
+    [titleLabel sizeToFit];
+    control.navigationItem.titleView = titleLabel;
+    //left bar button
+    UIView *leftBtnView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 50, 44)];
+    leftBtnView.userInteractionEnabled = YES;
+    UITapGestureRecognizer *backBtnTapGesture = [[UITapGestureRecognizer alloc] initWithTarget:control action:leftAction];
+    [leftBtnView addGestureRecognizer:backBtnTapGesture];
+    UIImageView *leftArrow = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"ic_back_arrow.png"]];
+    leftArrow.frame = CGRectMake(0, 0, 11, 19);
+    [leftBtnView addSubview:leftArrow];
+    UILabel *leftLabel = [[UILabel alloc] initWithFrame:CGRectMake(15, 0, 45, 44)];
+    leftLabel.backgroundColor = [UIColor clearColor];
+    leftLabel.text = leftTitle;
+    leftLabel.font = [UIFont boldSystemFontOfSize:17];
+    leftLabel.textColor = [UIColor colorWithHexString:backTextColor];
+    [leftBtnView addSubview:leftLabel];
+    UIBarButtonItem *leftBarButton = [[UIBarButtonItem alloc] initWithCustomView:leftBtnView];
+    leftBarButton.style = UIBarButtonItemStylePlain;
+    leftArrow.center = CGPointMake(5.5, leftLabel.center.y);
+    control.navigationItem.leftBarButtonItem = leftBarButton;
+    
+    //right bar button
+    UILabel *rightLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 80, 44)];
+    rightLabel.userInteractionEnabled = YES;
+    UITapGestureRecognizer *nextBtnTapGesture = [[UITapGestureRecognizer alloc] initWithTarget:control action:rightAction];
+    [rightLabel addGestureRecognizer:nextBtnTapGesture];
+    rightLabel.backgroundColor = [UIColor clearColor];
+    rightLabel.textAlignment = NSTextAlignmentRight;
+    rightLabel.font = [UIFont boldSystemFontOfSize:17];
+    rightLabel.text = rightTitle;
+    rightLabel.textColor = [UIColor whiteColor];
+    UIBarButtonItem *nextButton = [[UIBarButtonItem alloc] initWithCustomView:rightLabel];
+    control.navigationItem.rightBarButtonItem = nextButton;
+    
+    return control.navigationItem;
+}
+
+@end

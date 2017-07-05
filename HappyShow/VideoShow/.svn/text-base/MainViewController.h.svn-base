@@ -1,0 +1,15 @@
+//
+//  MainViewController.h
+//  VideoShow
+//
+//  Created by lance on 15/5/7.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+
+/** 主页面---包含两个控制器 */
+@interface MainViewController : BaseViewController
+
+@end
+

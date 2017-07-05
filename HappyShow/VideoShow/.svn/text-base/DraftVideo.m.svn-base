@@ -1,0 +1,21 @@
+//
+//  DraftVideo.m
+//  VideoShow
+//
+//  Created by lance on 15/6/3.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "DraftVideo.h"
+
+
+@implementation DraftVideo
+
+@dynamic asseturl;
+@dynamic draftpath;
+@dynamic id;
+@dynamic savetime;
+@dynamic duration;
+@dynamic clips;
+
+@end

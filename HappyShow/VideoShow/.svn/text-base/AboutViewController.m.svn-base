@@ -1,0 +1,51 @@
+//
+//  AboutViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/5/11.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "AboutViewController.h"
+#import "NavigationBarUtil.h"
+#import "UINavigationBar+Util.h"
+#import "Util.h"
+#import "AppMacros.h"
+#import "UIColor+Util.h"
+
+@interface AboutViewController ()
+
+@property (nonatomic,strong) IBOutlet UILabel * labelVersionCode;
+@property (nonatomic,strong) IBOutlet UILabel * labelSupport;
+
+@end
+
+@implementation AboutViewController
+
+@synthesize labelVersionCode;
+@synthesize labelSupport;
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"Setting_about", nil)];
+    [self.navigationController.navigationBar initWithViewController:self leftText:NSLocalizedString(@"Setting", nil) leftImageName:@"ic_back_arrow.png" action:@selector(backTap:)];
+
+    labelVersionCode.text=[NSString stringWithFormat:@"%@ %@",NSLocalizedString(@"Version Code", nil),[Util stringWithVersion]];
+
+    labelSupport.textColor=[UIColor colorWithHexString:themeColor];
+    labelSupport.text=CONTACT_EMAIL_SUPPORT;
+    
+    [self.view addSubview:labelSupport];
+    
+}
+
+-(void) backTap:(id)sender
+{
+    [self.navigationController popViewControllerAnimated:YES];
+}
+
+- (void)dealloc {
+    
+}
+
+@end

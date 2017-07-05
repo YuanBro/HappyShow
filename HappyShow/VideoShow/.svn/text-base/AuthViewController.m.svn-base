@@ -1,0 +1,213 @@
+//
+//  YoukuAuthController.m
+//  VideoShow
+//
+//  Created by lance on 15/5/4.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "AuthViewController.h"
+#import "Prefs.h"
+#import "NSString+Util.h"
+#import "UIDevice+Resolutions.h"
+#import "Toast+UIView.h"
+#import "AppMacros.h"
+#import "BaseService.h"
+#import "MBProgressHUD.h"
+#import "JSONKit.h"
+#import "UIColor+Util.h"
+
+@interface AuthViewController ()<UIWebViewDelegate>
+
+@property (nonatomic,assign) BOOL hintFlag;//是否执行提示
+@property (nonatomic,strong) IBOutlet UIWebView * mWebView;
+@property (nonatomic,strong) IBOutlet UIButton * btClose;
+
+-(IBAction)closeAuth:(id)sender;
+
+@end
+
+@implementation AuthViewController
+
+@synthesize authType;
+
+@synthesize authDelegate;
+
+@synthesize hintFlag;
+//@synthesize indicatorView;
+@synthesize mWebView;
+@synthesize btClose;
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor colorWithHexString:homeColor];
+    [btClose setTitle:NSLocalizedString(@"Cancel", nil) forState:UIControlStateNormal];
+    
+    [mWebView loadRequest:[self createURLWithAuthType]];
+}
+
+-(NSURLRequest *) createURLWithAuthType
+{
+    NSURLRequest * url=nil;
+    switch (authType) {
+        case AuthTypeInstagram:
+        {
+            NSString * base_url = [BaseService prefixUrl:ServiceTypeNone];
+            NSString * urlStr=[NSString stringWithFormat:@"%@/api/v1/oauth/connect",base_url];
+            url=[[NSURLRequest alloc] initWithURL:[NSURL URLWithString:urlStr]];
+        }
+            break;
+        case AuthTypeYouku:
+        {
+            NSMutableDictionary *params = [NSMutableDictionary dictionary];
+            [params setObject:youku_client_id forKey:@"client_id"];
+            [params setObject:@"code" forKey:@"response_type"];
+            [params setObject:auth_redirect_uri forKey:@"redirect_uri"];
+            [params setObject:@"false" forKey:@"state"];
+            
+            NSString * urlStr = [BaseService prepareUrl:@"https://openapi.youku.com/v2/oauth2/authorize" withParams:params];
+            url=[[NSURLRequest alloc] initWithURL:[NSURL URLWithString:urlStr]];
+        }
+            break;
+        default:
+            break;
+    }
+    return url;
+}
+
+- (void)dealloc {
+    
+}
+
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+-(UIInterfaceOrientationMask) supportedInterfaceOrientations
+{
+    return UIInterfaceOrientationMaskPortrait;
+}
+
+- (BOOL)webView:(UIWebView *)webView shouldStartLoadWithRequest:(NSURLRequest *)request navigationType:(UIWebViewNavigationType)navigationType
+{
+    __weak AuthViewController * weakSelf = self;
+    switch (authType) {
+        case AuthTypeInstagram:
+        {
+            NSString *absoluteUrl=request.mainDocumentURL.absoluteString;
+            NSString * url=request.mainDocumentURL.relativePath;
+            NSRange range=[url rangeOfString:@"/home/callback"];
+            if(range.length>0){//如果成功回调---这里的js会调用iOS的本地代码
+                
+                NSRange tmpRange=[absoluteUrl rangeOfString:@"="];
+                NSString *token=[absoluteUrl substringFromIndex:tmpRange.location+1];
+                if (![NSString isNull:token]) {
+                    [Prefs saveInstagramToken:token];
+                    NSLog(@"认证后成功回调!token--->%@",token);
+                    [self dismissViewControllerAnimated:YES completion:^{
+                        if ([weakSelf.authDelegate respondsToSelector:@selector(authFinish:authType:)]) {
+                            [weakSelf.authDelegate authFinish:YES authType:weakSelf.authType];
+                        }
+                    }];
+                }
+                
+                return NO;
+            }
+        }
+            break;
+        case AuthTypeYouku:
+        {
+            NSString *absoluteUrl=request.mainDocumentURL.absoluteString;
+            NSRange range=[absoluteUrl rangeOfString:auth_redirect_uri];//如果包含它则重定向成功
+            if(range.location==0){//如果成功回调---这里的js会调用iOS的本地代码```````````````
+                NSArray * arrTmp=[absoluteUrl componentsSeparatedByString:@"?"];
+                NSArray * arrMap=[(NSString*)arrTmp[1] componentsSeparatedByString:@"&"];//将参数取出
+                NSMutableDictionary * codeResults=[NSMutableDictionary dictionary];
+                for(NSString * str in arrMap){
+                    NSArray * kv=[str componentsSeparatedByString:@"="];
+                    if (kv.count==1) {
+                        [codeResults setObject:@"" forKey:kv[0]];
+                    }else{
+                        [codeResults setObject:kv[1] forKey:kv[0]];
+                    }
+                }
+                NSString * code=codeResults[@"code"];
+                NSLog(@"code===%@",code);
+                [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                    NSMutableDictionary *params = [NSMutableDictionary dictionary];
+                    [params setObject:youku_client_id forKey:@"client_id"];
+                    [params setObject:youku_client_secret forKey:@"client_secret"];
+                    [params setObject:@"authorization_code" forKey:@"grant_type"];
+                    [params setObject:code forKey:@"code"];
+                    [params setObject:auth_redirect_uri forKey:@"redirect_uri"];
+                    
+                    NSString * results=[BaseService doPostSyncUrl:@"https://openapi.youku.com/v2/oauth2/token" dict:params];
+                    //NSLog(@"results=======%@",results);
+                    NSDictionary * dict = [results objectFromJSONString];
+                    NSString * access_token = dict[@"access_token"];
+                    [Prefs saveYoukuToken:access_token];
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        [MBProgressHUD hideAllHUDsForView:weakSelf.view animated:YES];
+                        [weakSelf dismissViewControllerAnimated:YES completion:^{
+                            if ([weakSelf.authDelegate respondsToSelector:@selector(authFinish:authType:)]) {
+                                [weakSelf.authDelegate authFinish:YES authType:weakSelf.authType];
+                            }
+                        }];
+                        
+                    });
+                });
+                hintFlag=NO;
+                return NO;
+            }
+        }
+            break;
+        default:
+            break;
+    }
+    
+    
+    hintFlag=YES;
+    return YES;
+}
+
+- (void)webViewDidStartLoad:(UIWebView *)webView
+{
+    //[indicatorView startAnimating];
+    NSString *title = [webView stringByEvaluatingJavaScriptFromString:@"document.title"];
+    NSLog(@"start title1=%@",title);
+}
+- (void)webViewDidFinishLoad:(UIWebView *)webView
+{
+    //[indicatorView stopAnimating];
+    NSString *title = [webView stringByEvaluatingJavaScriptFromString:@"document.title"];
+    NSLog(@"finish title1=%@",title);
+}
+
+- (void)webView:(UIWebView *)webView didFailLoadWithError:(NSError *)error
+{
+    //[indicatorView stopAnimating];
+    if(hintFlag){
+        [self.view makeToast:NSLocalizedString(@"Load Failed", nil)];
+    }
+}
+
+-(IBAction)closeAuth:(id)sender
+{
+    __weak AuthViewController * weakSelf = self;
+    [self dismissViewControllerAnimated:YES completion:^{
+        if ([weakSelf.authDelegate respondsToSelector:@selector(authFinish:authType:)]) {
+            [weakSelf.authDelegate authFinish:NO authType:weakSelf.authType];
+        }
+    }];
+    
+}
+
+@end

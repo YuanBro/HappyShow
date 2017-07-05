@@ -1,0 +1,108 @@
+//
+//  Macros.h
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-9-24.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#ifndef VideoShow_Macros_h
+#define VideoShow_Macros_h
+
+///** 据此查找对应的通道 */
+//typedef NS_ENUM(NSInteger, TrackType){
+//    TrackTypeVideo=0,
+//    TrackTypeMusic=1,
+//    TrackTypeAudio=2,
+//    TrackTypeOverlay=3
+//};
+
+/** 定义宏 */
+
+//定义数据库文件名
+#define DB_NAME @"VideoShow"
+#define CONTACT_EMAIL_SUPPORT @"support@enjoy-mobi.com"
+#define CONTACT_QQ @"98653006"
+
+//是否允许debug
+#define allowDebug YES
+//导出内测版是否强制使用测试服务器---正式提交一定要改为NO,切记!!!
+#define forceDebug NO
+//服务器主机地址
+#define SERVICE_HOST @"http://api.videoshowapp.com"
+#define TEST_SERVICE_HOST @"http://test.videoshowapp.com"
+// soap请求的wsdl请求地址
+#define WSDL @"http://api.videoshowapp.com:8087/services/goodsservice.asmx/"
+
+#define auth_redirect_uri @"http://www.videoshowapp.com"
+
+// 定义document中的目录文件名
+#define DOCUMENT_DRAFTS @"Dratfs"
+#define DOCUMENT_GIF @"gif"
+#define DOCUMENT_OVERLAYS @"Overlays"
+#define DOCUMENT_PLIST @"plist"
+#define DOCUMENT_STICKER @"Sticker"
+#define DOCUMENT_UPLOAD @"Uploads"
+#define DOCUMENT_RECORD @"Record"
+
+#define AD_FILE @"ad_file"
+
+//检索邮箱地址正确性
+#define EMAIL_REGEX @"\\b([a-zA-Z0-9%_.+\\-]+)@([a-zA-Z0-9.\\-]+?\\.[a-zA-Z]{2,6})\\b"
+//检索手机号的正则表达式
+#define PHONE_REGEX @"^((13[0-9])|(147)|(15[^4,\\D])|(18[0,5-9]))\\d{8}$"
+
+//屏幕的触摸事件监听
+#define kScreenTouchNotification @"ScreenTouchNotification"
+//定义进入前台的通知
+#define kNotificationBecomeActive @"kNotificationBecomeActive"
+//进入后台的通知
+#define kNotificationEnterBackground @"kNotificationEnterBackground"
+#define kNotificationWillResignActive @"kNotificationWillResignActive"
+// sticker下载完成的通知
+//#define kStickerRequestFinish @"StickerRequestFinish"
+
+//videoshow在facebook上的用户id
+#define FACEBOOK_USERID @"100004310174950"
+
+//https://apps.twitter.com/app/new videoshowapp在 可以通过注册应用得到user id
+#define TWITTER_USERID @"1706567557"
+
+//网络请求 数据加密公钥
+#define CURRENT_PUBLIC_KEY @"532311sdf"
+/////////////////////////////////开放平台//////////////////////////////
+
+//google admob
+#define admob_analysis_id @"UA-51347286-9"
+#define admob_unit_id @"ca-app-pub-2253654123948362/8139520933"
+//友盟 old 53cf1d2856240bfc7e0936d8
+#define umeng_key @"543e453bfd98c5c192003fa3"
+
+#define instagram_key @"eb30e0b995c4431e98863cd73089d5a3"
+#define instagram_secret @"c0fb2d4986b94a6e9c5043809ac76ffa"
+
+//微信开放平台key old wxf9928eaa00912b54  ef82c74c032807b749889af245337a28
+#define wechat_key @"wx7e36c01715a8521f"
+#define wechat_secret @"189f0017a6e6117db18d8b26415aed73"
+
+// facebook开放平台key
+#define facebook_key @"867638153270399"
+#define facebook_secret @"d1210e1388420cf547745d9af9d85af9"
+
+// 优酷开放平台信息
+#define youku_client_id @"bad060fbeb2d63d1"
+#define youku_client_secret @"b290d0590ba93133990c12d30c191957"
+
+// 新浪开放平台
+#define sina_key @"674397331"
+#define sina_secret @"30c293bacc6b54efab32187e9834fe22"
+
+
+#define youtube_key @"12254982715-ccgv8oc0gal55k0jp6g35r9igiunp7g1.apps.googleusercontent.com"
+#define youtube_secret @"PYuqhZInf1ph5s4sGUgQ20ao"
+
+#define sysVersion [[[UIDevice currentDevice] systemVersion] intValue]
+//判断设备是否为iPad
+#define isPad (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad)
+
+#endif

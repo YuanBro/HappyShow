@@ -1,0 +1,19 @@
+//
+//  GuideFragment.h
+//  VideoShow
+//
+//  Created by lance on 15/5/9.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+#import "GuideViewController.h"
+
+/** 功能图片介绍---这里只显示一张图片和一个按钮 */
+@interface GuideFragment : BaseViewController
+
+@property GuideViewController * guideControl;
+@property (nonatomic,strong) NSString * imageName;
+@property (nonatomic,assign) BOOL entryFlag;//是否显示进入按钮
+
+@end

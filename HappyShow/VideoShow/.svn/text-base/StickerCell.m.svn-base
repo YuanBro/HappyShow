@@ -1,0 +1,36 @@
+//
+//  StickerCell.m
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-10-30.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "StickerCell.h"
+
+@implementation StickerCell
+
+@synthesize stickerImage;
+
+//使用nib注册
+- (void)awakeFromNib {
+    // Initialization code
+}
+
+- (id)initWithFrame:(CGRect)frame
+{
+    self = [super initWithFrame:frame];
+    if (self) {
+        NSArray * nibs=[[NSBundle mainBundle] loadNibNamed:NSStringFromClass([StickerCell class]) owner:self options:nil];
+        for (id obj in nibs) {
+            if ([obj isKindOfClass:[StickerCell class]]) {
+                self=(StickerCell *)obj;
+                break;
+            }
+        }
+    }
+    
+    return self;
+}
+
+@end

@@ -1,0 +1,133 @@
+//
+//  CommonViewController.m
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-10-23.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+#import "AppMacros.h"
+#import "Application.h"
+#import "UIColor+Util.h"
+#import "MobClick.h"
+
+@interface BaseViewController()
+
+@property (nonatomic,assign) float brandKeyboardHeight;
+
+@end
+
+@implementation BaseViewController
+
+@synthesize screenRect;
+@synthesize statusHeight;
+@synthesize naviHeight;
+@synthesize tabbarHeight;
+
+-(void) viewDidLoad
+{
+    [super viewDidLoad];
+    screenRect = [UIScreen mainScreen].bounds;
+    statusHeight=[Application sharedApplication].statusBarFrame.size.height;
+    if (self.navigationController!=nil) {
+        naviHeight=self.navigationController.navigationBar.frame.size.height;
+    }
+    
+    if (self.tabBarController!=nil) {
+        tabbarHeight=self.tabBarController.tabBar.frame.size.height;
+    }
+//    NSLog(@"scale=%f   statusHeight=%d  naviHeight=%d  tabbarHeight=%d  screenWidth=%f   screenHeight=%f",[UIScreen mainScreen].scale,statusHeight,naviHeight,tabbarHeight,screenRect.size.width,screenRect.size.height);
+
+    UIColor * barColor=[UIColor colorWithHexString:navigationBarColor];
+    if (sysVersion >= 7.0) {
+        self.edgesForExtendedLayout = UIRectEdgeNone;//这里处理成默认从导航栏下方开始绘制
+        self.navigationController.navigationBar.barTintColor = barColor;
+    }else{
+        self.navigationController.navigationBar.tintColor = barColor;
+    }
+    self.navigationController.navigationBar.translucent=NO;
+    
+    self.view.backgroundColor=[UIColor whiteColor];
+
+}
+
+- (BOOL) heightLessThan480
+{
+    float screenHeight=[UIScreen mainScreen].bounds.size.height;
+    if (screenHeight<=480) {//4s以下的屏幕设备
+        return YES;
+    }
+    return NO;
+}
+
++(instancetype) initFromStoryboard:(Class) aClass
+{
+    UIStoryboard * story = [UIStoryboard storyboardWithName:@"Main" bundle:[NSBundle mainBundle]];
+    return [story instantiateViewControllerWithIdentifier:NSStringFromClass(aClass)];
+}
+
+-(void)didReceiveMemoryWarning
+{
+    [super didReceiveMemoryWarning];
+    NSLog(@"%@:内存警告",NSStringFromClass([self class]));
+}
+
+- (void)dealloc
+{
+    NSLog(@"%@:dealloc",NSStringFromClass([self class]));
+}
+
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
+{
+    return UIInterfaceOrientationMaskPortrait;
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [MobClick beginLogPageView:NSStringFromClass([self class])];
+    NSNotificationCenter * notifyCenter=[NSNotificationCenter defaultCenter];
+    [notifyCenter addObserver:self selector:@selector(applicationWillResignActive:) name:kNotificationWillResignActive object:nil];
+    [notifyCenter addObserver:self selector:@selector(applicationBecomeActive:) name:kNotificationBecomeActive object:nil];
+    [notifyCenter addObserver:self selector:@selector(applicationEnterBackground:) name:kNotificationEnterBackground object:nil];
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    [MobClick endLogPageView:NSStringFromClass([self class])];
+    NSNotificationCenter * notifyCenter=[NSNotificationCenter defaultCenter];
+    [notifyCenter removeObserver:self name:kNotificationWillResignActive object:nil];
+    [notifyCenter removeObserver:self name:kNotificationBecomeActive object:nil];
+    [notifyCenter removeObserver:self name:kNotificationEnterBackground object:nil];
+}
+
+/***************************************app进入前后台的通知******************************************/
+
+-(void) applicationBecomeActive:(NSNotification *)notify
+{
+    
+}
+
+-(void) applicationEnterBackground:(NSNotification *)notify
+{
+    
+}
+
+- (void)applicationWillResignActive:(NSNotification*)notify
+{
+
+}
+
+@end

@@ -1,0 +1,17 @@
+//
+//  DemoTransitionViewController.h
+//  VideoShow
+//
+//  Created by MingweiShen on 16/2/26.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "qxTimeline.h"
+
+@protocol PlayerViewControllerDelegate;
+
+@interface DemoTransitionViewController : UIViewController
+@property (nonatomic, weak) qxTimeline * timeline;
+@property (nonatomic, weak) id<PlayerViewControllerDelegate> delegate;
+@end

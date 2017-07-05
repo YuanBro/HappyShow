@@ -1,0 +1,190 @@
+//
+//  Prefs.m
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-9-25.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "Prefs.h"
+
+#import "AppMacros.h"
+#import "FileHandle.h"
+
+#define GUIDE_FLAG @"guide_flag"
+//instagram访问令牌
+#define INSTAGRAM_TOKEN @"instagram_token"
+#define YOUKU_TOKEN @"youku_token"
+#define YOUKU_EXPIRES_IN @"youku_expires_in"
+#define YOUKU_REFRESH_TOKEN @"youku_refresh_token"
+
+#define VIDEO_TAIL_FLAG @"video_tail_flag"
+#define MESSAGE_PUSH_FLAG @"message_push_flag"
+#define QUALITY_CONFIG @"quality_config"
+
+@interface Prefs()
+
+@end
+
+@implementation Prefs
+
+/** 0-手动配置 1-快速模式 2-高速模式 */
++(void)saveQualityConfig:(int)config
+{
+    [Prefs savePref:QUALITY_CONFIG value:[NSString stringWithFormat:@"%d",config]];
+}
+
++(int) getQualityConfig {
+    NSString * tmp = [Prefs retrieveForKey:QUALITY_CONFIG];
+    return [tmp intValue];
+}
+
++(void)saveVideoTailFlag:(BOOL)flag
+{
+    [Prefs savePref:VIDEO_TAIL_FLAG value:[NSString stringWithFormat:@"%d",flag]];
+}
+
++(BOOL) getVideoTailFlag {
+    NSString * tmp = [Prefs retrieveForKey:VIDEO_TAIL_FLAG];
+    return [tmp intValue]!=0;
+}
+
+//保存是否显示过引导
++(void)saveGuideFlag:(BOOL)flag
+{
+    [Prefs savePref:GUIDE_FLAG value:[NSString stringWithFormat:@"%d",flag]];
+}
+
+//是否显示引导页
++(BOOL) getGuideFlag {
+    NSString * tmp = [Prefs retrieveForKey:GUIDE_FLAG];
+    return [tmp intValue]!=0;
+}
+
++(void)saveMessagePushFlag:(BOOL)flag
+{
+    [Prefs savePref:MESSAGE_PUSH_FLAG value:[NSString stringWithFormat:@"%d",flag]];
+}
+
+/** 是否允许通知 0为开启状态 else为关闭状态 */
++(BOOL) getMessagePushFlag {
+    NSString * tmp = [Prefs retrieveForKey:MESSAGE_PUSH_FLAG];
+    BOOL flag = tmp==nil||[tmp intValue]==0;
+    return flag;
+}
+
+//保存访问令牌
++(void)saveInstagramToken:(NSString*)token
+{
+    [Prefs savePref:INSTAGRAM_TOKEN value:token];
+}
+
++(NSString*) getInstagramToken{
+    return [Prefs retrieveForKey:INSTAGRAM_TOKEN];
+}
+
++(void) clearInstagramToken{
+    [Prefs clearForKey:INSTAGRAM_TOKEN];
+}
+
++(void) saveYoukuToken:(NSString *)token
+{
+    [Prefs savePref:YOUKU_TOKEN value:token];
+}
++(NSString *)getYoukuToken
+{
+    return [Prefs retrieveForKey:YOUKU_TOKEN];
+}
++(void) clearYoukuToken
+{
+    [Prefs clearForKey:YOUKU_TOKEN];
+}
+
++(void) saveYoukuExpiresIn:(NSString *)expires_in
+{
+    [Prefs savePref:YOUKU_EXPIRES_IN value:expires_in];
+}
++(int)getYoukuExpiresIn
+{
+    return [[Prefs retrieveForKey:YOUKU_EXPIRES_IN] intValue];
+}
++(void) clearYoukuExpiresIn
+{
+    [Prefs clearForKey:YOUKU_EXPIRES_IN];
+}
+
++(void) saveYoukuRefreshToken:(NSString *)token
+{
+    [Prefs savePref:YOUKU_REFRESH_TOKEN value:token];
+}
++(NSString *)getYoukuRefreshToken
+{
+    return [Prefs retrieveForKey:YOUKU_REFRESH_TOKEN];
+}
++(void) clearYoukuRefreshToken
+{
+    [Prefs clearForKey:YOUKU_REFRESH_TOKEN];
+}
+
+//////////////////////////////////////////////////////////////通用操作//////////////////////////////////////////////////////////////////////
+
+//将结果缓存到指定名称的文件
++ (void)cacheResult:(NSDictionary *)dict withName:(NSString *)name{
+    NSString *pname = [name stringByAppendingString:@".plist"];
+    NSString *filename=[[FileHandle getPlistCacheDirectory] stringByAppendingPathComponent:pname];
+    [dict writeToFile:filename atomically:YES];
+}
+
+//获取缓存结果
++ (NSDictionary *)getCacheResult:(NSString *)name{
+    NSString *pname = [name stringByAppendingString:@".plist"];
+    NSString *filename=[[FileHandle getPlistCacheDirectory] stringByAppendingPathComponent:pname];
+    return [NSDictionary dictionaryWithContentsOfFile:filename];
+}
+
+#pragma mark NSUserDefaults
+/** 保存键值对 */
++(void)savePref:(NSString*)key value:(id)value{
+	NSUserDefaults *standardUserDefaults = [NSUserDefaults standardUserDefaults];
+	if (standardUserDefaults) {
+		[standardUserDefaults setObject:value forKey:key];
+		[standardUserDefaults synchronize];
+	}
+}
+
+/** 根据key取出保存的数据 */
++(id)retrieveForKey:(NSString*) key{
+	NSUserDefaults *standardUserDefaults = [NSUserDefaults standardUserDefaults];
+	if (standardUserDefaults) {
+        return [standardUserDefaults objectForKey:key];
+    }
+	return nil;
+}
+
+/** 清空指定的参数 */
++(void) clearForKey:(NSString*)key
+{
+    NSUserDefaults *standardUserDefaults = [NSUserDefaults standardUserDefaults];
+    if (standardUserDefaults) {
+		[standardUserDefaults setObject:@"" forKey:key];
+		[standardUserDefaults synchronize];
+	}
+}
+
+/** 移除指定的key */
++(void) removeKey:(NSString*)key
+{
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults removeObjectForKey:key];
+}
+
+/** 清空用户参数 */
++(void)clearAllPrefs{
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	NSArray *keys = [[[defaults dictionaryRepresentation] allKeys] copy];
+	for(NSString *key in keys) {
+		[defaults removeObjectForKey:key];
+	}
+}
+
+@end

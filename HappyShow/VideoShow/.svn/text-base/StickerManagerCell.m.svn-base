@@ -1,0 +1,13 @@
+//
+//  ManagementStickerItem.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/16.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "StickerManagerCell.h"
+
+@implementation StickerManagerCell
+
+@end

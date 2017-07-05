@@ -1,0 +1,173 @@
+//
+//  DownloadedSticker+CoreData.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/5.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "DownloadedSticker+CoreData.h"
+#import "AppDelegate.h"
+#import "Util.h"
+
+#define MODEL @"DownloadedSticker"
+#define SORT_BY_ID @"sort_id"
+
+@implementation DownloadedSticker (CoreData)
+
++ (void)saveDownloadedSticker:(DownloadedSticker*)sticker
+{
+    if(sticker){
+        [DownloadedSticker deleteDownloadedSticker:sticker.material_id.intValue];
+        DownloadedSticker *tmp =[NSEntityDescription insertNewObjectForEntityForName:MODEL
+                                                              inManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+        tmp.download_time = [NSDate date];
+        tmp.material_icon = sticker.material_icon;
+        //tmp.material_icon = @"";
+        tmp.material_id = sticker.material_id;
+        tmp.material_name = sticker.material_name;
+        tmp.material_paper = sticker.material_paper;
+        tmp.version_code = sticker.version_code;
+        tmp.type=sticker.type;
+        NSArray *allStickers = [DownloadedSticker queryAll];
+        if(allStickers && allStickers.count > 0){
+            tmp.sort_id = [NSNumber numberWithInt:((DownloadedSticker*)[allStickers lastObject]).sort_id.intValue + 1];
+        }else{
+            tmp.sort_id = [NSNumber numberWithInt:1];
+        }
+        [[AppDelegate shareInstance].managedObjectContext performSelectorOnMainThread:@selector(save:) withObject:nil waitUntilDone:YES];
+    }
+}
+
++ (void)deleteDownloadedSticker:(int)materialID
+{
+    [DownloadedSticker deleteStickerWithPredicate:[NSPredicate predicateWithFormat:@"material_id = %d",materialID]];
+}
+
++ (void)deleteStickerWithPredicate:(NSPredicate*)predicate
+{
+    NSManagedObjectContext * context  = [[AppDelegate shareInstance] managedObjectContext];
+    NSArray *results = [DownloadedSticker queryWithPredicate:predicate limit:0];
+    if (results.count>0){
+        for(NSManagedObject *obj in results){
+            [context deleteObject:obj];
+        }
+    }
+}
+
++ (void)deleteInvalidSticker
+{
+    [DownloadedSticker deleteStickerWithPredicate:[NSPredicate predicateWithFormat:@"download_time = %@",[NSDate dateWithTimeIntervalSince1970:0]]];
+}
+
++ (NSArray*)queryWithPredicate:(NSPredicate*)predicate limit:(int)limit
+{
+    NSManagedObjectContext * context=[[AppDelegate shareInstance] managedObjectContext];
+    NSManagedObjectModel * model=[[AppDelegate shareInstance] managedObjectModel];
+    NSDictionary * entities=[model entitiesByName];
+    NSEntityDescription *entity=[entities valueForKey:MODEL];
+    
+    NSSortDescriptor * sort=[[NSSortDescriptor alloc] initWithKey:SORT_BY_ID ascending:YES];
+    NSArray * sortDescriptors=[NSArray arrayWithObject:sort];
+    
+    NSFetchRequest * req=[[NSFetchRequest alloc] init];
+    [req setEntity:entity];
+    [req setSortDescriptors:sortDescriptors];
+    if(predicate){
+        [req setPredicate:predicate];
+    }
+    if(limit > 0){
+        [req setFetchLimit:limit];
+    }
+    return [context executeFetchRequest:req error:nil];
+}
+
++ (NSArray*)queryByID:(int)stickerID
+{
+    [DownloadedSticker deleteInvalidSticker];
+    NSArray * results = [DownloadedSticker queryWithPredicate:[NSPredicate predicateWithFormat:@"material_id = %d",stickerID] limit:0];
+    if (results.count>0) {
+        return  results;
+    }
+    return nil;
+}
+
++ (DownloadedSticker*)queryByMaterialID:(int)materialID
+{
+    [DownloadedSticker deleteInvalidSticker];
+    NSArray * results = [DownloadedSticker queryWithPredicate:[NSPredicate predicateWithFormat:@"material_id = %d",materialID] limit:0];
+    if (results.count>0) {
+        return  results[0];
+    }
+    return nil;
+}
+
++ (NSMutableArray*)queryAll
+{
+    [DownloadedSticker deleteInvalidSticker];
+    NSMutableArray *array = [[DownloadedSticker queryWithPredicate:nil limit:0] mutableCopy];
+    NSMutableArray *tmp = nil;
+    for(DownloadedSticker *s in array)
+    {
+        NSString *p = [NSString stringWithFormat:@"%@/%@",[Util stickerPath:s.material_id.intValue],s.material_icon];
+        if(![Util fileExists:p])
+        {
+            [DownloadedSticker deleteDownloadedSticker:s.material_id.intValue];
+            if(!tmp){
+                tmp = [[NSMutableArray alloc] init];
+        }
+            [tmp addObject:s];
+        }
+    }
+    if(tmp && tmp.count > 0){
+        for(DownloadedSticker *s in tmp){
+            [array removeObject:s];
+        }
+    }
+    return array;
+}
+
++ (NSMutableArray*)queryWithType:(NSString*)type
+{
+    [DownloadedSticker deleteInvalidSticker];
+    NSMutableArray *array = [[DownloadedSticker queryWithPredicate:[NSPredicate predicateWithFormat:@"type=%@",type] limit:0] mutableCopy];
+    NSMutableArray *tmp = nil;
+    for(DownloadedSticker *s in array){
+        NSString *p = [NSString stringWithFormat:@"%@/%@",[Util stickerPath:s.material_id.intValue],s.material_icon];
+        if(![Util fileExists:p]){
+            [DownloadedSticker deleteDownloadedSticker:s.material_id.intValue];
+            if(!tmp){
+                tmp = [[NSMutableArray alloc] init];
+            }
+            
+            
+            
+            [tmp addObject:s];
+        }
+    }
+    if(tmp && tmp.count > 0){
+        for(DownloadedSticker *s in tmp){
+            [array removeObject:s];
+        }
+    }
+    return array;
+}
+
+
+
+
++ (void)resortStickers:(NSArray*)stickers
+{
+    if(stickers)
+    {
+        DownloadedSticker *sticker = nil;
+        for(int i = 0; i < stickers.count; i ++)
+        {
+            sticker = stickers[i];
+            sticker.sort_id = [NSNumber numberWithInt:i];
+        }
+        [[AppDelegate shareInstance].managedObjectContext performSelectorOnMainThread:@selector(save:) withObject:nil waitUntilDone:YES];
+        [self deleteInvalidSticker];
+    }
+}
+@end

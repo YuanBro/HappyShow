@@ -1,0 +1,23 @@
+//
+//  AlbumViewController.h
+//  VideoShow
+//
+//  Created by lance on 15/4/13.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import <AssetsLibrary/AssetsLibrary.h>
+#import "Util.h"
+#import "BaseViewController.h"
+
+/** 相册列表 */
+@class qxTimeline;
+@interface AlbumsViewController : BaseViewController
+
+@property (assign,nonatomic) FilterType filterType;
+
+@property (nonatomic,strong) qxTimeline * reeditTimeline;//这里要保留备份使用---用于获取从预览返回时的属性
+
+@property (nonatomic,strong)NSString * albumsType;
+@end

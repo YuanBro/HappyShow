@@ -1,0 +1,22 @@
+//
+//  qxMediaObject+Util.h
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-11-5.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "qxMediaObject.h"
+
+@interface qxMediaObject (Util)
+
+/** 判断是否是sticker类型 */
+- (BOOL) isStickerObj;
+
+/** 判断是否是字幕 */
+- (BOOL) isTextObj;
+
+#pragma mark 根据文字创建图片
+-(NSString*)createTextImageWithSize:(CGSize)textSize;
+
+@end

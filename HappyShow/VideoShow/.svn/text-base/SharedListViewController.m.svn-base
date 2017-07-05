@@ -1,0 +1,330 @@
+//
+//  SharedListViewController.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-7-18.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+#import <MediaPlayer/MediaPlayer.h>
+#import "SharedListViewController.h"
+#import "SharedVideoItem.h"
+#import "JSONKit.h"
+#import "NetService.h"
+#import "BaseService.h"
+#import "Prefs.h"
+#import "VideoLike+CoreData.h"
+#import "MBProgressHUD.h"
+#import "Toast+UIView.h"
+#import "UIColor+Util.h"
+#import "MJRefresh.h"
+
+static NSString *cellIdentifier = @"SharedVideoCell";
+
+@interface SharedListViewController()
+{
+    
+    UIView *authView;
+}
+@property (nonatomic,assign) BOOL hasMorePage;
+@property (nonatomic,assign) NSUInteger pageIndex;
+@property (nonatomic,assign) int likePosition;//当前点赞的位置
+@property (nonatomic,strong) NSMutableArray *sharedItemList;
+@property (nonatomic,strong) UITableView * shareTable;
+
+@end
+
+@implementation SharedListViewController
+
+@synthesize hasMorePage;
+@synthesize pageIndex;
+@synthesize sharedItemList;
+@synthesize shareTable;
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    sharedItemList = [[NSMutableArray alloc] init];
+    self.view.backgroundColor = [UIColor colorWithHexString:tableColor];
+    
+    CGRect tableRect=CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height-self.statusHeight-self.naviHeight-49);
+    self.shareTable = [[UITableView alloc] initWithFrame:tableRect style:UITableViewStyleGrouped];
+    self.shareTable.separatorStyle = UITableViewCellSeparatorStyleNone;
+    self.shareTable.dataSource=self;
+    self.shareTable.delegate=self;
+    [self.view addSubview:self.shareTable];
+    
+    //load cell nib
+    UINib *nib = [UINib nibWithNibName:@"SharedVideoCell" bundle:nil];
+    [self.shareTable registerNib:nib forCellReuseIdentifier:cellIdentifier];
+    
+    [self setupRefresh];
+}
+
+/**
+ *  集成刷新控件
+ */
+- (void)setupRefresh
+{
+    __weak SharedListViewController * weakSelf = self;
+    [self.shareTable addHeaderWithCallback:^{
+        weakSelf.pageIndex = 1;
+        weakSelf.hasMorePage = YES;
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSArray * results = [weakSelf requestWithPageIndex:1];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                if (results!=nil && results.count>0) {
+                    [weakSelf.sharedItemList removeAllObjects];
+                    [weakSelf.sharedItemList addObjectsFromArray:results];
+                    [weakSelf.shareTable reloadData];
+                }
+                
+                [weakSelf.shareTable headerEndRefreshing];
+            });
+            
+        });
+        
+    }];
+    [self.shareTable addFooterWithCallback:^{
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSArray * results = [weakSelf requestWithPageIndex:++weakSelf.pageIndex];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                if (results!=nil && results.count>0) {
+                    [weakSelf.sharedItemList addObjectsFromArray:results];
+                    [weakSelf.shareTable reloadData];
+                }
+                
+                [weakSelf.shareTable footerEndRefreshing];
+            });
+        });
+        
+    }];
+    
+    self.shareTable.headerPullToRefreshText = NSLocalizedString(@"header_pull_refresh", nil);
+    self.shareTable.headerReleaseToRefreshText = NSLocalizedString(@"header_release_refresh", nil);
+    self.shareTable.headerRefreshingText = NSLocalizedString(@"load_refreshing", nil);
+    
+    self.shareTable.footerPullToRefreshText = NSLocalizedString(@"footer_pull_refresh", nil);
+    self.shareTable.footerReleaseToRefreshText = NSLocalizedString(@"footer_release_refresh", nil);
+    self.shareTable.footerRefreshingText = NSLocalizedString(@"load_refreshing", nil);
+    
+    [self.shareTable headerBeginRefreshing];
+}
+
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+-(void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+}
+
+-(void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    
+}
+
+#pragma mark - Table view data source
+
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section
+{
+    return 10;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section
+{
+    return 0.001;
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+{
+    return sharedItemList.count;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    return 1;
+}
+
+-(CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    float aspectWidth = 64+46+self.view.frame.size.width;
+    return aspectWidth;
+}
+
+-(UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    SharedVideoCell *cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier];
+    if ([self.shareTable respondsToSelector:@selector(setSeparatorInset:)]) {
+        [self.shareTable setSeparatorInset:UIEdgeInsetsZero];
+    }
+    if ([self.shareTable respondsToSelector:@selector(setLayoutMargins:)]) {
+        [self.shareTable setLayoutMargins:UIEdgeInsetsZero];
+    }
+    if ([cell respondsToSelector:@selector(setLayoutMargins:)]) {
+        [cell setLayoutMargins:UIEdgeInsetsZero];
+    }
+    SharedVideoItem *item = sharedItemList[indexPath.section];
+    cell.videoImg.backgroundColor = [UIColor colorWithRed:28.0/255 green:28.0/255 blue:30.0/255 alpha:1];
+    [cell.videoImg setImageWithURL:[NSURL URLWithString:item.imageUrl] placeholderImage:[UIImage imageNamed:@"ic_default_image.png"]];
+    [cell.userImg setImageWithURL:[NSURL URLWithString:item.userProfilePictureUrl] placeholderImage:[UIImage imageNamed:@"ic_default_user.png"]];
+    cell.userName.text = item.userName;
+    NSString * likeCountText=nil;
+    if (item.likesCount>=10000) {
+        likeCountText=[NSString stringWithFormat:@"%f%@",item.likesCount/10000.0,NSLocalizedString(@"Big Like", nil)];
+    }else{
+        likeCountText=[NSString stringWithFormat:@"%d",(int)item.likesCount];
+    }
+    cell.likeCount.text = likeCountText;
+    cell.createTime.text = [item localizedCreateTime];
+    cell.videoUrl = item.videoUrl;
+    cell.itemId = item.itemId;
+    cell.like.selected=item.isLiked;
+    cell.tag = (int)indexPath.row;
+//    NSLog(@"--------%li++++++%ld",(long)indexPath.item,(long)indexPath.section);
+    cell.index = (int)indexPath.section;
+    cell.delegate = self;
+    return cell;
+}
+
+#pragma mark - Request---
+- (NSArray *)requestWithPageIndex:(NSUInteger)index
+{
+    if (self.datasource==nil) {
+        return nil;
+    }
+    if ([self.datasource respondsToSelector:@selector(requestUrl)]==NO) {
+        NSLog(@"请设置具体的数据源url");
+        return nil;
+    }
+    
+    NSString *urlStr = [NSString stringWithFormat:@"%@%@%lu",[self.datasource requestUrl],@"?page=",(unsigned long)index];
+    NSString * result=[BaseService callHttpSync:urlStr];
+    NSLog(@"result data = %@",result);
+    if (result==nil) {
+        [self.view makeToast:NSLocalizedString(@"Feature Request Failed", nil)];
+        return nil;
+    }
+    NSDictionary *tempDict = [result objectFromJSONString];
+    int page = [(NSNumber*)tempDict[@"page"] intValue];
+    if([(NSNumber*)tempDict[@"ret"] intValue] != 1){
+        if(page > 1){
+            hasMorePage = NO;
+        }
+        return nil;
+    }
+    
+    NSArray *results = [SharedVideoItem initFromJson:result];
+    return results;
+}
+
+#pragma mark - SharedVideoCellDelegate --- 播放视频由子类处理
+- (void)sharedVideoCellPlayAction:(SharedVideoCell *)cell
+{
+    if([self.delegate respondsToSelector:@selector(playUrl:)]){
+        [self.delegate playUrl:[NSURL URLWithString:cell.videoUrl]];
+    }
+}
+
+//执行点赞---回调给子类处理
+- (void)sharedVideoCellLikeAction:(SharedVideoCell *)cell
+{
+//    self.likePosition=cell.tag;
+    self.likePosition = cell.index;
+    NSString *token = [Prefs getInstagramToken];
+    if(token && ![token isEqualToString:@""]){
+        [self execLike:[sharedItemList objectAtIndex:cell.index] position:cell.index];
+    }else{
+        if ([self.delegate respondsToSelector:@selector(requestInstagramAccessToken)]) {
+            [self.delegate requestInstagramAccessToken];
+        }
+    }
+    
+}
+
+//分享视频
+- (void)shareVideoCellShareAction:(SharedVideoCell *)cell
+{
+    if([self.delegate respondsToSelector:@selector(shareItem:image:)]){
+        [self.delegate shareItem:cell.videoUrl image:cell.videoImg.image];
+    }
+}
+
+//执行点赞 flag=NO 取消点赞 ---这里直接用同步方法
+-(void) execLike:(SharedVideoItem *)item position:(int)row
+{
+    [MBProgressHUD showHUDAddedTo:self.view animated:YES].labelText=NSLocalizedString(@"Wait for a moment", nil);
+    //[SVProgressHUD showWithStatus:NSLocalizedString(@"Wait for a moment", nil)];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSString *result=[NetService reqLikeMedia:item.itemId flag:!item.isLiked token:[Prefs getInstagramToken]];
+        NSDictionary * dict=[result objectFromJSONString];
+        int resultCode=[[[[dict objectForKey:@"like_status"] objectForKey:@"meta"] objectForKey:@"code"] intValue];
+        
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            [MBProgressHUD hideAllHUDsForView:self.view animated:YES];
+            if (resultCode==200) {//标记状态---如果有记录更新数据,如果没有记录插入数据
+            [self.view makeToast:NSLocalizedString(@"Like Success", nil)];
+//                if (item.isLiked) {
+//                    item.likesCount--;
+//                }else{
+//                    item.likesCount++;
+//                }
+                int likeCount=[[[[[dict objectForKey:@"media_item"] objectForKey:@"instagram_item"] objectForKey:@"likes"] objectForKey:@"count"] intValue];
+//                item.likesCount=likeCount++;
+//                int state=item.isLiked?0:1;
+                item.likesCount++;
+                [VideoLike remarkLiked:[Prefs getInstagramToken] mediaid:item.itemId mediaowner:item.userName state:1];
+                item.isLiked=YES;
+                
+                NSIndexPath *indexPath=[NSIndexPath indexPathForRow:row inSection:0];
+//                [self.shareTable reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
+               [self.shareTable reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForItem:row inSection:0]] withRowAnimation:UITableViewRowAnimationFade];
+                [self.shareTable reloadData];
+                
+            }else{
+                [self.view makeToast:NSLocalizedString(@"Like Failure", nil)];
+            }
+        });
+    });
+    
+}
+
+-(void)authInstagramFinish:(BOOL)isAuthed
+{
+    
+}
+
+-(void) authFinish:(BOOL)isAuthed authType:(AuthType)type
+{
+    if(isAuthed){
+        switch (type) {
+            case AuthTypeInstagram:
+            {
+                NSString * token=[Prefs getInstagramToken];
+                NSLog(@"返回令牌--->%@",token);
+                [self.shareTable reloadData];
+//                [self execLike:[sharedItemList objectAtIndex:self.likePosition] position:self.likePosition];
+            }
+                break;
+                
+            default:
+                break;
+        }
+    }else{
+        [self.view makeToast:NSLocalizedString(@"Authorization Failure", nil)];
+    }
+    
+}
+
+- (void)dealloc {
+    
+}
+
+@end

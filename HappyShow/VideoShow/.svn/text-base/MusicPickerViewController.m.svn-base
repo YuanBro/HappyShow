@@ -1,0 +1,584 @@
+//
+//  MusicPickerTableViewController.m
+//  X-VideoShow
+//
+//  Created by Jerry Chen  on 14-6-24.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "MusicPickerViewController.h"
+#import "MusicPickerCell.h"
+#include "qxMediaObject.h"
+#import "Util.h"
+#import "AppMacros.h"
+#import "UIColor+Util.h"
+#import "MusicInf.h"
+#import "UIImage+Util.h"
+
+#define tabHeight 40
+#define naviLineWidth 100
+#define naviLineHeight 4
+static NSString *cellIdentifier = @"MusicPickerCell";
+
+static CGFloat limitSecond = 5.0;//最少限制5秒及时长以上的音乐
+static NSString * observeSelectIndex = @"selectedIndex";
+static NSString * observeCurrentStatusPreload = @"currentStatusPreload";
+
+//时间误差为
+static float tolerance_offset_time = 0.250;//循环调度时间
+
+@interface MusicPickerViewController()<UITableViewDataSource,UITableViewDelegate,AVAudioPlayerDelegate,MusicPickerCellDelegate>
+{
+    NSTimer *playControlTimer;
+    
+    NSMutableArray *preloadList;
+    AVAudioPlayer *audioPlayer;
+    
+}
+
+@property (nonatomic,assign) CGSize screenSize;
+@property (nonatomic,strong) NSMutableArray *mediaList;//保留的MusicInf对象
+@property (assign,nonatomic) NSInteger preIndex;
+@property (assign,nonatomic) NSInteger selectedIndex;
+@property (assign,nonatomic) BOOL currentStatusPreload;
+
+@property (nonatomic,strong) UITableView *musicTableView;
+@property (nonatomic,assign) int selectTab;
+@property (nonatomic,strong) UIButton *btnPreloadMusic;
+@property (nonatomic,strong) UIButton *btnSysMusic;
+@property (nonatomic,strong) UIView *naviLine;
+
+@property (nonatomic,strong) UIView * noMusicHintView;
+
+@end
+
+@implementation MusicPickerViewController
+
+@synthesize screenSize;
+@synthesize selectTab;
+@synthesize btnPreloadMusic;
+@synthesize btnSysMusic;
+@synthesize musicTableView;
+@synthesize naviLine;
+@synthesize mediaList;
+@synthesize noMusicHintView;
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"Add Music", nil)];
+    [self.navigationController.navigationBar initWithViewController:self leftImageName:@"bt_cancel.png" action:@selector(cancelAction:)];
+
+    preloadList = [MusicInf initFromPlist:@"PreloadMusic"];
+    mediaList=[NSMutableArray array];
+    
+    screenSize = [UIScreen mainScreen].bounds.size;
+    [self createTabView];
+
+    //
+    musicTableView = [[UITableView alloc] initWithFrame:CGRectMake(0, tabHeight, screenSize.width, screenSize.height - self.statusHeight-self.naviHeight - tabHeight) style:UITableViewStylePlain];
+    musicTableView.delegate = self;
+    musicTableView.dataSource = self;
+    [self.view addSubview:musicTableView];
+    
+    //
+    musicTableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
+    UINib *tableNib=[UINib nibWithNibName:cellIdentifier bundle:nil];
+    [self.musicTableView registerNib:tableNib forCellReuseIdentifier:cellIdentifier];
+    //[musicTableView registerClass:[MusicPickerCell class] forCellReuseIdentifier:cellIdentifier];
+    
+    self.selectedIndex = -1;
+    self.preIndex=self.selectedIndex;
+    [self initHintView];
+    
+    self.currentStatusPreload = YES;
+    [self tabAction:btnPreloadMusic];
+    
+    [self queryMedia];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    
+    [self addObserver:self forKeyPath:observeSelectIndex options:NSKeyValueObservingOptionNew context:NULL];
+    [self addObserver:self forKeyPath:observeCurrentStatusPreload options:NSKeyValueObservingOptionNew context:NULL];
+}
+
+-(void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+    [self removeObserver:self forKeyPath:observeSelectIndex];
+    [self removeObserver:self forKeyPath:observeCurrentStatusPreload];
+    
+    [self stop];
+}
+
+-(void)dealloc
+{
+    
+}
+
+-(void) createTabView
+{
+
+    UIView * tabView=[[UIView alloc] initWithFrame:CGRectMake(0,0,screenSize.width, tabHeight)];
+    tabView.backgroundColor = [UIColor whiteColor];
+    tabView.layer.shadowColor = [UIColor blackColor].CGColor;
+    tabView.layer.shadowOffset = CGSizeMake(0,0);//shadowOffset阴影偏移，默认(0, -3),这个跟shadowRadius配合使用
+    tabView.layer.shadowOpacity = 1;//阴影透明度，默认0
+    tabView.layer.shadowRadius = 1;//阴影半径，默认3
+    
+    //view control
+    //-------------------------------------
+    NSString * unselectColor = @"#323232";
+    btnPreloadMusic = [UIButton buttonWithType:UIButtonTypeCustom];
+    btnPreloadMusic.frame = CGRectMake(0, 0, screenSize.width/2, tabView.frame.size.height);
+    btnPreloadMusic.tag=0;
+    [btnPreloadMusic setTitleColor:[UIColor colorWithHexString:unselectColor] forState:UIControlStateNormal];
+    [btnPreloadMusic setTitle:NSLocalizedString(@"Preload", nil) forState:UIControlStateNormal];
+    btnPreloadMusic.contentMode=UIViewContentModeCenter;
+    btnPreloadMusic.titleLabel.textAlignment=NSTextAlignmentCenter;
+    btnPreloadMusic.titleLabel.font=[UIFont systemFontOfSize:15];
+    [btnPreloadMusic addTarget:self action:@selector(tabAction:) forControlEvents:UIControlEventTouchUpInside];
+    
+    btnSysMusic = [UIButton buttonWithType:UIButtonTypeCustom];
+    btnSysMusic.frame = CGRectMake(screenSize.width/2, 0, screenSize.width/2, tabView.frame.size.height);
+    btnSysMusic.tag=1;
+    [btnSysMusic setTitleColor:[UIColor colorWithHexString:unselectColor] forState:UIControlStateNormal];
+    [btnSysMusic setTitle:NSLocalizedString(@"My Music", nil) forState:UIControlStateNormal];
+    btnSysMusic.contentMode=UIViewContentModeCenter;
+    btnSysMusic.titleLabel.font=[UIFont systemFontOfSize:15];
+    [btnSysMusic addTarget:self action:@selector(tabAction:) forControlEvents:UIControlEventTouchUpInside];
+    
+    int startx=btnPreloadMusic.center.x-naviLineWidth/2;
+    naviLine=[[UIView alloc] initWithFrame:CGRectMake(startx, tabView.frame.size.height-naviLineHeight-1, naviLineWidth, naviLineHeight)];
+    naviLine.backgroundColor=[UIColor colorWithHexString:themeColor];
+    naviLine.layer.masksToBounds=YES;
+    naviLine.layer.cornerRadius=1.0;
+    naviLine.layer.borderWidth=0.0;
+    
+    UIView * shadowLine=[[UIView alloc] initWithFrame:CGRectMake(0,tabView.frame.size.height-1,screenSize.width, 1)];
+    shadowLine.backgroundColor = [UIColor colorWithHexString:@"#d3d2d5"];
+    
+    [tabView addSubview:btnPreloadMusic];
+    [tabView addSubview:btnSysMusic];
+    [tabView addSubview:naviLine];
+    [tabView addSubview:shadowLine];
+    [self.view addSubview:tabView];
+    
+}
+
+-(void) tabAction:(UIButton *)sender
+{
+    [self pause];
+    btnSysMusic.selected=NO;
+    btnPreloadMusic.selected=NO;
+    sender.selected=YES;
+    int index = (int)sender.tag;
+    if (self.selectTab==index) {
+        return;
+    }
+    self.selectTab=index;
+    self.preIndex = -1;
+    self.selectedIndex = -1;
+    switch (sender.tag) {
+        case 0://preload
+        {
+            self.currentStatusPreload = YES;
+            noMusicHintView.hidden = YES;
+        }
+            break;
+        case 1://my music
+        {
+            self.currentStatusPreload = NO;
+            noMusicHintView.hidden = mediaList.count > 0;
+        }
+        default:
+            break;
+    }
+    
+    __weak MusicPickerViewController * weakSelf = self;
+    [UIView animateWithDuration:.3f animations:^{
+        int tabWitdh = weakSelf.screenSize.width/2;
+        CGRect tmpRect = weakSelf.naviLine.frame;
+        tmpRect.origin.x=sender.frame.origin.x+(tabWitdh-naviLineWidth)/2;
+        weakSelf.naviLine.frame=tmpRect;
+    }completion:nil];
+}
+
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
+{
+    return UIInterfaceOrientationMaskPortrait;
+}
+
+//无音乐提示
+-(void) initHintView
+{
+    float y = btnSysMusic.frame.origin.y + btnSysMusic.frame.size.height;
+    self.noMusicHintView=[[UIView alloc] initWithFrame:CGRectMake(0, y, self.view.frame.size.width, self.view.frame.size.height - y)];
+    self.noMusicHintView.backgroundColor=[UIColor whiteColor];
+
+    //330*260
+    UIImage * image=[UIImage imageResource:@"ic_no_music.png"];
+    UIImageView *imageView=[[UIImageView alloc] initWithFrame:CGRectMake(0, 80, 100, 100*image.size.height/image.size.width)];
+    imageView.contentMode=UIViewContentModeScaleAspectFill;
+    imageView.image=image;
+    imageView.center=CGPointMake(self.view.frame.size.width/2, imageView.frame.origin.y + imageView.frame.size.height / 2);
+    UIColor * labelColor=[UIColor colorWithHexString:@"#b8b8b8"];
+    UILabel * label1=[[UILabel alloc] initWithFrame:CGRectMake(0, imageView.frame.origin.y+imageView.frame.size.height+20, self.noMusicHintView.frame.size.width, 0)];
+    label1.textAlignment=NSTextAlignmentCenter;
+    label1.font=[UIFont systemFontOfSize:22.0];
+    label1.text=NSLocalizedString(@"No Music", nil);
+    label1.textColor=labelColor;
+    [label1 sizeToFit];
+    label1.center=CGPointMake(self.noMusicHintView.frame.size.width/2, label1.frame.origin.y + label1.frame.size.height / 2);
+    
+    y = label1.frame.origin.y+label1.frame.size.height+ 10;
+    UITextView * textview = [[UITextView alloc] initWithFrame:CGRectMake(0, y, self.view.frame.size.width, 100)];
+    textview.textAlignment=NSTextAlignmentCenter;
+    textview.font=[UIFont systemFontOfSize:18.0];
+    textview.text=NSLocalizedString(@"iTunes Download", nil);
+    textview.textColor=labelColor;
+    [textview sizeToFit];
+    textview.center=CGPointMake(self.noMusicHintView.frame.size.width/2, textview.frame.origin.y + textview.frame.size.height / 2);
+    
+    [self.noMusicHintView addSubview:imageView];
+    [self.noMusicHintView addSubview:label1];
+    [self.noMusicHintView addSubview:textview];
+    
+    [self.view addSubview:self.noMusicHintView];
+    self.noMusicHintView.hidden=YES;
+}
+
+-(void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
+{
+    if([keyPath isEqualToString:observeSelectIndex]){
+        if(self.selectedIndex >= 0){
+            self.navigationItem.rightBarButtonItem.enabled = YES;
+        }else{
+            self.navigationItem.rightBarButtonItem.enabled = NO;
+        }
+    }else if([keyPath isEqualToString:observeCurrentStatusPreload]){
+        [musicTableView reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+    }
+}
+
+-(void)cancelAction:(id)sender
+{
+    if([self.delegate respondsToSelector:@selector(musicPickerCanceled)]){
+        [self.delegate musicPickerCanceled];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+{
+    return 1;
+}
+
+-(CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section
+{
+    CGFloat height = 0.0;
+    if([[[UIDevice currentDevice] systemVersion] floatValue] >= 7.0){
+        height = 0.1;
+    }
+    return height;
+}
+
+-(CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    CGFloat height = 55.0;
+    if(self.selectedIndex == indexPath.row){
+        height = 120.0;
+    }
+    return height;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    if(self.currentStatusPreload){
+        return preloadList.count;
+    }else{
+        return mediaList.count;
+    }
+}
+
+-(UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    //
+    MusicPickerCell *cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier];
+    
+//    if ([tableView respondsToSelector:@selector(setSeparatorInset:)]){
+//        [tableView setSeparatorInset:UIEdgeInsetsZero];
+//    }
+//    if ([tableView respondsToSelector:@selector(setLayoutMargins:)]) {
+//        [tableView setLayoutMargins:UIEdgeInsetsZero];
+//    }
+//    if ([cell respondsToSelector:@selector(setLayoutMargins:)]) {
+//        [cell setLayoutMargins:UIEdgeInsetsZero];
+//    }
+    cell.delegate = self;
+    
+    if(self.selectedIndex == indexPath.row){
+        cell.bottomBgView.hidden=NO;
+    }else{
+        cell.bottomBgView.hidden=YES;
+    }
+    
+    long seconds = 0;
+    if(self.currentStatusPreload){//preload music
+        MusicInf * inf=preloadList[indexPath.row];
+        cell.title.text = inf.displayName;
+        seconds = (long)inf.duration;
+        cell.duration.text = [Util stringWithSeconds:round(seconds)];
+    }else{//ipod music
+        MusicInf *inf = mediaList[indexPath.row];
+        MPMediaItem *mediaItem = inf.mediaItem;
+        cell.title.text = [mediaItem valueForProperty:MPMediaItemPropertyTitle];
+        seconds = inf.duration;
+        cell.duration.text = [Util stringWithSeconds:round(inf.duration)];
+    }
+    seconds = seconds <= 0 ? 1 : seconds;
+    //
+    cell.startTime.text = @"00 : 00";
+    cell.endTime.text = [Util stringWithSeconds:round(seconds)];
+    cell.rangeSlider.minValue = 0;
+    cell.rangeSlider.maxValue = seconds;
+    cell.rangeSlider.leftValue = 0;
+    cell.rangeSlider.rightValue = seconds;
+    if(self.selectedIndex == indexPath.row){
+        cell.btnPlayStatus.hidden = NO;
+        
+        cell.tagImg.hidden = YES;
+        cell.add.hidden = NO;
+        if(audioPlayer.playing){
+            cell.btnPlayStatus.selected=YES;
+        }else{
+            cell.btnPlayStatus.selected=NO;
+        }
+    }else{
+        cell.btnPlayStatus.hidden = YES;
+        cell.tagImg.hidden = NO;
+        cell.add.hidden = YES;
+    }
+    return cell;
+}
+
+-(void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    if(self.selectedIndex != indexPath.row){
+        if (self.selectedIndex!=-1) {
+            self.preIndex=self.selectedIndex;
+        }
+        self.selectedIndex = indexPath.row;
+        NSIndexPath * prePath=[NSIndexPath indexPathForRow:self.preIndex inSection:0];
+        if(self.preIndex!=-1){
+            [tableView reloadRowsAtIndexPaths:@[prePath,indexPath] withRowAnimation:UITableViewRowAnimationFade];
+        }else{
+            [tableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationFade];
+        }
+        if(self.currentStatusPreload){
+            MusicInf * inf=preloadList[indexPath.row];
+            NSString *path = [[NSBundle mainBundle] pathForResource:inf.fileName ofType:inf.extension];
+            [self resetAudioPlayerWithMediaURL:[NSURL URLWithString:path]];
+        }else{
+            MusicInf * inf=mediaList[indexPath.row];
+            NSURL *url = [inf.mediaItem valueForProperty:MPMediaItemPropertyAssetURL];
+            [self resetAudioPlayerWithMediaURL:url];
+        }
+    }else{
+//        if(audioPlayer.isPlaying){
+//            [self pause];
+//        }else{
+//            [self play];
+//        }
+    }
+}
+
+//点击状态栏禁止滚动到顶部
+- (BOOL)scrollViewShouldScrollToTop:(UIScrollView *)scrollView
+{
+    return NO;
+}
+
+/** 这里过滤下时间 */
+-(void)queryMedia
+{
+    [UIApplication sharedApplication].networkActivityIndicatorVisible = YES;
+    __weak MusicPickerViewController * weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        
+        MPMediaQuery *query = [MPMediaQuery albumsQuery];
+        NSMutableArray *tmpList = [[query items] mutableCopy];
+        if(tmpList){
+            NSMutableArray *tmp = [[NSMutableArray alloc] init];
+            for(MPMediaItem *item in tmpList){
+                long duration = [[item valueForProperty:MPMediaItemPropertyPlaybackDuration] doubleValue];
+                if(duration<limitSecond){
+                    [tmp addObject:item];
+                }
+            }
+            //删除时长太短的音乐
+            for(MPMediaItem *item in tmp){
+                [tmpList removeObject:item];
+            }
+        }
+        for (int i=0; i<tmpList.count; i++) {
+            MusicInf * inf=[[MusicInf alloc] init];
+            MPMediaItem * mediaItem = tmpList[i];
+            inf.mediaItem=mediaItem;
+            AVURLAsset * asset=[AVURLAsset URLAssetWithURL:[mediaItem valueForProperty:MPMediaItemPropertyAssetURL] options:@{AVURLAssetPreferPreciseDurationAndTimingKey : @YES}];
+            inf.duration=CMTimeGetSeconds(asset.duration);
+            [weakSelf.mediaList addObject:inf];
+        }
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [UIApplication sharedApplication].networkActivityIndicatorVisible = NO;
+            if (!self.currentStatusPreload && mediaList.count > 0) {
+                [self.noMusicHintView removeFromSuperview];
+                musicTableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
+                [musicTableView reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+            }else{
+                self.noMusicHintView.hidden=YES;
+            }
+        });
+    });
+}
+
+-(void)resetAudioPlayerWithMediaURL:(NSURL*)url
+{
+    audioPlayer = [[AVAudioPlayer alloc] initWithContentsOfURL:url error:nil];
+    audioPlayer.numberOfLoops = -1;
+    audioPlayer.delegate = self;
+    [audioPlayer prepareToPlay];
+    [self play];
+}
+
+-(void)play
+{
+    MusicPickerCell *cell = (MusicPickerCell*)[musicTableView cellForRowAtIndexPath:[NSIndexPath indexPathForItem:self.selectedIndex inSection:0]];
+    cell.btnPlayStatus.selected=YES;
+    [audioPlayer play];
+    [self startPlayControlTask];
+}
+
+-(void)pause
+{
+    MusicPickerCell *cell = (MusicPickerCell*)[musicTableView cellForRowAtIndexPath:[NSIndexPath indexPathForItem:self.selectedIndex inSection:0]];
+    cell.btnPlayStatus.selected=NO;
+    [audioPlayer pause];
+    [self stopPlayControlTask];
+}
+
+-(void)stop
+{
+    [audioPlayer stop];
+    [self stopPlayControlTask];
+}
+
+-(void)playControlTask
+{
+    if(audioPlayer.playing){
+        MusicPickerCell *cell = (MusicPickerCell*)[musicTableView cellForRowAtIndexPath:[NSIndexPath indexPathForItem:self.selectedIndex inSection:0]];
+//        cell.rangeSlider.stepValue = cell.rangeSlider.rightValue-audioPlayer.currentTime;
+//       NSLog(@"循环调度--->%f    %f  ",audioPlayer.currentTime ,cell.rangeSlider.rightValue);
+        if(audioPlayer.currentTime >= cell.rangeSlider.rightValue-tolerance_offset_time){
+            [audioPlayer setCurrentTime:cell.rangeSlider.leftValue];
+        }
+    }
+}
+
+-(void)startPlayControlTask
+{
+    if([playControlTimer isValid]){
+        [playControlTimer invalidate];
+    }
+    playControlTimer = [NSTimer scheduledTimerWithTimeInterval:tolerance_offset_time target:self selector:@selector(playControlTask) userInfo:nil repeats:YES];
+}
+
+-(void)stopPlayControlTask
+{
+    if ([playControlTimer isValid]) {
+        [playControlTimer invalidate];
+    }
+}
+
+-(void)musicPickerCellSliderTouchUp:(MusicPickerCell *)cell
+{
+    CGFloat limit=1.0;
+    CGFloat offset = cell.rangeSlider.rightValue-cell.rangeSlider.leftValue;
+    if(offset < limit){
+        if (cell.rangeSlider.leftValue>limit) {
+            cell.rangeSlider.leftValue = cell.rangeSlider.rightValue - limit;
+        }else{
+            cell.rangeSlider.rightValue = cell.rangeSlider.leftValue + limit;
+        }
+    }
+    cell.startTime.text = [Util stringWithSeconds:round(cell.rangeSlider.leftValue)];
+    cell.endTime.text = [Util stringWithSeconds:round(cell.rangeSlider.rightValue)];
+    
+    NSLog(@"cell--->%f   %f",cell.rangeSlider.rightValue, cell.rangeSlider.leftValue);
+    
+    [audioPlayer setCurrentTime:cell.rangeSlider.leftValue];
+    [self play];
+}
+
+-(void)musicPickerCellSliderTouchDown:(MusicPickerCell *)cell
+{
+    [self pause];
+}
+
+-(void)musicPickerCellPlayAction:(UIButton*)sender
+{
+    if(audioPlayer.isPlaying){
+        [self pause];
+    }else{
+        [self play];
+    }
+}
+
+/** 添加选取的配乐片段 */
+- (void)musicPickerCellAddAction:(UIButton*)sender
+{
+    qxMediaObject *mediaObj = [[qxMediaObject alloc] init];
+    if(self.currentStatusPreload){
+        MusicInf * inf=preloadList[self.selectedIndex];
+        NSString *path = [[NSBundle mainBundle] pathForResource:inf.fileName ofType:inf.extension];
+        [mediaObj setFilePath:path withType:eMT_Audio fromAssetLibrary:NO];
+    }else{
+        MusicInf * inf=mediaList[self.selectedIndex];
+        MPMediaItem *mediaItem = inf.mediaItem;
+        NSURL *url = [mediaItem valueForProperty:MPMediaItemPropertyAssetURL];
+        NSLog(@"music url = %@",[url absoluteString]);
+        [mediaObj setFilePath:[url absoluteString] withType:eMT_Audio fromAssetLibrary:YES];
+    }
+    MusicPickerCell *cell = (MusicPickerCell*)[musicTableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:self.selectedIndex inSection:0]];
+    
+    long left=cell.rangeSlider.leftValue * 1000;
+    long right=(cell.rangeSlider.maxValue - cell.rangeSlider.rightValue) * 1000;
+    NSLog(@"left===%ld    right===%ld max===%f   upper===%f",left,right,cell.rangeSlider.maxValue,cell.rangeSlider.rightValue);
+    [mediaObj setTrim:left withRight:right];
+    
+    Float64 actualTimeRange = CMTimeGetSeconds(mediaObj.actualTimeRange.duration);
+    Float64 mediaOriginalDuration = CMTimeGetSeconds(mediaObj.mediaOriginalDuration);
+    NSLog(@"actual == %f   origin == %f",actualTimeRange,mediaOriginalDuration);
+    
+    __weak MusicPickerViewController * weakSelf = self;
+    [self dismissViewControllerAnimated:YES completion:^{
+        if([weakSelf.delegate respondsToSelector:@selector(musicPickerViewController:didFinishPickMediaItem:flag:)]){
+            [weakSelf.delegate musicPickerViewController:weakSelf didFinishPickMediaItem:mediaObj flag:weakSelf.currentStatusPreload==NO];
+        }
+    }];
+}
+
+@end

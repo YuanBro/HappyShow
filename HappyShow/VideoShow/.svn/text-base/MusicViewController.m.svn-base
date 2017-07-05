@@ -1,0 +1,483 @@
+//
+//  MusicViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/6/3.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "MusicViewController.h"
+#import "UIImage+Util.h"
+#import "qxTimeline+Util.h"
+#import "MyLabel.h"
+#import "AudioScrollView.h"
+#import "Colors.h"
+#import "UIColor+Util.h"
+#import "MusicPickerViewController.h"
+#import "Util.h"
+//#import "qxPlaybackView.h"
+#import "qxFxPlaybackHelper.h"
+#import "qxTrack+Util.h"
+#import "RotateNavigationController.h"
+#import "MBProgressHUD.h"
+#import "Toast+UIView.h"
+#import "qxPlaybackView+Util.h"
+
+static NSString *observerPlaying = @"playing";
+
+@interface MusicViewController()<qxFxPlaybackDelegate,MusicPickerViewControllerDelegate,AudioScrollViewDelegate>
+{
+    BOOL hasVolumeChanged;//音量是否有改变
+    Float64 previewPosBeforeVolumeChanged;//设置音量之前的预览时间点
+}
+
+@property (nonatomic,assign) CMTime duration;//视频时长
+@property (nonatomic,assign) BOOL playing;
+@property (nonatomic,strong) qxFxPlaybackHelper *playbackHelper;
+@property (nonatomic,strong) qxMediaObject *currentMediaObject;
+@property (nonatomic,strong) NSTimer * previewControlTimer;
+
+@property (nonatomic,strong) IBOutlet UIView * volumePanel;
+@property (nonatomic,strong) IBOutlet UIView * videoView;
+@property (nonatomic,strong) IBOutlet UIView * musicPanel;//工具面板
+@property (nonatomic,strong) IBOutlet UISlider *volumeSlider;
+@property (nonatomic,strong) IBOutlet UILabel * labelVideoPrecent;
+@property (nonatomic,strong) IBOutlet UILabel * labelMusicPrecent;
+@property (nonatomic,strong) IBOutlet UIButton * btAddMusic;
+@property (nonatomic,strong) IBOutlet UIButton * btDelMusic;
+@property (nonatomic,strong) IBOutlet UIButton * btPlay;
+
+@property (nonatomic,strong) IBOutlet MyLabel * labelCurrent;
+@property (nonatomic,strong) IBOutlet MyLabel * labelTotal;
+
+@property (nonatomic,strong) IBOutlet UIView * toolView;
+@property (nonatomic,strong) IBOutlet UIImageView * spliteImageView;
+@property (nonatomic,strong) IBOutlet UIView *frameView;
+@property (nonatomic,strong) AudioScrollView * mTimelineView;
+
+@property (atomic, assign) NSUInteger loadCount;
+
+@property (nonatomic, assign) BOOL needRefreshVideoBeforePreview;// 是否需要重建
+
+- (IBAction)playAction:(id)sender;
+
+//添加音乐先打开音乐库
+- (IBAction)addMusicAction:(id)sender;
+//添加音乐先打开音乐库
+- (IBAction)delMusicAction:(id)sender;
+
+@end
+
+@implementation MusicViewController
+
+@synthesize duration;
+@synthesize playing;
+@synthesize playbackHelper;
+@synthesize videoView;
+@synthesize musicPanel;
+@synthesize volumeSlider;
+@synthesize labelVideoPrecent;
+@synthesize labelMusicPrecent;
+@synthesize btAddMusic;
+@synthesize btDelMusic;
+@synthesize btPlay;
+@synthesize labelCurrent;
+@synthesize labelTotal;
+@synthesize toolView;
+@synthesize spliteImageView;
+@synthesize frameView;
+@synthesize mTimelineView;
+@synthesize currentMediaObject;
+@synthesize previewControlTimer;
+
+-(void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor colorWithHexString:homeColor];
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"Tool_music", nil)];
+    [self.navigationController.navigationBar initWithViewController:self leftText:NSLocalizedString(@"Back", nil) leftImageName:@"ic_back_arrow.png" action:@selector(cancelAction:)];
+    [self.navigationController.navigationBar initWithViewController:self rightImageName:@"bt_ok.png" action:@selector(confirmAction:)];
+    
+    self.volumePanel.backgroundColor=[[UIColor blackColor] colorWithAlphaComponent:0.2];
+    toolView.backgroundColor=[UIColor colorWithHexString:bottomViewColor];
+    spliteImageView.backgroundColor=[UIColor colorWithHexString:bottomViewSpliteColor];
+    
+    UITapGestureRecognizer *playbackTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(playbackViewTap:)];
+    [videoView addGestureRecognizer:playbackTap];
+    [volumeSlider addTarget:self action:@selector(volumeSliderValueChanged:) forControlEvents:UIControlEventValueChanged];
+    [volumeSlider addTarget:self action:@selector(volumeSliderTouchUp:) forControlEvents:UIControlEventTouchUpInside];
+    [volumeSlider addTarget:self action:@selector(volumeSliderTouchUp:) forControlEvents:UIControlEventTouchUpOutside];
+    [volumeSlider addTarget:self action:@selector(volumeSliderTouchUp:) forControlEvents:UIControlEventTouchCancel];
+    volumeSlider.minimumValue = 0;
+    volumeSlider.maximumValue = 1;
+    volumeSlider.tintColor = [UIColor colorWithHexString:themeColor];
+    [volumeSlider setThumbImage:[UIImage imageResource:@"slider_handle.png"] forState:UIControlStateNormal];
+    [volumeSlider setThumbImage:[UIImage imageResource:@"slider_handle.png"] forState:UIControlStateHighlighted];
+
+    
+    mTimelineView = [[AudioScrollView alloc] initWithFrame:CGRectMake(0, 1.5, self.view.frame.size.width, 45) contentSize:CGSizeMake(self.view.frame.size.width, 45) timeline:self.timeline];
+    mTimelineView.backgroundColor = [UIColor clearColor];
+    mTimelineView.delegate = self;
+    [frameView addSubview:mTimelineView];
+    [mTimelineView scrollToSecond:0];
+    // 取出视频栈的音量
+    float percent=[[self.timeline getTrackFromTimeline:0] getAudioPercent];
+    NSLog(@"music percent====>%f",percent);
+    //这里设置的是视频的音量
+    volumeSlider.value = percent;
+    int videop=volumeSlider.value*100;
+    labelVideoPrecent.text=[NSString stringWithFormat:@"%d%%",videop];
+    labelMusicPrecent.text=[NSString stringWithFormat:@"%d%%",100-videop];
+    
+    [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+    __weak MusicViewController * weakSelf = self;
+//    [[self.timeline getTrackFromTimeline:0] initUsableForSize:self.screenRect.size block:^{
+//        [weakSelf prepareForPreview];
+//        
+//        [weakSelf enableEditing];
+//    }];
+    [[self.timeline getTrackFromTimeline:0] reloadPhoto:self.screenRect.size block:^{
+        [weakSelf prepareForPreview];
+        [weakSelf enableEditing];
+    }];
+}
+
+/** 打开编辑 当执行完预览和加载图片帧---两个都加载完成之后才开启---速度不一定 */
+- (void) enableEditing {
+    self.loadCount += 1;
+    if (self.loadCount < 2) {
+        return;
+    }
+    
+    [MBProgressHUD hideAllHUDsForView:self.view animated:YES];
+    
+    [mTimelineView refreshViewWithAudioTrack:1];
+    [mTimelineView scrollToSecond:0];
+    btAddMusic.enabled=YES;
+    btDelMusic.enabled=YES;
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    
+    [self addObserver:self forKeyPath:observerPlaying options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld context:nil];
+
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    
+    [self removeObserver:self forKeyPath:observerPlaying];
+    
+}
+
+
+- (void)dealloc {
+    self.timeline = nil;
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSString *,id> *)change context:(void *)context {
+    
+    if ([observerPlaying isEqualToString:keyPath]) {
+        
+        BOOL newPlaying = [change[NSKeyValueChangeNewKey] boolValue];
+        if (newPlaying) {
+            self.btAddMusic.enabled = NO;
+            self.btDelMusic.enabled = NO;
+        }else{
+            self.btAddMusic.enabled = YES;
+            self.btDelMusic.enabled = YES;
+        }
+        
+    }
+    
+}
+
+- (IBAction)playAction:(id)sender
+{
+    if (playing) {
+        [self pausePreview];
+    }else{
+        if(self.needRefreshVideoBeforePreview){
+            [self prepareForPreview];
+        }else{
+            [self startPreview];
+        }
+    }
+    
+}
+
+- (void)playbackViewTap:(id)sender
+{
+    if(playing){
+        [self pausePreview];
+    }
+}
+
+- (void)cancelAction:(id)sender
+{
+    [self stopPreview];
+    [playbackHelper destroy];
+    playbackHelper = nil;
+    if ([self.delegate respondsToSelector:@selector(videoEdit:type:editFlag:)]) {
+        [self.delegate videoEdit:self type:EditTypeMusic editFlag:NO];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)confirmAction:(id)sender
+{
+
+    [self stopPreview];
+    [playbackHelper destroy];
+    playbackHelper = nil;
+    if ([self.delegate respondsToSelector:@selector(videoEdit:type:editFlag:)]) {
+        [self.delegate videoEdit:self type:EditTypeMusic editFlag:YES];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (IBAction)delMusicAction:(id)sender
+{
+    [self pausePreview];
+    qxMediaObject *currentAudioObj = [self currentAudioObj];
+    if(currentAudioObj){
+        NSMutableArray *audioArray = [self.timeline getTrackFromTimeline:1].mpMediaObjArray;
+        NSUInteger index = [audioArray indexOfObject:currentAudioObj];
+        if(index < audioArray.count){
+            [[self.timeline getTrackFromTimeline:1] delMediaObject:(int)index];
+        }
+        [mTimelineView refreshViewWithAudioTrack:1];
+        [self checkButtonStatus];
+        self.needRefreshVideoBeforePreview = YES;
+    }
+}
+
+/** 获取当前音频对象 */
+- (qxMediaObject*)currentAudioObj
+{
+    qxMediaObject *audioObj=[[self.timeline getTrackFromTimeline:1] findAudioObjAtSecond:[mTimelineView currentSecond]];
+    return audioObj;
+}
+
+//添加音乐先打开音乐库
+- (IBAction)addMusicAction:(id)sender
+{
+    [self pausePreview];
+    MusicPickerViewController *control = [[MusicPickerViewController alloc] init];
+    control.delegate = self;
+    UINavigationController *nav = [[RotateNavigationController alloc] initWithRootViewController:control];
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+- (void)checkButtonStatus
+{
+    qxMediaObject *currentAudioObj = [self currentAudioObj];
+    BOOL flag = currentAudioObj != nil;
+    btAddMusic.hidden = flag;
+    btDelMusic.hidden = !flag;
+}
+
+#pragma mark 设置好音量
+- (void)volumeSliderTouchUp:(UISlider*)sender
+{
+    if(hasVolumeChanged){
+        //禁止播放时间
+        hasVolumeChanged = NO;
+        float audioPercent = 1-sender.value;
+        [self.timeline setAudioPercent:audioPercent];
+        [self seekTo:previewPosBeforeVolumeChanged];
+        self.needRefreshVideoBeforePreview = YES;
+    }
+    
+}
+
+- (void)volumeSliderValueChanged:(UISlider*)sender
+{
+    if(hasVolumeChanged==NO){
+        hasVolumeChanged = YES;
+        [self pausePreview];
+        previewPosBeforeVolumeChanged = [playbackHelper playbackProgress]/1000;
+    }
+    
+    int videop=sender.value*100;
+    labelVideoPrecent.text=[NSString stringWithFormat:@"%d%%",videop];
+    labelMusicPrecent.text=[NSString stringWithFormat:@"%d%%",100-videop];
+    
+}
+
+#pragma mark - Timer
+-(void)updatePlayStatusTask
+{
+    NSTimeInterval tm = [playbackHelper playbackProgress];
+    float time = tm/1000;
+    NSString *str = [Util stringWithSeconds:round(time)];
+    labelCurrent.text = str;
+    [mTimelineView scrollToSecond:time];
+    qxMediaObject *obj = [[self.timeline getTrackFromTimeline:0] findMediaObjectAtSecond:time];
+    if (obj!=nil) {
+        currentMediaObject = obj;
+    }
+}
+
+-(void)startUpdatePlayStatus
+{
+    if(![previewControlTimer isValid]){
+        previewControlTimer = [NSTimer scheduledTimerWithTimeInterval:0.05 target:self selector:@selector(updatePlayStatusTask) userInfo:nil repeats:YES];
+    }
+}
+
+-(void)stopUpdatePlayStatus
+{
+    if([previewControlTimer isValid]){
+        [previewControlTimer invalidate];
+    }
+}
+
+//更新到指定的预览时间点
+- (void)seekTo:(float)second
+{
+    if(CMTimeGetSeconds(duration) > 0){
+//        [self.playbackHelper.player seekToTime:CMTimeMakeWithSeconds(second, duration.timescale) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
+        [playbackHelper seekToTime:second];
+        NSString *timeStr = [Util stringWithSeconds:round(second)];
+        labelCurrent.text = timeStr;
+    }
+}
+
+#pragma mark - Preview control
+-(void)stopPreview
+{
+    [self stopUpdatePlayStatus];
+    if(playbackHelper){
+        [playbackHelper stop];
+    }
+    self.playing = NO;
+}
+
+-(void)startPreview
+{
+    if(!self.playing && playbackHelper){
+        [playbackHelper playPause:YES];
+        self.playing = YES;
+        [self startUpdatePlayStatus];
+    }
+    btPlay.selected = YES;
+}
+
+-(void)pausePreview
+{
+    if(self.playing && playbackHelper){
+        [playbackHelper playPause:NO];
+        self.playing = NO;
+        [self stopUpdatePlayStatus];
+    }
+    btPlay.selected = NO;
+}
+
+#pragma mark 切换模式时使用
+-(void)prepareForPreview
+{
+    if(playbackHelper){
+        playbackHelper.delegate = nil;
+        [playbackHelper stop];
+        [playbackHelper destroy];
+        playbackHelper = nil;
+    }
+    
+    self.videoView.frame=self.videoViewRect;
+    playbackHelper = [[qxFxPlaybackHelper alloc] init];
+    playbackHelper.delegate = self;
+    float scale = [UIScreen mainScreen].scale;
+    self.timeline.timelineSize = CGSizeMake(videoView.frame.size.width*scale, videoView.frame.size.height*scale);
+    playbackHelper.mpTimeline = self.timeline;
+    
+    [playbackHelper initWithUIView:videoView];
+    
+//    duration = playbackHelper.playerItem.duration;
+    duration = playbackHelper.mpTimeline.timelineDuration;
+
+    labelCurrent.text = [Util stringWithSeconds:0];
+    labelTotal.text = [Util stringWithSeconds:round(CMTimeGetSeconds(duration))];
+    
+//    [qxPlaybackView bringFromVideoView:videoView];
+}
+
+#pragma mark - qxPlaybackDelegate 处理艺术字的回调,目前没有用到
+- (void)readyForPlayback
+{
+    if(self.needRefreshVideoBeforePreview){
+        self.needRefreshVideoBeforePreview = NO;
+        [self startPreview];
+    }
+}
+
+- (void)FinishPlayback
+{
+    [self stopUpdatePlayStatus];
+    [self pausePreview];
+    [self seekTo:0];
+    //执行seek后，有时候播放进度值没有立马变为0，这个时候currentMediaObject的指向不对，因此这里显示赋值。
+    currentMediaObject = [self.timeline getTrackFromTimeline:0].mpMediaObjArray[0];
+    [mTimelineView scrollToSecond:0];
+    
+}
+
+#pragma mark  AudioScrollViewDelegate
+// 指向视频的某一个时间 tapFlag 是否点击执行的滚动
+- (void)videoScrollView:(AudioScrollView*)view didScrollTo:(CGFloat)second tapFlag:(BOOL)tapFlag {
+    if(!self.playing){
+        [self seekTo:second];
+    }
+    [self checkButtonStatus];
+}
+
+- (void)framesLoadDone {
+
+    [self enableEditing];
+}
+
+// 开始拖动
+- (void)scrubbingDidStart:(AudioScrollView *)view {
+    if (self.playing) {
+        [self pausePreview];
+    }
+}
+
+// 松手
+- (void)scrubbingDidEnd:(AudioScrollView *)view {
+    
+}
+
+/** 添加音乐的回调 flag = YES 系统音乐库中的音乐 */
+#pragma mark - MusicPickerViewControllerDelegate
+- (void)musicPickerViewController:(MusicPickerViewController *)controller didFinishPickMediaItem:(qxMediaObject *)mediaObj flag:(BOOL)flag
+{
+    float startTime = [mTimelineView currentSecond];
+    int type=[Util addAudio:mediaObj WithTrack:[self.timeline getTrackFromTimeline:1] startTime:startTime duration:duration flag:flag];
+    switch (type) {
+        case 0:
+            [mTimelineView refreshViewWithAudioTrack:1];
+            [self checkButtonStatus];
+            break;
+        case -1:
+            [self.view makeToast:NSLocalizedString(@"Add music failed", nil)];
+            break;
+        case -2:
+            [self.view makeToast:NSLocalizedString(@"Add music failed", nil)];
+            break;
+        default:
+            break;
+    }
+    
+    self.needRefreshVideoBeforePreview = YES;
+}
+
+- (void)musicPickerCanceled
+{
+
+}
+
+@end

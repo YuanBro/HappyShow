@@ -1,0 +1,41 @@
+//
+//  qxGifObject+Util.m
+//  VideoShow
+//
+//  Created by lance on 15/6/2.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "qxGifObject+Util.h"
+#import "UIImage+Rotation.h"
+
+@implementation qxGifObject (Util)
+
+/** 在原文件名的基础上添加 */
+- (NSMutableArray *) createGifPathsForSize:(CGSize)stickerSize rotatef:(float)rotatef
+{
+    if (rotatef==0) {
+        return self.mpImageArray;
+    }
+    NSMutableArray * results = [NSMutableArray array];
+    CGRect sizeRect=CGRectMake(0, 0, stickerSize.width,stickerSize.height);
+    for (NSString * path in self.mpImageArray) {
+        NSString * filename = [path lastPathComponent];
+        NSString * dir = [path stringByDeletingLastPathComponent];
+        NSString * npath = [dir stringByAppendingPathComponent:[NSString stringWithFormat:@"opera_%@",filename]];
+        UIImage *rotInputImage = [[UIImage imageWithContentsOfFile:path] imageRotatedByRadians:rotatef];
+        UIGraphicsBeginImageContext(sizeRect.size);//设置当前绘制的区域
+        // draw in context
+        [rotInputImage drawInRect:sizeRect];    // transfer image
+        UIImage *resultImage = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+        if (resultImage) {
+            [UIImagePNGRepresentation(resultImage) writeToFile:npath atomically:YES];
+        }
+        [results addObject:npath];
+    }
+    
+    return results;
+}
+
+@end

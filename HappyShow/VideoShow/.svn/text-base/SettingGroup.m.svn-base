@@ -1,0 +1,18 @@
+//
+//  SettingInf.m
+//  VideoShow
+//
+//  Created by lance on 15/5/6.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "SettingGroup.h"
+
+@implementation SettingGroup
+
+@synthesize type;
+@synthesize section;//所属块
+@synthesize groupName;
+@synthesize data;//分组数据
+
+@end

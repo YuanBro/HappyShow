@@ -1,0 +1,16 @@
+//
+//  TouchableView.h
+//  VideoShow
+//
+//  Created by lance on 15/5/14.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+@interface TouchableView : UIView
+
+@property (nonatomic,strong) UIColor * normalBackgroundColor;
+@property (nonatomic,strong) UIColor * selectBackgroundColor;
+
+@end

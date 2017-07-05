@@ -1,0 +1,763 @@
+//
+//  AlbumViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/4/13.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "AlbumsViewController.h"
+@import GoogleMobileAds;
+#import "Application.h"
+#import "qxTimeline.h"
+#import "AlbumCell.h"
+#import "AssetsCell.h"
+#import <AssetsLibrary/AssetsLibrary.h>
+#import "PlayerViewController.h"
+#import "qxTimeline+Util.h"
+
+#import "NavigationBarUtil.h"
+#import "LXReorderableCollectionViewFlowLayout.h"
+#import "StoryboardViewController.h"
+#import "AnimationsUtil.h"
+#import "Toast+UIView.h"
+#import "UIColor+Util.h"
+#import "AppMacros.h"
+#import "PagerViewControllerDelegate.h"
+#import "Util.h"
+
+//允许的最大片段数
+#define max_clip 200
+
+//照片时长默认为 3 sec
+#define photo_duration 3000
+
+//#define ToolboxHeight 130
+#define layout_space 5
+// 加载相册
+#define Assets_tag 0
+
+#define naviLineWidth 40
+#define naviLineHeight 4
+static NSString * cellIdentifier = @"AlbumCell";
+static NSString * assetsIdentifier = @"AssetsCell";
+static float animTime = 0.5f;//动画执行时间
+
+#import "LXReorderableCollectionViewFlowLayout.h"
+
+@interface AlbumsViewController ()<UITableViewDataSource,UITableViewDelegate,UICollectionViewDataSource,UICollectionViewDelegate,LXReorderableCollectionViewDataSource, LXReorderableCollectionViewDelegateFlowLayout,StoryboardViewDelegate,GADBannerViewDelegate,UIPageViewControllerDataSource,UIPageViewControllerDelegate,PagerViewControllerDelegate>
+{
+    float ToolboxHeight;
+}
+
+@property (nonatomic,strong) GADBannerView * bannerView;
+@property (assign,nonatomic) int sortType;//排序方式
+@property (nonatomic,strong) IBOutlet UITableView * mAlbumsTable;
+@property (nonatomic,strong) NSMutableArray * mAlbums;
+
+@property (nonatomic,strong) IBOutlet UICollectionView * mAssetsCollect;
+@property (nonatomic,strong) NSMutableArray * mAssets;//相册中的内容
+
+@property (nonatomic,strong) StoryboardViewController * storyPanel;//排序面板
+@property (nonatomic,strong) NSMutableArray * backupMedias;//备份的资源,如果撤销返回;则使用这个数据
+@property (nonatomic,strong) UIPageViewController *pageController;
+@property (nonatomic,strong) UIButton * btnAll;
+@property (nonatomic,strong) UIButton * btnVideo;
+@property (nonatomic,strong) UIButton * btnPhoto;
+@property (nonatomic,strong) UIView * naviLine;
+@property (nonatomic,assign) NSUInteger selectIndex;
+@end
+
+@implementation AlbumsViewController
+
+@synthesize bannerView;
+@synthesize mAlbumsTable;
+@synthesize mAlbums;
+@synthesize mAssetsCollect;
+@synthesize mAssets;
+@synthesize storyPanel;
+@synthesize backupMedias;
+@synthesize pageController;
+@synthesize btnAll,btnVideo,naviLine,btnPhoto;
+@synthesize selectIndex;
+@synthesize albumsType;
+static int pagerNaviHeight = 44;//这里要包含状态栏的高度
+/** 这里最初得到的view宽高是包含导航栏和状态栏的 */
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    [self.navigationController.navigationBar initWithViewController:self leftText:NSLocalizedString(@"Back", nil) leftImageName:@"ic_back_arrow.png" action:@selector(backViewTap:)];
+    ToolboxHeight = [UIScreen mainScreen].bounds.size.height*0.25;
+    self.view.backgroundColor = [UIColor colorWithHexString:homeColor];
+   
+    //[NavigationBarUtil initNavigationBar:self leftAction:@selector(backViewTap:) rightAction:@selector(nextAction:)];
+    mAlbums=[NSMutableArray array];
+    mAssets=[NSMutableArray array];
+    backupMedias = [NSMutableArray array];
+    
+    CGRect contentRect=CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height-ToolboxHeight);
+    self.mAssetsCollect=[self createCollectionViewWithFrame:contentRect tag:Assets_tag];
+    
+    [self.mAssetsCollect registerClass:[AssetsCell class] forCellWithReuseIdentifier:assetsIdentifier];
+    self.mAssetsCollect.hidden = YES;
+    if ([@"photoAlbums" isEqualToString:self.albumsType]) {
+        pagerNaviHeight = 0;
+        [self.navigationController.navigationBar initWithViewController:self title:@"图片"];
+    }else{
+        pagerNaviHeight = 44;
+        [self.navigationController.navigationBar initWithViewController:self title:@"全部"];
+        [self createTabView];
+    }
+   
+    CGRect tableRect=CGRectMake(0, pagerNaviHeight, self.view.frame.size.width, self.view.frame.size.height-self.statusHeight-self.naviHeight);
+    mAlbumsTable = [[UITableView alloc] initWithFrame:tableRect style:UITableViewStylePlain];
+    mAlbumsTable.dataSource=self;
+    mAlbumsTable.delegate=self;
+    UINib *tableNib=[UINib nibWithNibName:cellIdentifier bundle:nil];
+    [self.mAlbumsTable registerNib:tableNib forCellReuseIdentifier:cellIdentifier];
+    self.mAlbumsTable.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
+    [self.view addSubview:mAlbumsTable];
+    
+    
+    [self loadAssetsAlbums];
+    
+    // test banner
+    self.bannerView=[[GADBannerView alloc] initWithFrame:CGRectMake(0, self.view.frame.size.height-self.statusHeight-self.naviHeight-50, self.view.frame.size.width, 50)];
+    [self.view addSubview:self.bannerView];
+    self.bannerView.adUnitID = admob_unit_id;
+    self.bannerView.rootViewController = self;
+    self.bannerView.delegate=self;
+    
+    GADRequest * adReq = [GADRequest request];
+    //adReq.testDevices = @[@"2077ef9a63d2b398840261c8221a0c9a"];
+    [self.bannerView loadRequest:adReq];
+    
+    [self.view addSubview:self.mAssetsCollect];
+    
+    storyPanel = [[StoryboardViewController alloc] init];
+    // 内部会自动对齐底部
+    //storyPanel=[[StoryboardView alloc] initWithFrame:CGRectMake(0, self.view.frame.size.height-self.statusHeight-self.naviHeight-ToolboxHeight, self.view.frame.size.width, ToolboxHeight)];
+    storyPanel.delegate=self;
+    storyPanel.target=self;
+    storyPanel.createAction=@selector(nextAction:);
+    
+    
+    //[self.view addSubview:storyPanel];
+    [storyPanel attachToController:self superview:self.view frame:CGRectMake(0, self.view.frame.size.height-self.statusHeight-self.naviHeight-ToolboxHeight, self.view.frame.size.width, ToolboxHeight)];
+    //    storyPanel.view.hidden=YES;
+
+}
+- (void)viewDidUnload {
+    self.bannerView = nil ;
+}
+// 恢复时间线中的内容到底部排序控件中
+-(void) viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    
+    if (self.reeditTimeline!=nil && [self.reeditTimeline getTrackCount]>0) {
+        [self.storyPanel clearMedias];
+        qxTrack *videoTrack = [self.reeditTimeline getTrackFromTimeline:0];
+        ALAssetsLibrary *assetsLibrary = [Util defaultAssetsLibrary];
+        __weak AlbumsViewController *weakSelf = self;
+        
+        for (int i=0; i<videoTrack.mpMediaObjArray.count; i++) {
+            qxMediaObject *obj = [videoTrack.mpMediaObjArray objectAtIndex:i];
+            //这里得到所有的asset,添加到story中
+            [assetsLibrary assetForURL:[NSURL URLWithString:obj.strFilePath] resultBlock:^(ALAsset *asset){
+                if(asset!=nil){
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        [weakSelf.storyPanel addMedia:asset];
+                        [weakSelf.backupMedias addObject:asset];
+                    });
+                }
+            } failureBlock:^(NSError *error) {//被禁止访问
+                
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (error==nil) {
+                        [Util showAlert:NSLocalizedString(@"Photo library access deny", nil) title:NSLocalizedString(@"Access deny", nil) tag:0];
+                    } else {
+                        [Util showAlert:error.localizedDescription title:nil tag:0];
+                    }
+                });
+            }];
+            
+        }
+    }
+}
+-(void) createTabView
+{
+    UIView * tabView=[[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, 44)];
+    tabView.backgroundColor=[UIColor colorWithHexString:navigationBarColor];
+    int btnWidth=self.view.frame.size.width/3;
+    int starty=0;
+    if (sysVersion<7) {
+        starty=0;
+    }
+    
+    NSString *unSelectColor=@"#959596";
+    btnAll=[UIButton buttonWithType:UIButtonTypeCustom];
+    btnAll.frame=CGRectMake(0, starty, btnWidth, 44);
+    btnAll.selected=YES;
+    btnAll.tag=0;
+    [btnAll setTitle:@"全部内容" forState:UIControlStateNormal];
+    btnAll.titleLabel.font=[UIFont systemFontOfSize:15];
+    [btnAll setTitleColor:[UIColor colorWithHexString:unSelectColor] forState:UIControlStateNormal];
+    [btnAll setTitleColor:[UIColor whiteColor] forState:UIControlStateSelected];
+    [btnAll addTarget:self action:@selector(tabAction:) forControlEvents:UIControlEventTouchUpInside];
+    
+    btnVideo=[UIButton buttonWithType:UIButtonTypeCustom];
+    btnVideo.frame=CGRectMake(btnAll.frame.origin.x+btnAll.frame.size.width, starty, btnWidth, 44);
+    btnVideo.tag=1;
+    [btnVideo setTitle:@"视频" forState:UIControlStateNormal];
+    btnVideo.titleLabel.font=[UIFont systemFontOfSize:15];
+    [btnVideo setTitleColor:[UIColor colorWithHexString:unSelectColor] forState:UIControlStateNormal];
+    [btnVideo setTitleColor:[UIColor whiteColor] forState:UIControlStateSelected];
+    [btnVideo addTarget:self action:@selector(tabAction:) forControlEvents:UIControlEventTouchUpInside];
+    
+    
+    btnPhoto=[UIButton buttonWithType:UIButtonTypeCustom];
+    btnPhoto.frame=CGRectMake(btnVideo.frame.origin.x+btnVideo.frame.size.width, starty, btnWidth, 44);
+    btnPhoto.tag=2;
+    [btnPhoto setTitle:@"图片" forState:UIControlStateNormal];
+    btnPhoto.titleLabel.font=[UIFont systemFontOfSize:15];
+    [btnPhoto setTitleColor:[UIColor colorWithHexString:unSelectColor] forState:UIControlStateNormal];
+    [btnPhoto setTitleColor:[UIColor whiteColor] forState:UIControlStateSelected];
+    [btnPhoto addTarget:self action:@selector(tabAction:) forControlEvents:UIControlEventTouchUpInside];
+    
+    int startx=btnAll.center.x-naviLineWidth/2;
+    naviLine=[[UIView alloc] initWithFrame:CGRectMake(0, 44-naviLineHeight-2, btnWidth, naviLineHeight)];
+    naviLine.tag=3;
+    naviLine.backgroundColor=[UIColor colorWithHexString:themeColor];
+    naviLine.layer.masksToBounds=YES;
+    naviLine.layer.cornerRadius=3.0;
+    naviLine.layer.borderWidth=0.5;
+    
+    [tabView addSubview:btnAll];
+    [tabView addSubview:btnVideo];
+    [tabView addSubview:btnPhoto];
+    [tabView addSubview:naviLine];
+    
+//    customNavibar=tabView;
+    [self.view addSubview:tabView];
+}
+
+-(void)dealloc
+{
+    [self cleanMemory];
+//    self.bannerView = nil;
+}
+
+-(void) cleanMemory
+{
+    self.mAlbumsTable.dataSource=nil;
+    self.mAlbumsTable.delegate=nil;
+    self.mAssetsCollect.dataSource=nil;
+    self.mAssetsCollect.delegate=nil;
+//    [self.mAssetsCollect removeFromSuperview];
+//    [self.mAlbumsTable removeFromSuperview];
+    if (self.mAlbums != nil) {
+        [mAlbums removeAllObjects];
+    }
+    self.mAlbums = nil;
+    if (self.mAssets != nil) {
+        [mAssets removeAllObjects];
+    }
+    self.mAssets = nil;
+    if (self.backupMedias != nil) {
+        [backupMedias removeAllObjects];
+    }
+    self.backupMedias = nil;
+    self.bannerView = nil;
+    [self.storyPanel cancelAttachToController];
+}
+
+/** 初始化网格视图 */
+- (UICollectionView *) createCollectionViewWithFrame:(CGRect)frame tag:(int)tag {
+    UICollectionViewFlowLayout * layout = [[UICollectionViewFlowLayout alloc] init];
+    int itemWidth=(self.view.bounds.size.width-layout_space*5)/4;
+    layout.itemSize = CGSizeMake(itemWidth, itemWidth);
+    layout.sectionInset = UIEdgeInsetsMake(layout_space, layout_space, layout_space, layout_space);
+    
+    layout.minimumInteritemSpacing=layout_space;
+    layout.minimumLineSpacing=layout_space;
+    
+    UICollectionView *collect=[[UICollectionView alloc] initWithFrame:frame collectionViewLayout:layout];
+    collect.dataSource=self;
+    collect.delegate=self;
+    collect.tag=tag;
+    collect.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
+    collect.backgroundColor=[UIColor colorWithHexString:@"#f6f6f6"];
+    collect.alwaysBounceVertical=YES;
+    
+    return collect;
+}
+
+-(UIView *) createToolboxView {
+    UIView * toolbar=[[UIView alloc] init];
+    return toolbar;
+}
+
+#pragma StoryboardViewDelegate
+-(void)didDataChange:(StoryboardViewController *)story
+{
+    if(self.mAlbumsTable.hidden==NO){
+        [self checkLayout];
+    }
+    
+}
+
+-(void) checkLayout
+{
+    //调整位置尺寸参数
+    if(self.storyPanel.mMedias.count>0){
+        self.storyPanel.view.hidden=NO;
+    }else{
+        self.storyPanel.view.hidden=NO;
+    }
+    
+    CGRect tableRect=CGRectMake(0, pagerNaviHeight, self.view.frame.size.width, self.view.frame.size.height);
+    if (self.storyPanel.view.hidden==NO) {
+        tableRect.size.height-=ToolboxHeight;
+    }
+    self.mAlbumsTable.frame=tableRect;
+}
+
+/** 此时导航栏和状态栏的高度不包含在self.view中 */
+- (void)backViewTap:(UITapGestureRecognizer*)tapGesture
+{
+    if (self.mAlbumsTable.hidden) {
+        self.mAlbumsTable.hidden=NO;
+        self.mAssetsCollect.hidden = YES;
+        __weak AlbumsViewController * weakSelf=self;
+        [UIView animateWithDuration:animTime animations:^{
+            CGRect rect=weakSelf.mAlbumsTable.frame;
+            rect.origin.x+=rect.size.width;
+            weakSelf.mAlbumsTable.frame=rect;
+            weakSelf.mAlbumsTable.alpha=1.0;
+        } completion:^(BOOL finished){
+            if (finished) {
+                
+            }
+        }];
+        [self checkLayout];
+    }else{
+        if (self.reeditTimeline!=nil) {
+            [self entryPlayer:self.backupMedias];
+        }else{
+            [self dismissViewControllerAnimated:YES completion:nil];
+        }
+    }
+}
+
+// 点击进入相预览页面---这里要初始化预览控制器已经重要的时间线
+-(void)nextAction:(UITapGestureRecognizer*)tapGesture
+{
+    if (self.storyPanel.mMedias.count==0) {
+        [Util showAlert:NSLocalizedString(@"Select Element First", nil) title:nil tag:0];
+        return;
+    }
+    
+//    NSString *shareString = @"#VideoShow#";
+//    
+//    NSURL *shareURL = [self.storyPanel.mMedias[0] valueForProperty:ALAssetPropertyAssetURL];
+//    UIActivityViewController *control = [[UIActivityViewController alloc] initWithActivityItems:@[shareString, shareURL] applicationActivities:nil];
+//    
+//    [self presentViewController:control animated:YES completion:nil];
+    
+    [self entryPlayer:self.storyPanel.mMedias];
+}
+
+/** 进入主编辑界面 */
+-(void) entryPlayer:(NSMutableArray *)entryMedias {
+    int photoDuration = 0;
+    qxTrack *videoTrack = nil;
+    qxTrack *musicTrack = nil;
+    qxTrack *audioTrack = nil;
+    qxTrack *overlayTrack = nil;
+    float percent = 0.5;
+    videoTrack = [[qxTrack alloc] initWithTrackType:eMT_Video];//重建视频通道
+    if(self.reeditTimeline!=nil){//这里是返回添加或者减少片段
+        musicTrack = [self.reeditTimeline getTrackFromTimeline:1];
+        audioTrack = [self.reeditTimeline getTrackFromTimeline:2];
+        overlayTrack = [self.reeditTimeline getTrackFromTimeline:3];
+        
+        percent = [musicTrack getAudioPercent];
+        
+        for(qxMediaObject *obj in [self.reeditTimeline getTrackFromTimeline:0].mpMediaObjArray){
+            if(obj.eType == eMT_Photo){//这里取出之前设置的照片时长
+                photoDuration = CMTimeGetSeconds(obj.mediaOriginalDuration) * 1000;
+                break;
+            }
+        }
+        //
+        [self.reeditTimeline delTrack:0];
+        [self.reeditTimeline delTrack:1];
+        [self.reeditTimeline delTrack:2];
+        [self.reeditTimeline delTrack:3];
+        self.reeditTimeline = nil;
+    }else{
+        musicTrack = [[qxTrack alloc] initWithTrackType:eMT_Audio];//配乐和配音使用同一种类型通道
+        audioTrack = [[qxTrack alloc] initWithTrackType:eMT_Audio];//配音通道
+        overlayTrack = [[qxTrack alloc] initWithTrackType:eMT_Overlay];//字幕和sticker通道
+    }
+
+    if(photoDuration <= 0){
+        photoDuration = photo_duration;
+    }
+    
+    for (ALAsset * asset in entryMedias) {//创建track中的实体对象
+        qxMediaObject * obj=[[qxMediaObject alloc] init];
+        int type = eMT_Video;
+        if ([asset valueForProperty:ALAssetPropertyType]==ALAssetTypePhoto) {
+            type = eMT_Photo;
+        }
+        
+        NSURL * url = [asset valueForProperty:ALAssetPropertyAssetURL];
+        [obj setFilePath:[url absoluteString] withType:type fromAssetLibrary:YES];
+        if (type==eMT_Photo) {
+            [obj setDuration:photoDuration];
+        }else if(type==eMT_Video){//初始化视频的范围
+//            CMTime t = CMTimeMakeWithSeconds(0, 1);//创建一个时间范围
+//            CMTimeRange timeRange = CMTimeRangeMake(t, t);
+//            long start = CMTimeGetSeconds(timeRange.start) * 1000;
+            long end = CMTimeGetSeconds(obj.mediaOriginalDuration);
+            [obj setTrim:0 withRight:end];
+            
+        }
+        
+        [videoTrack addMediaObject:obj];
+        
+    }
+    [backupMedias removeAllObjects];
+    
+    //这里必须顺序添加---保证在数组中得索引正确
+    qxTimeline *timeline = [[qxTimeline alloc] init];
+    [timeline addTrack:videoTrack];
+    [timeline addTrack:musicTrack];
+    [timeline addTrack:audioTrack];
+    [timeline addTrack:overlayTrack];
+    
+    [timeline setAudioPercent:percent];
+
+    
+    PlayerViewController *control = [PlayerViewController initFromStoryboard:[PlayerViewController class]];
+    control.timeline = timeline;
+    [self.navigationController pushViewController:control animated:YES];
+}
+
+/** 加载设备中的相册列表 */
+-(void) loadAssetsAlbums {
+    ALAssetsLibrary * assets = [Util defaultAssetsLibrary];
+
+    __weak AlbumsViewController * weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        @autoreleasepool {
+            
+            
+            ALAssetsLibraryGroupsEnumerationResultsBlock assetsBlock = ^(ALAssetsGroup *group, BOOL * stop){
+                if(group == nil) {//查找相册结束
+                    //排序
+                    if(self.sortType==0){//根据文件数量排序---多的排前
+                        [weakSelf.mAlbums sortUsingComparator:^NSComparisonResult(id obj0,id obj1){
+                            ALAssetsGroup * a0=obj0;
+                            ALAssetsGroup * a1=obj1;
+                            
+                            return a1.numberOfAssets>a0.numberOfAssets;
+                        }];
+                    }
+                        
+                    dispatch_sync(dispatch_get_main_queue(), ^{
+                        [weakSelf.mAlbumsTable reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+                    });
+                    return;
+                }
+                //排除照片流相册
+                if(((NSNumber*)[group valueForProperty:ALAssetsGroupPropertyType]).intValue == ALAssetsGroupPhotoStream) {
+                    return;
+                }
+                switch (weakSelf.filterType) {
+                    case FilterTypeNone:
+                        [group setAssetsFilter:[ALAssetsFilter allAssets]];
+                        break;
+                    case FilterTypePhoto:
+                        [group setAssetsFilter:[ALAssetsFilter allPhotos]];
+                        break;
+                    case FilterTypeVideo:
+                        [group setAssetsFilter:[ALAssetsFilter allVideos]];
+                        break;
+                    default:
+                        break;
+                }
+                
+                // 如果是系统相册
+                if ([[group valueForProperty:ALAssetsGroupPropertyType] intValue] == ALAssetsGroupSavedPhotos) {
+                    if(mAlbums.count==0){
+                        [weakSelf.mAlbums insertObject:group atIndex:0];
+                    }else{
+                        [weakSelf.mAlbums addObject:group];
+                    }
+                } else {
+                    [weakSelf.mAlbums addObject:group];
+                }
+
+            };
+            
+            ALAssetsLibraryAccessFailureBlock failureBlock = ^(NSError * error) {
+                dispatch_sync(dispatch_get_main_queue(), ^{
+                    if (error==nil) {
+                        [Util showAlert:NSLocalizedString(@"Photo library access deny", nil) title:NSLocalizedString(@"Access deny", nil) tag:0];
+                    } else {
+                        [Util showAlert:error.localizedDescription title:nil tag:0];
+                    }
+                });
+            };
+            [weakSelf.mAlbums removeAllObjects];
+            // 这里存在访问控制是异步执行---用户点击同意之后才会执行访问块
+            [assets enumerateGroupsWithTypes:ALAssetsGroupAll usingBlock:assetsBlock failureBlock:failureBlock];
+
+        }
+        
+    });
+    
+}
+
+/** 加载相册中的内容 */
+-(void) loadAssets:(ALAssetsGroup *) group{
+    self.storyPanel.view.hidden=NO;
+    
+    [self.mAssets removeAllObjects];
+    [self.mAssetsCollect reloadData];
+    
+    __weak AlbumsViewController * weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        
+        @autoreleasepool {
+            //这里是串行执行
+            [group enumerateAssetsUsingBlock:^(ALAsset * result,NSUInteger index, BOOL *stop) {
+                if (result == nil) {
+                    return;
+                }
+                [weakSelf.mAssets addObject:result];
+            }];
+        }
+
+        //根据时间排序---最新排前
+        [weakSelf.mAssets sortUsingComparator:^NSComparisonResult(id obj0,id obj1){
+            ALAsset * a0=obj0;
+            ALAsset * a1=obj1;
+            NSDate * d0=[a0 valueForProperty:ALAssetPropertyDate];
+            NSDate * d1=[a1 valueForProperty:ALAssetPropertyDate];
+            return [d1 compare:d0];
+        }];
+
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            [UIView animateWithDuration:animTime animations:^{
+                CGRect rect=weakSelf.mAlbumsTable.frame;
+                rect.origin.x-=rect.size.width;
+                weakSelf.mAlbumsTable.frame=rect;
+                weakSelf.mAlbumsTable.alpha=0.5;
+                [weakSelf.mAssetsCollect reloadSections:[NSIndexSet indexSetWithIndex:0]];
+            } completion:^(BOOL finished){
+                if (finished) {
+                    self.mAssetsCollect.hidden = NO;
+                    weakSelf.mAlbumsTable.hidden=YES;
+                    
+                }
+            }];
+            
+        });
+    });
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    if (mAlbums==nil) {
+        return 0;
+    }
+    return mAlbums.count;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    AlbumCell *cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier];
+    ALAssetsGroup *group = self.mAlbums[indexPath.row];
+    NSUInteger count = group.numberOfAssets;
+    
+    cell.subtitle.text = [NSString stringWithFormat:@"%@",[group valueForProperty:ALAssetsGroupPropertyName]];
+    cell.detail.text = [NSString stringWithFormat:@"%d",(int)count];
+    cell.image.image=[UIImage imageWithCGImage:[group posterImage]];
+    
+    return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    ALAssetsGroup * group=[self.mAlbums objectAtIndex:indexPath.row];
+    [self loadAssets:group];
+    
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    return 105;
+}
+
+- (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section
+{
+    if (collectionView.tag==Assets_tag) {
+        return mAssets.count;
+    }
+    return 0;
+}
+
+- (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath
+{
+    if (collectionView.tag==Assets_tag) {//显示相册详情
+        AssetsCell * cell = [collectionView dequeueReusableCellWithReuseIdentifier:assetsIdentifier forIndexPath:indexPath];
+        ALAsset * asset = [mAssets objectAtIndex:indexPath.row];
+        if ([asset valueForProperty:ALAssetPropertyType]==ALAssetTypeVideo) {
+            cell.labelTime.hidden=NO;
+            double duration = [[asset valueForProperty:ALAssetPropertyDuration] doubleValue];
+            cell.labelTime.text = [NSString stringWithFormat:@"  %@",[Util stringWithSeconds:round(duration)]];
+        }else{
+            cell.labelTime.hidden=YES;
+        }
+        cell.assetImage.image = [UIImage imageWithCGImage:asset.thumbnail];
+        return cell;
+    }
+    return nil;
+}
+
+- (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath
+{
+    if (collectionView.tag==Assets_tag) {
+        if (storyPanel.mMedias.count>=200) {
+            [self.view makeToast:NSLocalizedString(@"More than max count", nil)];
+        }else{
+            ALAsset * asset=[mAssets objectAtIndex:indexPath.row];
+            [storyPanel addMedia:asset];
+        }
+    }
+}
+
+/*
+#pragma mark - Navigation
+
+// In a storyboard-based application, you will often want to do a little preparation before navigation
+- (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender {
+    // Get the new view controller using [segue destinationViewController].
+    // Pass the selected object to the new view controller.
+}
+*/
+
+
+/// Called when an ad request loaded an ad. This is a good opportunity to add this view to the
+/// hierarchy if it has not been added yet. If the ad was received as a part of the server-side auto
+/// refreshing, you can examine the hasAutoRefreshed property of the view.
+- (void)adViewDidReceiveAd:(GADBannerView *)view
+{
+    NSLog(@"adViewDidReceiveAd====>");
+}
+
+/// Called when an ad request failed. Normally this is because no network connection was available
+/// or no ads were available (i.e. no fill). If the error was received as a part of the server-side
+/// auto refreshing, you can examine the hasAutoRefreshed property of the view.
+- (void)adView:(GADBannerView *)view didFailToReceiveAdWithError:(GADRequestError *)error
+{
+    NSLog(@"didFailToReceiveAdWithError===>");
+}
+
+#pragma mark Click-Time Lifecycle Notifications
+
+/// Called just before presenting the user a full screen view, such as a browser, in response to
+/// clicking on an ad. Use this opportunity to stop animations, time sensitive interactions, etc.
+///
+/// Normally the user looks at the ad, dismisses it, and control returns to your application by
+/// calling adViewDidDismissScreen:. However if the user hits the Home button or clicks on an App
+/// Store link your application will end. On iOS 4.0+ the next method called will be
+/// applicationWillResignActive: of your UIViewController
+/// (UIApplicationWillResignActiveNotification). Immediately after that adViewWillLeaveApplication:
+/// is called.
+- (void)adViewWillPresentScreen:(GADBannerView *)adView
+{
+    NSLog(@"adViewWillPresentScreen===>");
+}
+
+/// Called just before dismissing a full screen view.
+- (void)adViewWillDismissScreen:(GADBannerView *)adView
+{
+    NSLog(@"adViewWillDismissScreen===>");
+}
+
+/// Called just after dismissing a full screen view. Use this opportunity to restart anything you
+/// may have stopped as part of adViewWillPresentScreen:.
+- (void)adViewDidDismissScreen:(GADBannerView *)adView
+{
+    NSLog(@"adViewDidDismissScreen===>");
+}
+
+/// Called just before the application will background or terminate because the user clicked on an
+/// ad that will launch another application (such as the App Store). The normal
+/// UIApplicationDelegate methods, like applicationDidEnterBackground:, will be called immediately
+/// before this.
+- (void)adViewWillLeaveApplication:(GADBannerView *)adView
+{
+    NSLog(@"adViewWillLeaveApplication===>");
+}
+-(void) tabAction:(UIButton *)sender
+{
+    btnAll.selected=NO;
+    btnVideo.selected=NO;
+    btnPhoto.selected=NO;
+    sender.selected=YES;
+    
+    int index = (int)sender.tag;
+    if (selectIndex==index) {
+        return;
+    }
+    [self animWithNaviLine:index];
+    selectIndex=index;
+    if (index == 0) {
+        self.filterType = FilterTypeNone;
+        [self.navigationController.navigationBar initWithViewController:self title:@"全部"];
+    }else if (index == 1){
+        self.filterType = FilterTypeVideo;
+        [self.navigationController.navigationBar initWithViewController:self title:@"视频"];
+    }else if (index == 2){
+        self.filterType = FilterTypePhoto;
+        [self.navigationController.navigationBar initWithViewController:self title:@"图片"];
+    }
+    [self loadAssetsAlbums];
+//    NSArray * tmpControls=[NSArray arrayWithObject:[self.controllers objectAtIndex:selectIndex]];
+//    [self.pageController setViewControllers:tmpControls direction:UIPageViewControllerNavigationDirectionForward animated:NO completion:nil];
+    
+}
+-(void) animWithNaviLine:(NSUInteger)index
+{
+    btnAll.selected=NO;
+    btnVideo.selected=NO;
+    btnPhoto.selected=NO;
+    UIButton * btnTab=nil;
+    if (index==0) {
+        btnTab=btnAll;
+    }else if(index==1){
+        btnTab=btnVideo;
+    }else if (index == 2){
+        btnTab=btnPhoto;
+    }
+    btnTab.selected=YES;
+    
+    __weak AlbumsViewController * weakSelf = self;
+    [UIView animateWithDuration:0.3 animations:^{
+        int startx=btnTab.frame.origin.x;
+        CGRect rect = CGRectMake(startx, 44-naviLineHeight-2, self.view.frame.size.width/3, naviLineHeight);
+        weakSelf.naviLine.frame=rect;
+    } completion:^(BOOL finished){
+        
+    }];
+}
+
+@end

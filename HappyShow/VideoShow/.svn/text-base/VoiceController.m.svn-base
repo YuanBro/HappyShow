@@ -1,0 +1,248 @@
+//
+//  VoiceController.m
+//  VideoShow
+//
+//  Created by admin on 16/1/26.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "DownloadedSticker+CoreData.h"
+#import "Util.h"
+#import "StickerManagerCell.h"
+#import "Toast+UIView.h"
+#import "StickerItem+CoreData.h"
+#import "UIImage+Util.h"
+#import "VoiceMangerCell.h"
+static NSString *identifier = @"VoiceMangerCell";
+
+@interface VoiceController ()
+
+{
+    UIButton *listActionBtn;
+    BOOL isEditStatus;
+    NSMutableArray *stickerList;
+    NSMutableArray *arr;
+    NSInteger a;
+    NSIndexPath* index;
+}
+@end
+
+@implementation VoiceController
+
+- (id)initWithStyle:(UITableViewStyle)style
+{
+    if(self = [super initWithStyle:style])
+    {
+        
+    }
+    return self;
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    isEditStatus = NO;
+    stickerList = [NSMutableArray array];
+    arr=[NSMutableArray array];
+    
+    UINib *cellNib = [UINib nibWithNibName:identifier bundle:nil];
+    [self.tableView registerNib:cellNib forCellReuseIdentifier:identifier];
+    self.tableView.separatorColor = [UIColor colorWithRed:223/255.0 green:223/255.0 blue:223/255.0 alpha:1];
+    if ([self.tableView respondsToSelector:@selector(setSeparatorInset:)])
+    {
+        [self.tableView setSeparatorInset:UIEdgeInsetsZero];
+    }
+    if ([self.tableView respondsToSelector:@selector(setLayoutMargins:)])
+    {
+        [self.tableView setLayoutMargins:UIEdgeInsetsZero];
+    }
+    
+    
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(stickerUpdate:) name:@"StickerRequestFinish" object:nil];
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    
+    [self stickerUpdate:nil];
+}
+
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
+{
+    return UIInterfaceOrientationMaskPortrait;
+}
+
+- (void)dealloc
+{
+    
+}
+
+- (void)backAction:(id)sender
+{
+    [self dismissViewControllerAnimated:YES completion:nil];
+
+}
+
+- (void)stickerUpdate:(NSNotification*)notification
+{
+    switch (self.materialType) {
+        case MaterialTypeSoundtrack:
+        {
+            stickerList=[DownloadedSticker queryWithType:@"3"];
+            [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"音乐管理", nil) leftAction:@selector(backAction:)];
+        }
+            break;
+        case MaterialTypeSouce:
+        {
+            stickerList=[DownloadedSticker queryWithType:@"1"];
+            [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"音效管理", nil) leftAction:@selector(backAction:)];
+        }
+            
+        default:
+            
+            break;
+    }
+    
+    
+    if(!stickerList ||stickerList.count == 0)
+    {
+        [self.view makeToast:NSLocalizedString(@"NO Sticker", nil) duration:2.0 position:@"bottom"];
+    }
+    if(!self.navigationItem.rightBarButtonItem)
+    {
+        UIBarButtonItem *barItem = [[UIBarButtonItem alloc] initWithCustomView:listActionBtn];
+        self.navigationItem.rightBarButtonItem = barItem;
+    }
+    [self.tableView reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+}
+
+#pragma mark - UITableViewDataSource
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+{
+    return 1;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    return stickerList.count;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    return 70.0;
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    if ([cell respondsToSelector:@selector(setSeparatorInset:)])
+    {
+        [cell setSeparatorInset:UIEdgeInsetsZero];
+    }
+    if ([cell respondsToSelector:@selector(setPreservesSuperviewLayoutMargins:)])
+    {
+        [cell setPreservesSuperviewLayoutMargins:NO];
+    }
+    if ([cell respondsToSelector:@selector(setLayoutMargins:)])
+    {
+        [cell setLayoutMargins:UIEdgeInsetsZero];
+    }
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    
+    DownloadedSticker *sticker = stickerList[indexPath.row];
+    
+    VoiceMangerCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
+    
+   
+    
+    cell.label.text = sticker.material_name;
+    
+    cell.cellid=sticker.material_id;
+    
+    return cell;
+    
+}
+
+- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    return YES;
+}
+
+- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    if(editingStyle == UITableViewCellEditingStyleDelete){
+        
+        switch (_materialType) {
+            case MaterialTypeSouce:
+            {
+               UIAlertView* v=[[UIAlertView alloc]initWithTitle:@"删除音效" message:@"确定删除音效？" delegate:self cancelButtonTitle:@"取消" otherButtonTitles:@"确定", nil];
+                  [v show];
+            
+            }
+                
+                break;
+            case MaterialTypeSoundtrack:
+            {
+                UIAlertView* v=[[UIAlertView alloc]initWithTitle:@"删除配乐" message:@"确定删除配乐？" delegate:self cancelButtonTitle:@"取消" otherButtonTitles:@"确定", nil];
+                  [v show];
+                
+            }
+                
+                break;
+                
+            default:
+                break;
+        }
+        
+        a=indexPath.row;
+        index=indexPath;
+
+        [tableView reloadData];
+        
+    }
+}
+
+-(void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+    
+    switch (buttonIndex) {
+        case 1:
+        {
+            
+            int stickerID = ((DownloadedSticker*)stickerList[a]).material_id.intValue;
+            [DownloadedSticker deleteDownloadedSticker:stickerID];
+            [Util deleteFile:[NSString stringWithFormat:@"%@/%d",[Util rootDownloadPath],stickerID]];
+            [StickerItem deleteRecentSticker:stickerID];
+            [stickerList removeObjectAtIndex:a];
+            [self.tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:index] withRowAnimation:UITableViewRowAnimationFade];
+        }
+            break;
+            
+        default:
+            break;
+    }
+   
+}
+
+
+@end

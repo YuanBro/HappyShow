@@ -1,0 +1,20 @@
+//
+//  StickerItem.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/17.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+#import <CoreData/CoreData.h>
+
+/** 保存到数据库 */
+@interface StickerItem : NSManagedObject
+
+@property (nonatomic, retain) NSNumber * stickerID;
+@property (nonatomic, retain) NSNumber * type;//0:preload sticker ; 1:downloaded sticker
+@property (nonatomic, retain) NSString * image;//图片路径
+@property (nonatomic, retain) NSDate * lastUsedTime;
+
+@end

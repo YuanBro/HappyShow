@@ -1,0 +1,63 @@
+//
+//  VideoFrameView.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-10-29.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+// 每一帧代表的像素值
+#define FrameWidthPerSecond 15
+
+@class VideoFrameView;
+@protocol VideoFrameViewDelegate <NSObject>
+@optional
+/** 视频滚动到指定的秒数 */
+- (void)videoFrameView:(VideoFrameView*)view didScrollTo:(CGFloat)second tapFlag:(BOOL)tapFlag;
+/** 单击视频预览帧的内容区域 */
+- (void)videoFrameContentViewTapped;
+/** 所有帧加载完成 */
+- (void)videoFrameLoadDone;
+
+/** 拖动视频预览的区域开始 */
+- (void)videoFrameViewPanDidStart;
+
+/** 拖动视频预览的区域结束 */
+- (void)videoFrameViewPanDidEnd;
+
+@end
+
+/** 时间轴组件 */
+@interface VideoFrameView : UIView
+
+/** 初始化布局及数据 */
+- (id)initWithFrame:(CGRect)rect mediaArray:(NSArray*)medArray;
+
+/** 滚动到指定的位置 tapFlag---是否点击滚动 */
+- (void)scrollToSecond:(float)second tapFlag:(BOOL)tapFlag sendEvent:(BOOL)flag;
+
+/** 重新加载数据 */
+- (void)reloadFrames;
+/** 添加内容视图 */
+- (void)addContentView:(UIView*)view;
+/** 获取当前的位置 */
+- (float)currentPosition;
+/** 获取当前毫秒值 */
+- (float)currentSecond;
+/** 获取指定视图的开始时间 */
+- (float)startTimeOfContentView:(UIView*)view;
+/** 获取所有帧的总宽度 */
+- (float)totalFramesWidth;
+/** 设置选择片段的起始和结束时间 */
+- (void)setSelectRectFrom:(float)startSecond to:(float)endSecond;
+/** 清理选择的矩形 */
+- (void)clearSelectRect;
+
+@property (nonatomic,assign) CGSize contentSize;
+@property (nonatomic,assign) BOOL scrollEnable;
+@property (nonatomic,weak) id<VideoFrameViewDelegate> delegate;
+
+
+@end

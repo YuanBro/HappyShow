@@ -1,0 +1,15 @@
+//
+//  ShareCell.h
+//  VideoShow
+//
+//  Created by lance on 15/5/5.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+@interface ShareCell : UICollectionViewCell
+
+@property (weak,nonatomic) IBOutlet UIImageView * snsImageView;
+
+@end

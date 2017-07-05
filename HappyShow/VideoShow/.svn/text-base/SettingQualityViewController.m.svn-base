@@ -1,0 +1,101 @@
+//
+//  SettingQualityViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/5/7.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "SettingQualityViewController.h"
+#import "SettingQualityCell.h"
+#import "Prefs.h"
+#import "UIImage+Util.h"
+
+static NSString * cellIdentifier = @"SettingQualityCell";
+
+@interface SettingQualityViewController ()<UITableViewDataSource,UITableViewDelegate>
+
+@property (nonatomic,strong) UITableView * mTable;
+@property (nonatomic,strong) NSMutableArray * data;
+
+@end
+
+@implementation SettingQualityViewController
+
+@synthesize mTable;
+@synthesize data;
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"Setting_export_quality", nil)];
+    [self.navigationController.navigationBar initWithViewController:self leftText:@"" leftImageName:@"ic_back_arrow.png" action:@selector(backTap:)];
+//    UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 200, 30)];
+//    titleLabel.backgroundColor = [UIColor clearColor];
+//    titleLabel.text =NSLocalizedString(@"Setting_export_quality", nil);
+//    titleLabel.textAlignment = NSTextAlignmentCenter;
+//    titleLabel.textColor = [UIColor whiteColor];
+//    titleLabel.font=[UIFont boldSystemFontOfSize:17];
+//    [titleLabel sizeToFit];
+//    
+//    self.navigationItem.titleView=titleLabel;
+//    UIButton *closeBtn = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 22, 38)];
+//    [closeBtn setImage:[UIImage imageNamed:@"ic_back_arrow.png"] forState:UIControlStateNormal];
+//    [closeBtn setImageEdgeInsets:UIEdgeInsetsMake(9.5, 0, 9.5, 11)];
+//    [closeBtn addTarget:self action:@selector(backTap:) forControlEvents:UIControlEventTouchUpInside];
+//    UIBarButtonItem *leftBarButton = [[UIBarButtonItem alloc] initWithCustomView:closeBtn];
+//    self.navigationItem.leftBarButtonItem=leftBarButton;
+    
+    data=[NSMutableArray arrayWithObjects:NSLocalizedString(@"Setting_quality_manual", nil),NSLocalizedString(@"Setting_quality_fast", nil),NSLocalizedString(@"Setting_quality_fine", nil), nil];
+    CGRect tableRect=CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height-self.statusHeight-self.naviHeight);
+    self.mTable = [[UITableView alloc] initWithFrame:tableRect style:UITableViewStyleGrouped];
+    self.mTable.dataSource=self;
+    self.mTable.delegate=self;
+    [self.view addSubview:self.mTable];
+    UINib * nib=[UINib nibWithNibName:cellIdentifier bundle:nil];
+    [self.mTable registerNib:nib forCellReuseIdentifier:cellIdentifier];
+    
+    [self.mTable reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+}
+
+- (void)dealloc {
+    
+}
+
+-(void) backTap:(UIButton*)sender
+{
+    [self.navigationController popViewControllerAnimated:YES];
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section
+{
+    return 30;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    return data.count;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    SettingQualityCell * cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier forIndexPath:indexPath];
+    
+    cell.labelText.text = data[indexPath.row];
+    if (indexPath.row==[Prefs getQualityConfig]) {
+        cell.btnMarker.selected=YES;
+    }else{
+        cell.btnMarker.selected=NO;
+    }
+    
+    return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    [Prefs saveQualityConfig:(int)indexPath.row];
+    [tableView reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+}
+
+@end

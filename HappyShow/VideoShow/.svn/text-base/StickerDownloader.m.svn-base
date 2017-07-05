@@ -1,0 +1,250 @@
+//
+//  StickerDownloader.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/15.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "StickerDownloader.h"
+#import "ASIHTTPRequest.h"
+#import "Util.h"
+#import "DownloadingSticker+CoreData.h"
+#import "DownloadedSticker+CoreData.h"
+#import "AppDelegate.h"
+#import "ZipArchive.h"
+#import "Reachability.h"
+#import "MaterialInf.h"
+
+@interface StickerDownloader()<ASIProgressDelegate>
+{
+    ASIHTTPRequest *currentRequest;
+}
+@end
+
+@implementation StickerDownloader
+@synthesize materialType;
++ (StickerDownloader*)sharedInstance
+{
+    static dispatch_once_t token;
+    static StickerDownloader *instance;
+    dispatch_once(&token, ^{
+        instance = [[StickerDownloader alloc] init];
+    });
+    
+    return instance;
+}
+
+/** 添加下载队列 */ 
+- (void)addDownloadTask:(NSURL*)url stickerID:(int)stickerID isUpdate:(BOOL)update
+{
+    if(!networkQueue){
+        networkQueue = [[ASINetworkQueue alloc] init];
+        [networkQueue reset];
+        networkQueue.delegate = self;
+        networkQueue.downloadProgressDelegate = self;
+        networkQueue.showAccurateProgress = YES;
+        networkQueue.maxConcurrentOperationCount = 1;
+        networkQueue.shouldCancelAllRequestsOnFailure = NO;
+        [networkQueue setRequestDidFailSelector:@selector(didRequestFail:)];
+        [networkQueue setRequestDidFinishSelector:@selector(didRequestFinish:)];
+        [networkQueue setRequestDidStartSelector:@selector(didRequestStart:)];
+        [networkQueue setQueueDidFinishSelector:@selector(didQueueFinish:)];
+        [networkQueue go];
+    }
+    //
+    [self saveDownloadingSticker:stickerID url:url.absoluteString];
+    //
+    ASIHTTPRequest *request = [ASIHTTPRequest requestWithURL:url];
+    request.tag = stickerID;
+    NSString *dfile = [Util stickerDownloadFile:stickerID];
+    if(update){
+        dfile = [NSString stringWithFormat:@"%@_update.zip",dfile];
+        request.userInfo = @{@"update" : @1, @"file" : dfile};
+    }
+    [request setDownloadDestinationPath:dfile];
+    [request setTemporaryFileDownloadPath:[self stickerDownloadTempFile:stickerID]];
+    request.allowResumeForFileDownloads = YES;
+    [request setNumberOfTimesToRetryOnTimeout:3];
+    [request setTimeOutSeconds:30];
+    if([self networkAvailable]){
+        [networkQueue addOperation:request];
+    }else{
+        [self didRequestFail:request];
+    }
+}
+
+- (NSString*)stickerDownloadTempFile:(int)stickerID
+{
+    NSString *file = nil;
+    NSString *path = [[Util rootDownloadPath] stringByAppendingPathComponent:@"temp"];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if(![Util fileExists:path]){
+        [fileManager createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:nil];
+    }
+    file = [path stringByAppendingPathComponent:[NSString stringWithFormat:@"tmp%d.zip",stickerID]];
+    if(![Util fileExists:file]){
+        [fileManager createFileAtPath:file contents:nil attributes:nil];
+    }
+    return file;
+}
+
+- (void)saveSticker:(int)materialID
+{
+    for(MaterialInf * inf in self.originalDataList){
+        if(inf.id == materialID){
+            NSEntityDescription *desc = [NSEntityDescription entityForName:@"DownloadedSticker" inManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+            DownloadedSticker *sticker = [[DownloadedSticker alloc] initWithEntity:desc insertIntoManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+            sticker.material_id = [NSNumber numberWithInt:materialID];
+            sticker.material_name = inf.material_name;
+            sticker.material_paper = inf.material_paper;
+            switch (self.materialType) {
+                case MaterialTypeSouce:
+                {
+                    sticker.material_icon = @"";
+                    sticker.type=@"1";
+                }
+                    break;
+                    
+                case MaterialTypeSticker:
+                {
+                    NSString *icon = inf.material_icon;
+                    icon = [icon substringFromIndex:[icon rangeOfString:@"/" options:NSBackwardsSearch].location + 1];
+                    sticker.material_icon = icon;
+                    sticker.type=@"2";
+                }
+                    break;
+                case MaterialTypeSoundtrack:
+                {
+                    sticker.material_icon = @"";
+                    sticker.type=@"3";
+                    
+                }
+                    
+                    break;
+                default:
+                {
+                    NSString *icon = inf.material_icon;
+                    icon = [icon substringFromIndex:[icon rangeOfString:@"/" options:NSBackwardsSearch].location + 1];
+                    sticker.material_icon = icon;
+
+                }
+                    break;
+            }
+            sticker.version_code = [NSNumber numberWithInt:inf.ver_code];
+            sticker.download_time = [NSDate dateWithTimeIntervalSince1970:0];
+            [DownloadedSticker saveDownloadedSticker:sticker];
+            break;
+        }
+    }
+}
+
+- (void)saveDownloadingSticker:(int)materialID url:(NSString*)url
+{
+    for(MaterialInf * inf in self.originalDataList)
+    {
+        if(inf.id == materialID)
+        {
+            NSEntityDescription *desc = [NSEntityDescription entityForName:@"DownloadingSticker" inManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+            DownloadingSticker *sticker = [[DownloadingSticker alloc] initWithEntity:desc insertIntoManagedObjectContext:[AppDelegate shareInstance].managedObjectContext];
+            sticker.material_id = [NSNumber numberWithInt:materialID];
+            sticker.url = url;
+            sticker.download_progress = @0.0;
+            sticker.create_time = [NSDate date];
+            [DownloadingSticker addDownloadingSticker:sticker];
+            break;
+        }
+    }
+}
+
+- (NSArray*)operations
+{
+    NSArray *oprations = nil;
+    if(networkQueue){
+        oprations = networkQueue.operations;
+    }
+    return oprations;
+}
+
+- (BOOL)unzipSticker:(int)stickerID isUpdate:(BOOL)update
+{
+    BOOL res = NO;
+    ZipArchive *zip = [[ZipArchive alloc] init];
+    NSString *dfile = [Util stickerDownloadFile:stickerID];
+    if(update){
+        dfile = [NSString stringWithFormat:@"%@_update.zip",dfile];
+    }
+    NSString *srcFile = dfile;
+    NSString *destFile = [Util stickerPath:stickerID];
+    if([zip UnzipOpenFile:srcFile]){
+        res = [zip UnzipFileTo:destFile overWrite:!update];
+    }
+    [zip UnzipCloseFile];
+    [Util deleteFile:dfile];
+    return res;
+}
+
+- (BOOL)networkAvailable
+{
+    Reachability *r = [Reachability reachabilityWithHostName:@"www.google.com"];
+    return [r currentReachabilityStatus] != NotReachable;
+}
+
+#pragma mark - ASIProgressDelegate
+- (void)setProgress:(float)newProgress
+{
+    if([self.delegate respondsToSelector:@selector(sticker:downloadProgress:)] && currentRequest){
+        [self.delegate sticker:(int)currentRequest.tag downloadProgress:newProgress];
+    }
+}
+
+- (void)didRequestStart:(ASIHTTPRequest*)request
+{
+    currentRequest = request;
+    if([self.delegate respondsToSelector:@selector(stickerStartDownload:)]){
+        [self.delegate stickerStartDownload:(int)request.tag];
+    }
+}
+
+- (void)didRequestFinish:(ASIHTTPRequest*)request
+{
+    currentRequest = nil;
+    int stickerID = (int)request.tag;
+    BOOL update = NO;
+    if(request.userInfo && [request.userInfo[@"update"] intValue] == 1 && request.userInfo[@"file"])
+    {
+        update = YES;
+    }
+    if([self unzipSticker:stickerID isUpdate:update])
+    {
+        [self saveSticker:stickerID];
+        [DownloadingSticker deleteDownloadingSticker:stickerID];
+        if([self.delegate respondsToSelector:@selector(stickerFinishDownload:)]){
+            [self.delegate stickerFinishDownload:stickerID];
+        }
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"StickerRequestFinish" object:nil];
+    }else{
+        [DownloadedSticker deleteDownloadedSticker:stickerID];
+        [self didRequestFail:request];
+    }
+}
+
+- (void)didRequestFail:(ASIHTTPRequest*)request
+{
+    currentRequest = nil;
+    [DownloadingSticker deleteDownloadingSticker:(int)request.tag];
+    [Util deleteFile:[NSString stringWithFormat:@"%@/%d",[Util rootDownloadPath],(int)request.tag]];
+    if([self.delegate respondsToSelector:@selector(stickerFailDownload:)]){
+        [self.delegate stickerFailDownload:(int)request.tag];
+    }
+}
+
+- (void)didQueueFinish:(ASIHTTPRequest*)request
+{
+    currentRequest = nil;
+    if([self.delegate respondsToSelector:@selector(downloadQueueFinished)]){
+        [self.delegate downloadQueueFinished];
+    }
+}
+
+@end

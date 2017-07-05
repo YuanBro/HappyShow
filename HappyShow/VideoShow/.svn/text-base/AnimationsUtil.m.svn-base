@@ -1,0 +1,273 @@
+//
+//  AnimationsUtil.m
+//  brandshow
+//
+//  Created by lance on 14-4-17.
+//  Copyright (c) 2014年 harry.xie. All rights reserved.
+//
+
+#import "AnimationsUtil.h"
+
+@implementation AnimationsUtil
+
+
+
+/** 公共封装方法 动画 */
++(void) animationType:(NSString *)animationType withSubtype:(NSString *)kCATransitionSubtype duration:(float)duration completion:(void (^)(BOOL finished))completion{
+    
+    [CATransaction begin];
+    CATransition *transition = [CATransition animation];
+    if (animationType!=nil&&(![animationType isEqualToString:@""])) {
+        transition.type = animationType;
+    }else{
+        transition.type=kCATransitionFade;
+    }
+    if(kCATransitionSubtype!=nil&&(![kCATransitionSubtype isEqualToString:@""])){
+        transition.subtype=kCATransitionSubtype;
+    }else{
+        //transition.subtype=kCATransitionFromLeft;
+    }
+    transition.duration = duration;
+    transition.fillMode = kCAFillModeForwards;
+    transition.removedOnCompletion = YES;
+    
+    [[UIApplication sharedApplication].keyWindow.layer addAnimation:transition forKey:kPathTranslation];
+    //动画开始时阻止接受事件
+    [[UIApplication sharedApplication] beginIgnoringInteractionEvents];
+    [CATransaction setCompletionBlock: ^ {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(transition.duration * NSEC_PER_SEC)), dispatch_get_main_queue(), ^ {
+            //开启接受事件
+            [[UIApplication sharedApplication] endIgnoringInteractionEvents];
+        });
+    }];
+    if (completion!=nil) {
+        completion(YES);
+    }
+    [CATransaction setCompletionBlock:^{}];
+    [CATransaction commit];
+}
+
+//===============================封装跳转动画==============================
+
++(void) durationWithFade:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion
+{
+    [self animationType:kCATransitionFade withSubtype:kCATransitionSubtype duration:duration completion:^(BOOL finished){
+        completion(finished);
+    }];
+}
++(void) durationWithPush:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion
+{
+    [self animationType:kCATransitionPush withSubtype:kCATransitionSubtype duration:duration completion:^(BOOL finished){
+        completion(finished);
+    }];
+}
++(void) durationWithReveal:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion
+{
+    [self animationType:kCATransitionReveal withSubtype:kCATransitionSubtype duration:duration completion:^(BOOL finished){
+        completion(finished);
+    }];
+}
++(void) durationWithMoveIn:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion
+{
+    [self animationType:kCATransitionMoveIn withSubtype:kCATransitionSubtype duration:duration completion:^(BOOL finished){
+        completion(finished);
+    }];
+}
+
++(void) durationWithSuckEffect:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion
+{
+    [self animationType:kAnimationSuckEffect withSubtype:kCATransitionSubtype duration:duration completion:^(BOOL finished){
+        completion(finished);
+    }];
+}
+
++(void) durationWithRippleEffect:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion
+{
+    [self animationType:kAnimationRippleEffect withSubtype:kCATransitionSubtype duration:duration completion:^(BOOL finished){
+        completion(finished);
+    }];
+}
++(void) durationWithCube:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion
+{
+    [self animationType:kAnimationCube withSubtype:kCATransitionSubtype duration:duration completion:^(BOOL finished){
+        completion(finished);
+    }];
+}
++(void) durationWithOglFlip:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion
+{
+    [self animationType:kAnimationOglFlip withSubtype:kCATransitionSubtype duration:duration completion:^(BOOL finished){
+        completion(finished);
+    }];
+}
++(void) durationWithPageCurl:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion
+{
+    [self animationType:kAnimationPageCurl withSubtype:kCATransitionSubtype duration:duration completion:^(BOOL finished){
+        completion(finished);
+    }];
+}
++(void) durationWithPageUnCurl:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion
+{
+    [self animationType:kAnimationPageUnCurl withSubtype:kCATransitionSubtype duration:duration completion:^(BOOL finished){
+        completion(finished);
+    }];
+}
++(void) durationWithCameraIrisHollowOpen:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion
+{
+    [self animationType:kAnimationCameraIrisHollowOpen withSubtype:kCATransitionSubtype duration:duration completion:^(BOOL finished){
+        completion(finished);
+    }];
+}
++(void) durationWithCameraIrisHollowClose:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion
+{
+    [self animationType:kAnimationCameraIrisHollowClose withSubtype:kCATransitionSubtype duration:duration completion:^(BOOL finished){
+        completion(finished);
+    }];
+}
+
+
+
+//==================================================视图补间动画=====================================
+//移动
++ (CABasicAnimation *)translation:(UIView *) view{
+    CABasicAnimation *traslation = [CABasicAnimation animationWithKeyPath:@"position"];
+    traslation.toValue = [NSValue valueWithCGPoint:CGPointMake(320,480)];
+    traslation.duration = 2.0;
+    //traslation.autoreverses = YES;
+    traslation.repeatCount = 1;
+    
+    [view.layer addAnimation:traslation forKey:kPathTranslation];
+    return traslation;
+}
+
+//透明
++ (CABasicAnimation*)opacity:(UIView *)view {
+    CABasicAnimation *opacity = [CABasicAnimation animationWithKeyPath:@"opacity"];
+    opacity.fromValue = [NSNumber numberWithFloat:1.0];
+    opacity.toValue = [NSNumber numberWithFloat:0.4];
+    opacity.duration = 0.2; //动画时间
+    opacity.repeatCount = FLT_MAX; //永久
+    opacity.autoreverses = YES; //每次动画后倒回回放
+    opacity.removedOnCompletion=NO;  //动画后不还原，为no时不回到最初状态
+    opacity.fillMode=kCAFillModeForwards;
+    
+    [view.layer addAnimation:opacity forKey:kPathOpacity];
+    return opacity;
+}
+
+// 旋转
+- (CABasicAnimation*)rotate:(UIView *)view {
+    CATransform3D ca3d = CATransform3DMakeRotation(45 * 3.14159265/180.0, -1, 1, 1);
+    
+    CABasicAnimation *rotate = [CABasicAnimation animationWithKeyPath:@"transform.rotation"];
+    rotate.toValue = [NSValue valueWithCATransform3D:ca3d];
+    rotate.duration=1.0;
+    rotate.autoreverses=NO;
+    rotate.repeatCount=1;
+    rotate.removedOnCompletion=NO;
+    rotate.fillMode=kCAFillModeForwards;
+    [view.layer addAnimation:rotate forKey:kPathRotate];
+    return rotate;
+}
+
+//缩放
+- (CABasicAnimation *)scale:(UIView *)view {
+    CABasicAnimation *scale = [CABasicAnimation animationWithKeyPath:@"transform.scale"];
+    scale.fromValue=[NSNumber numberWithFloat:0.5];
+    scale.toValue = [NSNumber numberWithFloat:2.0];
+    scale.duration=1.0;
+    scale.autoreverses=YES;
+    scale.repeatCount=2;
+    scale.removedOnCompletion=YES;
+    scale.fillMode=kCAFillModeForwards;
+    [view.layer addAnimation:scale forKey:kPathScale];
+    return scale;
+}
+
+//不按原始边长度缩放
+-(CABasicAnimation *)bounds:(UIView *) boundsView{
+    CABasicAnimation *bounds = [CABasicAnimation animationWithKeyPath:@"bounds"];
+    bounds.duration = 1.f;
+    bounds.fromValue = [NSValue valueWithCGRect:CGRectMake(0,0,10,10)];
+    bounds.toValue = [NSValue valueWithCGRect:CGRectMake(10,10,200,200)];
+    bounds.byValue  = [NSValue valueWithCGRect:boundsView.bounds];
+    
+    bounds.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
+    bounds.repeatCount = 1;
+    bounds.autoreverses = YES;
+    
+    [boundsView.layer addAnimation:bounds forKey:@"bounds"];
+    return bounds;
+}
+
+- (CAKeyframeAnimation*)path:(UIView *) pathView{
+    CAKeyframeAnimation *animation = [CAKeyframeAnimation animationWithKeyPath:@"position"];
+    CGMutablePathRef path = CGPathCreateMutable();
+    CGPathMoveToPoint(path, nil, 0, 0);
+    //添加直线路径
+    CGPathAddLineToPoint(path, NULL, 60, 130);
+    CGPathAddLineToPoint(path, NULL, 70, 140);
+    CGPathAddLineToPoint(path, NULL, 80, 150);
+    CGPathAddLineToPoint(path, NULL, 90, 160);
+    CGPathAddLineToPoint(path, NULL, 100, 170);
+    //添加曲线路径
+    CGPathAddCurveToPoint(path,NULL,50.0,275.0,150.0,275.0,70.0,120.0);
+    CGPathAddCurveToPoint(path,NULL,150.0,275.0,250.0,275.0,90.0,120.0);
+    CGPathAddCurveToPoint(path,NULL,250.0,275.0,350.0,275.0,110.0,120.0);
+    CGPathAddCurveToPoint(path,NULL,350.0,275.0,450.0,275.0,130.0,120.0);
+    
+    animation.path = path;
+    animation.duration = 5;
+    animation.autoreverses = YES;
+    
+    [pathView.layer addAnimation:animation forKey:kPathPath];
+    CFRelease(path);
+    return animation;
+}
+//组合动画
+- (CAAnimationGroup*)goup:(UIView *)view {
+    CAAnimationGroup *group = [CAAnimationGroup animation];
+    
+    CABasicAnimation *scale = [CABasicAnimation animationWithKeyPath:@"transform.scale"];
+    scale.fromValue=[NSNumber numberWithFloat:0.5];
+    scale.toValue = [NSNumber numberWithFloat:2.0];
+    
+    CABasicAnimation *traslation = [CABasicAnimation animationWithKeyPath:@"position"];
+    traslation.toValue = [NSValue valueWithCGPoint:CGPointMake(320,480)];
+    
+    group.animations=[NSArray arrayWithObjects:scale, traslation, nil];
+    group.duration = 2.0;
+    
+    [view.layer addAnimation:group forKey:kPathGroup];
+    return group;
+}
+
+
+//======================================UI动画================================================
+
++ (void)viewAnimation:(int)duration view:(UIView *)view completion:(void (^)(void))completion
+{
+    [UIView beginAnimations:@"animationID" context:nil];
+    [UIView setAnimationDuration:duration];
+    [UIView setAnimationCurve:UIViewAnimationCurveEaseInOut];
+    [UIView setAnimationRepeatAutoreverses:NO];
+    
+    [UIView setAnimationTransition:UIViewAnimationTransitionFlipFromLeft forView:view cache:YES];
+    completion();//调用代码块
+
+    [UIView commitAnimations];
+}
+
++ (void)viewAnimation:(int)duration animationType:(UIViewAnimationCurve)curve view:(UIView *)view completion:(void (^)(void))completion
+{
+    [UIView beginAnimations:@"animationID" context:nil];
+    [UIView setAnimationDuration:duration];
+    [UIView setAnimationCurve:curve];
+    [UIView setAnimationRepeatAutoreverses:NO];
+    
+    [UIView setAnimationTransition:UIViewAnimationTransitionFlipFromLeft forView:view cache:YES];
+    completion();//调用代码块
+    
+    [UIView commitAnimations];
+}
+
+@end

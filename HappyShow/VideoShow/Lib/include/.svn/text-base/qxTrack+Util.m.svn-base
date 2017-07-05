@@ -1,0 +1,513 @@
+//
+//  qxTrack+Util.m
+//  VideoShow
+//
+//  Created by lance on 15/6/2.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "qxTrack+Util.h"
+#import <AssetsLibrary/AssetsLibrary.h>
+#import "qxMediaObject+Util.h"
+#import "qxStickerObject.h"
+#import "Util.h"
+#import "FileHandle.h"
+#import "NSString+Util.h"
+#import "qxGifObject+Util.h"
+#import "qxMediaObject.h"
+
+@implementation qxTrack (Util)
+
+/** 根据秒数查找音频 */
+- (qxMediaObject*)findAudioObjAtSecond:(float)second
+{
+    qxMediaObject *audioObj = nil;
+    if(self.eType == eMT_Audio){
+        for(qxMediaObject *obj in self.mpMediaObjArray){
+            float start = CMTimeGetSeconds(obj.startTimeOfTrack);
+            float duration = CMTimeGetSeconds(obj.actualTimeRange.duration);
+            if(second >= start && second <= start + duration){
+                audioObj = obj;
+                break;
+            }
+        }
+    }
+    return audioObj;
+}
+
+/**
+ @return 返回对应时间的片段
+ */
+- (qxMediaObject *)findMediaObjectAtSecond:(float)second
+{
+    qxMediaObject * resultObj = nil;
+    double calSecond = 0;// 片段时间之和
+    for (int i = 0; i < self.mpMediaObjArray.count; i++) {
+        qxMediaObject *obj = self.mpMediaObjArray[i];
+        if (obj.eType == eMT_Photo||obj.eType == eMT_Video){
+            calSecond += CMTimeGetSeconds(obj.actualTimeRange.duration);
+        }
+        if (calSecond>=second) {
+            resultObj = obj;
+            break;
+        }
+    }
+    return resultObj;
+}
+
+/**
+ 字幕和sticker同一时间可能对应多个
+ @return 返回所有的对象
+ */
+- (NSMutableArray *)findStickerObjectsAtSecond:(float)second  {
+    NSMutableArray *resultArray = [NSMutableArray array];
+    if (self.eType == eMT_Overlay) {
+        for (int i=0; i<self.mpMediaObjArray.count; i++) {
+            qxMediaObject *obj = self.mpMediaObjArray[i];
+            if([obj isStickerObj]) {
+                float start = CMTimeGetSeconds(obj.startTimeOfTrack);
+                float duration = CMTimeGetSeconds(obj.actualTimeRange.duration);
+                if (second >= start && second <= start + duration) {
+                    [resultArray addObject:obj];
+                }
+            }
+        }
+    }
+    
+    return resultArray;
+}
+
+// 查找字幕
+- (NSMutableArray *)findTextObjectsAtSecond:(float)second  {
+    NSMutableArray *resultArray = [NSMutableArray array];
+    if (self.eType == eMT_Overlay) {
+        for (int i=0; i<self.mpMediaObjArray.count; i++) {
+            qxMediaObject *obj = self.mpMediaObjArray[i];
+            if([obj isTextObj]){
+                float start = CMTimeGetSeconds(obj.startTimeOfTrack);
+                float duration = CMTimeGetSeconds(obj.actualTimeRange.duration);
+                if (second >= start && second <= start + duration) {
+                    [resultArray addObject:obj];
+                }
+            }
+        }
+    }
+    
+    return resultArray;
+}
+
+/** 查找通道中的说有sticker对象 */
+- (NSMutableArray *)findStickerObjects {
+    NSMutableArray *resultArray = [NSMutableArray array];
+    if (self.eType == eMT_Overlay) {
+        for (int i=0; i<self.mpMediaObjArray.count; i++) {
+            qxMediaObject *obj = self.mpMediaObjArray[i];
+            if([obj isStickerObj]) {
+                [resultArray addObject:obj];
+            }
+        }
+    }
+    
+    return resultArray;
+}
+
+/** 查找通道中的说有字幕对象 */
+- (NSMutableArray *)findTextObjects {
+    NSMutableArray *resultArray = [NSMutableArray array];
+    if (self.eType == eMT_Overlay) {
+        for (int i=0; i<self.mpMediaObjArray.count; i++) {
+            qxMediaObject *obj = self.mpMediaObjArray[i];
+            if([obj isTextObj]){
+                [resultArray addObject:obj];
+            }
+        }
+    }
+    
+    return resultArray;
+}
+
+/** 重新初始化videoTrack */
++(qxTrack*)createVideoTrack:(qxTrack*)srcTrack
+{
+    if(srcTrack==nil){
+        return nil;
+    }
+    __block qxTrack *track = [[qxTrack alloc] initWithTrackType:eMT_Video];
+    
+    ALAssetsLibrary *library = [Util defaultAssetsLibrary];
+    dispatch_semaphore_t semapthore = dispatch_semaphore_create(0);
+    for(qxMediaObject *obj in srcTrack.mpMediaObjArray){
+        if(!track){
+            break;
+        }
+        if(obj){
+            qxMediaObject *medObj = [[qxMediaObject alloc] init];
+            [library assetForURL:[NSURL URLWithString:obj.strFilePath] resultBlock:^(ALAsset *asset){
+                [medObj setFilePath:obj.strFilePath withType:obj.eType fromAssetLibrary:YES];
+                if(obj.eType == eMT_Photo){
+                    [medObj setDuration:CMTimeGetSeconds(obj.mediaOriginalDuration) * 1000];
+                }else if(obj.eType == eMT_Video){
+                    [medObj setTrim:CMTimeGetSeconds(obj.actualTimeRange.start) * 1000 withRight:(CMTimeGetSeconds(obj.mediaOriginalDuration) - CMTimeGetSeconds(obj.actualTimeRange.start) - CMTimeGetSeconds(obj.actualTimeRange.duration)) * 1000];
+                }
+                [track addMediaObject:medObj];
+                dispatch_semaphore_signal(semapthore);
+            } failureBlock:^(NSError *error){
+                track = nil;
+                dispatch_semaphore_signal(semapthore);
+            }];
+        }
+        dispatch_semaphore_wait(semapthore, DISPATCH_TIME_FOREVER);
+    }
+    
+    if(track!=nil){
+        [track setAudioPercent:[srcTrack getAudioPercent]];
+    }
+    return track;
+}
+
+/** 重新初始化videoTrack */
++(qxTrack*)createMusicTrack:(qxTrack*)srcTrack
+{
+    if(srcTrack==nil){
+        return nil;
+    }
+    __block qxTrack *track = [[qxTrack alloc] initWithTrackType:eMT_Audio];
+    //music track
+    ALAssetsLibrary *library = [Util defaultAssetsLibrary];
+    dispatch_semaphore_t semapthore = dispatch_semaphore_create(0);
+    for(qxMediaObject *obj in srcTrack.mpMediaObjArray){
+        if(obj){
+            qxMediaObject *medObj = [[qxMediaObject alloc] init];
+            //NSLog(@"music path===>%@",obj.strFilePath);
+            if([obj.strFilePath hasPrefix:@"ipod-library"]){
+                [library assetForURL:[NSURL URLWithString:obj.strFilePath] resultBlock:^(ALAsset *asset){
+                    [medObj setFilePath:obj.strFilePath withType:eMT_Audio fromAssetLibrary:YES];
+                    
+                    Float64 startmsec=CMTimeGetSeconds(obj.actualTimeRange.start) * 1000;
+                    Float64 endmsec=(CMTimeGetSeconds(obj.mediaOriginalDuration) - CMTimeGetSeconds(obj.actualTimeRange.start) - CMTimeGetSeconds(obj.actualTimeRange.duration)) * 1000;
+                    
+                    //NSLog(@"music library--->start=%g   end=%g   origin=%g   start=%g   duration=%g",startmsec,endmsec,CMTimeGetSeconds(obj.mediaOriginalDuration),CMTimeGetSeconds(obj.actualTimeRange.start),CMTimeGetSeconds(obj.actualTimeRange.duration));
+                    [medObj setTrim:startmsec withRight:endmsec];
+                    [track addMediaObject:medObj];
+                    [track updateTimeAtIndex:(int)track.mpMediaObjArray.count - 1 startTime:obj.startTimeOfTrack];
+                    dispatch_semaphore_signal(semapthore);
+                } failureBlock:^(NSError *error){
+                    track = nil;
+                    dispatch_semaphore_signal(semapthore);
+                }];
+            }else{
+                NSString* musicpath = [obj.strFilePath relativeAppPath];
+                //NSLog(@"music prepath===>%@   relativepath===>%@",obj.strFilePath,musicpath);
+                [medObj setFilePath:musicpath withType:eMT_Audio fromAssetLibrary:NO];
+                Float64 startmsec=CMTimeGetSeconds(obj.actualTimeRange.start) * 1000;
+                Float64 endmsec=(CMTimeGetSeconds(obj.mediaOriginalDuration) - CMTimeGetSeconds(obj.actualTimeRange.start) - CMTimeGetSeconds(obj.actualTimeRange.duration)) * 1000;
+                //NSLog(@"music preload--->start=%g   end=%g   origin=%g   start=%g   duration=%g",startmsec,endmsec,CMTimeGetSeconds(obj.mediaOriginalDuration),CMTimeGetSeconds(obj.actualTimeRange.start),CMTimeGetSeconds(obj.actualTimeRange.duration));
+                [medObj setTrim:startmsec withRight:endmsec];
+                [track addMediaObject:medObj];
+                [track updateTimeAtIndex:(int)track.mpMediaObjArray.count - 1 startTime:obj.startTimeOfTrack];
+                dispatch_semaphore_signal(semapthore);
+            }
+        }
+        dispatch_semaphore_wait(semapthore, DISPATCH_TIME_FOREVER);
+    }
+    if(track!=nil){
+        [track setAudioPercent:[srcTrack getAudioPercent]];
+    }
+    
+    return track;
+}
+
+-(void) updateTimeAtLastWithStartTime:(CMTime)startTime {
+    [self updateTimeAtIndex:(int)self.mpMediaObjArray.count - 1 startTime:startTime];
+}
+
+/** 重新初始化audioTrack---注意要用到相对路径 */
++(qxTrack*)createAudioTrack:(qxTrack*)srcTrack
+{
+    if(srcTrack==nil){
+        return nil;
+    }
+    __block qxTrack *track = [[qxTrack alloc] initWithTrackType:eMT_Audio];
+    for(qxMediaObject *obj in srcTrack.mpMediaObjArray){
+        if(obj){
+            NSString* voicepath = [obj.strFilePath relativeSandboxDocPath];
+            NSLog(@"voice prepath===>%@   \n relativepath===>%@",obj.strFilePath,voicepath);
+            qxMediaObject *medObj = [[qxMediaObject alloc] init];
+            [medObj setFilePath:voicepath withType:eMT_Audio fromAssetLibrary:NO];
+            [track addMediaObject:medObj];
+            [track updateTimeAtIndex:(int)track.mpMediaObjArray.count - 1 startTime:obj.startTimeOfTrack];
+        }
+    }
+    [track setAudioPercent:[srcTrack getAudioPercent]];
+    return track;
+}
+
+/** 
+ 重新初始化overlayTrack
+ 只要在这一步控制相对路径应该就不会出错
+ */
++(qxTrack*)createOverlayTrack:(qxTrack*)srcTrack
+{
+    if(srcTrack==nil){
+        return nil;
+    }
+    qxTrack *track = [[qxTrack alloc] initWithTrackType:eMT_Overlay];
+    for(qxMediaObject *obj in srcTrack.mpMediaObjArray){
+        if(obj){
+            qxMediaObject *medObj = nil;
+            if([obj isTextObj]){//subtitle
+                medObj = [[qxMediaObject alloc] init];
+                qxMediaObject *textObj = [[qxMediaObject alloc] init];
+                [textObj setFilePath:nil withType:eMT_Text fromAssetLibrary:NO];
+                [textObj setText:((qxMediaObject*)obj.overlayCustomObj).text];
+                [textObj setTextColor:((qxMediaObject*)obj.overlayCustomObj).textColor];
+                [textObj setTextFont:((qxMediaObject*)obj.overlayCustomObj).textFont.fontName size:((qxMediaObject*)obj.overlayCustomObj).textFont.pointSize];
+                [textObj setDisplayRect:obj.textDisplayRect];
+                medObj.overlayCustomObj = textObj;
+                
+                NSString * strFilePath=[obj.strFilePath relativeSandboxDocPath];//处理成当前版本沙盒目录下的文件路径
+                [medObj setFilePath:strFilePath withType:eMT_Overlay fromAssetLibrary:NO];//gif不需要设置这一步
+            }else{//sticker
+                qxStickerObject *tmpObj=(qxStickerObject*)obj.overlayCustomObj;
+                
+                qxStickerObject *stickerObj = [[qxStickerObject alloc] init];
+                if(obj.eType == eMT_OverlayDynamic){//这里重新解析gif文件
+                    NSString * stickerName = [[tmpObj.stickerName lastPathComponent] componentsSeparatedByString:@"."][0];
+                    NSString * dir = [FileHandle pathWithGifForName:stickerName];
+                    NSString * relaPath=[tmpObj.stickerName relativeSandboxDocPath];
+                    NSLog(@"gif path===>%@",relaPath);
+                    NSURL * fileUrl = [NSURL fileURLWithPath:relaPath];
+                    qxGifObject * gifObj = [qxGifHelper getGifObjectFromFile:fileUrl withDir:dir];
+                    NSMutableArray * arr = [gifObj createGifPathsForSize:tmpObj.stickerSize rotatef:tmpObj.rotatef];
+                    int fps = 4;
+                    if (gifObj.mpImageTimeArray.count>0) {
+                        fps=1/[gifObj.mpImageTimeArray[0] floatValue];
+                    }
+                    
+                    NSLog(@"fps---->%d",fps);
+                    //此处取出来需要处理成当前沙盒目录的路径
+                    medObj = [[qxMediaObject alloc] initOverlayWithPhotoArray:arr withFPS:fps];
+                    stickerObj.gifObj = gifObj;
+                }else{
+                    medObj = [[qxMediaObject alloc] init];
+                    
+                    NSString * strFilePath=[obj.strFilePath relativeSandboxDocPath];//处理成当前版本沙盒目录下的文件路径
+                    [medObj setFilePath:strFilePath withType:eMT_Overlay fromAssetLibrary:NO];//gif不需要设置这一步
+                }
+                if (tmpObj.stickerType==0) {//内置表情不需要处理
+                    stickerObj.stickerName=tmpObj.stickerName;
+                }else{
+                    stickerObj.stickerName=[tmpObj.stickerName relativeSandboxDocPath];
+                }
+                
+                stickerObj.rotatef=tmpObj.rotatef;
+                stickerObj.stickerSize = tmpObj.stickerSize;
+                stickerObj.stickerType=tmpObj.stickerType;
+                stickerObj.centerPoint = tmpObj.centerPoint;
+                medObj.overlayCustomObj=stickerObj;
+                
+            }
+            [medObj setDisplayRect:obj.textDisplayRect];
+            [track addMediaObject:medObj];
+            [track updateTimeAtIndex:(int)track.mpMediaObjArray.count - 1 startTime:obj.startTimeOfTrack duration:obj.mediaOriginalDuration];
+        }
+    }
+    
+    return track;
+}
+
+/** 对图片进行初始化---防止内存溢出 */
+-(void)initUsableForSize:(CGSize) screenSize block:(void (^)(void))complete
+{
+    __weak qxTrack * weakSelf = self;
+    @autoreleasepool {
+        NSOperationQueue *queue = [[NSOperationQueue alloc] init];
+        [queue addOperationWithBlock:^{
+            
+            for (qxMediaObject * px in weakSelf.mpMediaObjArray) {
+                if (px.eType == eMT_Photo){
+                    [px makeUsable:CGSizeMake(9*screenSize.height/16, screenSize.height)];
+                }
+            }
+            
+            [[NSOperationQueue mainQueue] addOperationWithBlock:complete];
+        }];
+    }
+}
+-(void)reloadPhoto:(CGSize) screenSize block:(void (^)(void))complete
+{
+    __weak qxTrack * weakSelf = self;
+    @autoreleasepool {
+        NSOperationQueue *queue = [[NSOperationQueue alloc] init];
+        [queue addOperationWithBlock:^{
+            
+            for (qxMediaObject * px in weakSelf.mpMediaObjArray) {
+                if (px.eType == eMT_Photo){
+                    [px reloadPhoto];
+                }
+            }
+            
+            [[NSOperationQueue mainQueue] addOperationWithBlock:complete];
+        }];
+    }
+}
+
+-(void)initUsablePhotoForSize:(CGSize) screenSize block:(void (^)(void))complete
+{
+    __weak qxTrack * weakSelf = self;
+    @autoreleasepool {
+        NSOperationQueue *queue = [[NSOperationQueue alloc] init];
+        [queue addOperationWithBlock:^{
+            
+            for (qxMediaObject * px in weakSelf.mpMediaObjArray) {
+                if (px.eType == eMT_Photo){
+                    [px makeUsable:CGSizeMake(9*screenSize.height/16, screenSize.height)];
+                }
+            }
+            
+            [[NSOperationQueue mainQueue] addOperationWithBlock:complete];
+        }];
+    }
+}
+/** 查找指定时间之后最近的一个音频对象 */
+- (qxMediaObject*)findNearestAudioObjAfterTime:(Float64)second
+{
+    qxMediaObject *obj = nil;
+    if(self.mpMediaObjArray.count > 0){
+        NSMutableArray *tmpAudioArray = [[NSMutableArray alloc] init];
+        for(qxMediaObject *audioObj in self.mpMediaObjArray){
+            [tmpAudioArray addObject:audioObj];
+        }
+        //sort audio object by start time on track
+        NSArray *tmp = [tmpAudioArray sortedArrayUsingComparator:^(qxMediaObject *obj1, qxMediaObject *obj2){
+            NSComparisonResult result = NSOrderedSame;
+            Float64 t1 = CMTimeGetSeconds(obj1.startTimeOfTrack);
+            Float64 t2 = CMTimeGetSeconds(obj2.startTimeOfTrack);
+            if(t1 > t2){
+                result = NSOrderedDescending;
+            }else if(t1 < t2){
+                result = NSOrderedAscending;
+            }
+            return result;
+        }];
+        [tmpAudioArray removeAllObjects];
+        [tmpAudioArray addObjectsFromArray:tmp];
+        //find audio object
+        for(qxMediaObject *tmpObj in tmpAudioArray){
+            Float64 start = CMTimeGetSeconds(tmpObj.startTimeOfTrack);
+            if(start > second){
+                obj = tmpObj;
+                break;
+            }
+        }
+    }
+    return obj;
+}
+
+/** 
+ 支持多个字幕---同一时间可能对应多个对象,选择最后添加的一个
+ 查找在离指定时间之后的第一个字幕对象 
+ 
+ */
+- (qxMediaObject*)findNearestSubtitleObjAfterTime:(Float64)second
+{
+    qxMediaObject *obj = nil;
+    if(self.mpMediaObjArray.count > 0){
+        NSMutableArray *tmpOverlayArray = [NSMutableArray arrayWithArray:self.mpMediaObjArray];
+        NSMutableArray *tmpSubtitleArray = [[NSMutableArray alloc] init];
+        for(qxMediaObject *overlay in tmpOverlayArray){
+            if([overlay isTextObj]){
+                [tmpSubtitleArray addObject:overlay];
+            }
+        }
+        //sort text object by start time on track
+        NSArray *tmp = [tmpSubtitleArray sortedArrayUsingComparator:^(qxMediaObject *obj1, qxMediaObject *obj2){
+            NSComparisonResult result = NSOrderedSame;
+            Float64 t1 = CMTimeGetSeconds(obj1.startTimeOfTrack);
+            Float64 t2 = CMTimeGetSeconds(obj2.startTimeOfTrack);
+            if(t1 > t2){
+                result = NSOrderedDescending;
+            }else if(t1 < t2){
+                result = NSOrderedAscending;
+            }
+            return result;
+        }];
+        
+        [tmpSubtitleArray removeAllObjects];
+        [tmpSubtitleArray addObjectsFromArray:tmp];
+        //find text object
+        for(qxMediaObject *tmpObj in tmpSubtitleArray){
+            Float64 start = CMTimeGetSeconds(tmpObj.startTimeOfTrack);
+            if(start > second){
+                obj = tmpObj;
+                break;
+            }
+        }
+    }
+    return obj;
+}
+
+/** 
+ 支持多个sticker---同一时间可能对应多个对象,选择最后添加的一个
+ 查找在离指定时间之后的第一个sticker对象 
+ */
+- (qxMediaObject*)findNearestStickerObjAfterTime:(Float64)second
+{
+    qxMediaObject *obj = nil;
+    if(self.mpMediaObjArray.count > 0){
+        NSMutableArray *tmpOverlayArray = [NSMutableArray arrayWithArray:self.mpMediaObjArray];
+        NSMutableArray *tmpStickerArray = [[NSMutableArray alloc] init];
+        for(qxMediaObject *overlay in tmpOverlayArray){
+            if([overlay isStickerObj]){
+                [tmpStickerArray addObject:overlay];
+            }
+        }
+        //sort text object by start time on track
+        NSArray *tmp = [tmpStickerArray sortedArrayUsingComparator:^(qxMediaObject *obj1, qxMediaObject *obj2){
+            NSComparisonResult result = NSOrderedSame;
+            Float64 t1 = CMTimeGetSeconds(obj1.startTimeOfTrack);
+            Float64 t2 = CMTimeGetSeconds(obj2.startTimeOfTrack);
+            if(t1 > t2){
+                result = NSOrderedDescending;
+            }else if(t1 < t2){
+                result = NSOrderedAscending;
+            }
+            return result;
+        }];
+        [tmpStickerArray removeAllObjects];
+        [tmpStickerArray addObjectsFromArray:tmp];
+        //find text object
+        for(qxMediaObject *tmpObj in tmpStickerArray){
+            Float64 start = CMTimeGetSeconds(tmpObj.startTimeOfTrack);
+            if(start > second){
+                obj = tmpObj;
+                break;
+            }
+        }
+    }
+    return obj;
+}
+
+/** 删除指定的媒体文件并返回路径 */
+- (NSString *) delMediaObjectForMediaObj:(qxMediaObject *)mediaObj
+{
+    if (mediaObj==nil) {
+        return nil;
+    }
+    NSString * mediaObjPath = mediaObj.strFilePath;
+    NSMutableArray *audioArray = self.mpMediaObjArray;
+    NSUInteger index = [audioArray indexOfObject:mediaObj];
+    if(index < audioArray.count){
+        [self delMediaObject:(int)index];
+    }else{
+        return nil;
+    }
+    return mediaObjPath;
+}
+
+/** 删除通道内的多有媒体文件并返回路径 */
+- (void)delAllOfMediaObjects {
+    [self.mpMediaObjArray removeAllObjects];
+}
+
+@end

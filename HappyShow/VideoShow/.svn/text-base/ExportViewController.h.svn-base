@@ -1,0 +1,19 @@
+//
+//  ExportViewController.h
+//  VideoShow
+//
+//  Created by lance on 15/6/15.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+
+/** 用于显示导出对话框 */
+@interface ExportViewController : BaseViewController
+
+- (void)setExportProgress:(float)fPercent;
+
+//给按钮添加停止事件
+- (void) addTarget:(id)target action:(SEL)selector;
+
+@end

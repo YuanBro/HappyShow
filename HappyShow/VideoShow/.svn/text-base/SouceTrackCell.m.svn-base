@@ -1,0 +1,23 @@
+//
+//  SouceTrackCell.m
+//  VideoShow
+//
+//  Created by Mac on 16/1/12.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "SouceTrackCell.h"
+
+@implementation SouceTrackCell
+
+- (void)awakeFromNib {
+    // Initialization code
+}
+
+- (void)setSelected:(BOOL)selected animated:(BOOL)animated {
+    [super setSelected:selected animated:animated];
+
+    // Configure the view for the selected state
+}
+
+@end

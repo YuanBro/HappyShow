@@ -1,0 +1,768 @@
+//
+//  MaterialDownloadViewController.m
+//  VideoShow
+//
+//  Created by Mac on 16/1/12.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "MaterialDownloadViewController.h"
+#import "MaterialInf.h"
+#import "BaseService.h"
+#import "UIColor+Util.h"
+#import "UIImage+Util.h"
+#import "RotateNavigationController.h"
+
+#import "UIImageView+WebCache.h"
+#import "UITabBar+Badge.h"
+#import "MJRefresh.h"
+#import "StickerDownloader.h"
+#import "Util.h"
+#import "MaterialCell.h"
+#import "JSONKit.h"
+#import "StickerDownloader.h"
+#import "DownloadingSticker.h"
+#import "DownloadedSticker+CoreData.h"
+#import "DownloadingSticker+CoreData.h"
+#import "Toast+UIView.h"
+#import "VoiceController.h"
+#import "PlayMusicView.h"
+#import "AppDelegate.h"
+
+
+#define downVoiceUrl   @"http://tsso.videoshowapp.com:88/zone/1.0.1/soundClient/downloadMaterial.htm"
+#define downSoundUrl   @"http://tsso.videoshowapp.com:88/zone/1.0.1/musicClient/downloadMaterial.htm"
+
+#define requestVocieUrl @"http://tsso.videoshowapp.com:88/zone/1.0.1/soundClient/getSounds.htm?osType=2"
+#define requestSoundUrl  @"http://tsso.videoshowapp.com:88/zone/1.0.1/musicClient/getMusics.htm?osType=2"
+
+static NSString *cellIdentifier = @"MaterialCell";
+static  int verCode = 0;
+@interface MaterialDownloadViewController ()<StickerDownloaderDelegate,MaterialCellDelegate,AVAudioPlayerDelegate>{
+    UIView *netErrorView;
+    NSArray *predownloadList;
+}
+
+@property (nonatomic,assign) int pageIndex;
+
+@property (nonatomic,strong) NSMutableArray *mMaterials;//提供下载的素材列表
+
+
+@property (nonatomic,strong)PlayMusicView* playv;
+
+
+
+@property (nonatomic,weak) MaterialCell * materialCell;
+
+
+
+
+
+@end
+
+@implementation MaterialDownloadViewController
+@synthesize mMaterials,pageIndex,disableBack,typeId,titleText,disableSetting,downMarialDic;
+
+- (id)initWithStyle:(UITableViewStyle)style
+{
+    if(self = [super initWithStyle:style]){
+        
+    }
+    return self;
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    [self.tabBarController.tabBar removeBadgeOnItemIndex:0];
+    self.view.backgroundColor = [UIColor colorWithHexString:tableSectionColor];
+    mMaterials=[NSMutableArray array];
+    [self.navigationController.navigationBar initWithViewController:self title:titleText];
+    
+    if (disableBack==NO) {//允许显示返回
+        [self.navigationController.navigationBar initWithViewController:self leftImageName:@"ic_back_arrow.png" action:@selector(backTabAction:)];
+    }
+    if (disableSetting==YES)
+    {//允许显示返回
+        [self.navigationController.navigationBar initWithViewController:self rightImageName:@"bt_setting_normal.png" action:@selector(settingAction:)];
+    }
+    UINib *cellNib = [UINib nibWithNibName:cellIdentifier bundle:nil];
+    [self.tableView registerNib:cellNib forCellReuseIdentifier:cellIdentifier];
+    self.tableView.separatorColor = [UIColor colorWithHexString:@"#c8c7cc"];
+    
+    //request server
+    [self setupRefresh];
+    
+    
+    
+}
+
+- (void)didReceiveMemoryWarning
+{
+    [super didReceiveMemoryWarning];
+    
+}
+/**
+ *  集成刷新控件
+ */
+- (void)setupRefresh
+{
+    __weak MaterialDownloadViewController * weakSelf = self;
+    [self.tableView addHeaderWithCallback:^{
+        weakSelf.pageIndex = 1;
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSArray * results = [weakSelf requestPostWithPageIndex:1];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                if (results!=nil && results.count>0) {
+                    [weakSelf.mMaterials removeAllObjects];
+                    [weakSelf.mMaterials addObjectsFromArray:results];
+                    [weakSelf.tableView reloadData];
+                    [StickerDownloader sharedInstance].originalDataList=weakSelf.mMaterials;
+                }
+                
+                [weakSelf.tableView headerEndRefreshing];
+            });
+            
+        });
+        
+    }];
+    
+    [self.tableView addFooterWithCallback:^{
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSArray * results = nil;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                if (results!=nil && results.count>0) {
+                    [weakSelf.mMaterials addObjectsFromArray:results];
+                    
+                    [weakSelf.tableView reloadData];
+                    [StickerDownloader sharedInstance].originalDataList=weakSelf.mMaterials;
+                    
+                    
+                }
+                
+                [weakSelf.tableView footerEndRefreshing];
+            });
+        });
+        
+    }];
+    
+//    NSLog(@"%d",_inf.status);
+//    
+//    [self setButtonStyleWithStickerStatus:_inf.status];
+    
+    self.tableView.headerPullToRefreshText = NSLocalizedString(@"header_pull_refresh", nil);
+    self.tableView.headerReleaseToRefreshText = NSLocalizedString(@"header_release_refresh", nil);
+    self.tableView.headerRefreshingText = NSLocalizedString(@"load_refreshing", nil);
+    
+    self.tableView.footerPullToRefreshText = NSLocalizedString(@"footer_pull_refresh", nil);
+    self.tableView.footerReleaseToRefreshText = NSLocalizedString(@"footer_release_refresh", nil);
+    self.tableView.footerRefreshingText = NSLocalizedString(@"load_refreshing", nil);
+    [self.tableView headerBeginRefreshing];
+}
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
+{
+    return UIInterfaceOrientationMaskPortrait;
+}
+
+- (void)hideNetErrorView
+{
+    netErrorView.hidden = YES;
+}
+- (void)settingAction:(id)sender
+{
+    
+    VoiceController *voiController = [[VoiceController alloc] initWithStyle:UITableViewStylePlain];
+    
+    voiController.materialType = self.materialType;
+    
+    
+    RotateNavigationController *nav = [[RotateNavigationController alloc] initWithRootViewController:voiController];
+    
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [StickerDownloader sharedInstance].delegate = self;
+    //query local data
+    predownloadList = [DownloadingSticker queryAll];
+    [self.tableView reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+}
+
+-(void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    if ([self.mainDelegate respondsToSelector:@selector(controllerDidAppear:)])
+    {
+        [self.mainDelegate controllerDidAppear:self];
+    }
+    
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    if ([self.mainDelegate respondsToSelector:@selector(controllerDidDisappear:)]) {
+        [self.mainDelegate controllerDidDisappear:self];
+    }
+}
+
+- (void)reloadAction:(id)sender
+{
+    [self hideNetErrorView];
+    
+    [self.tableView headerBeginRefreshing];
+}
+
+- (void)backTabAction:(id)sender
+{
+    switch (self.materialType)
+    {
+        case MaterialTypeSoundtrack:
+        {
+            
+            [self.navigationController popViewControllerAnimated:YES];
+            [_playv.player stop];
+            
+        }
+            break;
+            
+        case MaterialTypeSouce:
+        {
+            [self dismissViewControllerAnimated:YES completion:nil];
+        }
+            break;
+            
+        default:
+            
+            break;
+    }
+    
+}
+
+
+
+#pragma mark - UITableViewDataSource
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    return mMaterials.count;
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+{
+    
+    return 1;
+}
+
+-(CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    return 70.0;
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    MaterialInf * inf = (MaterialInf*)mMaterials[indexPath.row];
+    
+    
+    
+    MaterialCell *cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier];
+    
+    if (!cell) {
+        cell = [[MaterialCell alloc]initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:cellIdentifier];
+    }
+    inf.status = [self checkStickerStatus:inf.id version:inf.ver_code];
+    
+    cell.cellDelegate = self;
+    cell.materialID = inf.id;
+    cell.downbutton.tag = indexPath.row;
+    cell.titleLabel.text = inf.material_name;
+    
+    cell.status = inf.status;
+    
+    cell.materialInf=inf;
+    
+    cell.Sound.hidden=YES;
+    
+    cell.titleLabel.text=inf.material_name;
+    
+    [cell.titleLabel sizeToFit];
+    
+    
+    if(inf.is_new==0)
+    {
+        
+        cell.imagev.hidden = NO;
+        
+    }
+    else
+    {
+        
+        cell.imagev.hidden = YES;
+        
+    }
+    
+    switch (cell.status)
+    {
+        case 0://download
+            
+            cell.downbutton.selected=NO;
+            
+            CGFloat r =245.0/255.0;
+            CGFloat g = 72.0/255.0;
+            CGFloat b = 105.0/255.0;
+            CGFloat a = 1;
+            CGFloat components[4] = {r,g,b,a};
+            CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+            
+            [cell.downbutton.layer setBorderColor:CGColorCreate(colorSpace, components)];
+            
+            cell.downbutton.layer.borderWidth=1.5;
+            
+            [cell.downbutton setTintColor:[UIColor colorWithCGColor:CGColorCreate(colorSpace, components)]];
+          [cell.downbutton setTitle:@"下载" forState:0];
+            break;
+            
+        case 1://update
+      
+            [cell.downbutton setTitle:@"下载中" forState:0];
+            
+            cell.downbutton.selected=NO;
+                [cell.downbutton.layer setBorderColor:[UIColor grayColor].CGColor];
+            
+        case 2://finished
+            
+ 
+            [cell.downbutton setTitle:@"已下载" forState:0];
+            
+            [cell.downbutton setTitleColor:[UIColor grayColor] forState:0];
+            [cell.downbutton.layer setBorderColor:[UIColor grayColor].CGColor];
+            
+            cell.downbutton.alpha=0.7;
+            
+            cell.selected=NO;
+            
+            break;
+            
+        case 3://downloading
+            
+            [cell.downbutton setTitle:@"下载中" forState:0];
+            
+            cell.downbutton.selected=NO;
+            
+             [cell.downbutton.layer setBorderColor:[UIColor grayColor].CGColor];
+            
+            
+            break;
+            
+        default:
+            break;
+    }
+    return cell;
+}
+
+#pragma mark - UITableViewDelegate
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    [tableView deselectRowAtIndexPath:indexPath animated:NO];
+    
+    MaterialInf * inf = mMaterials[indexPath.row];
+    
+    /*----------------配乐----------------*/
+    if(self.materialType==MaterialTypeSoundtrack)
+    {
+        _playv=[[[NSBundle mainBundle] loadNibNamed:@"PlayMusicView" owner:nil options:nil]lastObject];
+        
+        if(inf.status==2)
+        {
+            _playv.Load.hidden=YES;
+            
+        }
+        _playv.backView=[[UIView alloc]initWithFrame:[UIScreen mainScreen].bounds];
+        
+        AppDelegate* app=[AppDelegate shareInstance];
+        
+        _playv.center=app.window.center;
+        
+        [app.window addSubview:_playv.backView];
+        
+        [_playv.backView addSubview:_playv];
+        
+        _playv.backView.backgroundColor=[[UIColor blackColor] colorWithAlphaComponent:0.5];
+        
+        _playv.musicType=inf.material_pic;
+        
+        _playv.musicName.text=inf.material_name;
+        
+    }
+    /*----------------音效----------------*/
+    else
+    {
+        
+        self.materialCell = [tableView cellForRowAtIndexPath:indexPath];
+        // self.materialCell.Sound.hidden=NO;
+        
+        
+        [self  resetAudioPlayerWithMediaURL:[NSURL URLWithString:inf.material_pic]];
+        
+        
+        
+    }
+}
+/*----------------下载音乐----------------*/
+-(void)resetAudioPlayerWithMediaURL:(NSURL*)url
+{
+    /*
+     以下两行将任务排程到一个后台线程执行,dispatch_get_global_queue会取得一个系统分配的后台任务队列。
+     */
+    dispatch_queue_t queue1 = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+    dispatch_async(queue1, ^{
+        
+        // 后台线程上执行了。
+        NSURLRequest* request=[NSURLRequest requestWithURL:url];
+        
+        NSData* data=[NSURLConnection sendSynchronousRequest:request returningResponse:nil error:nil];
+        
+        audioPlayer=[[AVAudioPlayer alloc]initWithData:data error:nil];
+        audioPlayer.numberOfLoops =0.5;
+        audioPlayer.delegate = self;
+        [audioPlayer prepareToPlay];
+        audioPlayer.volume=0.5;
+        
+        /*
+         因为有UI操作，所以需要切换回主线程。一般原则：
+         1. UI操作必须在主线程上完成。
+         2. 耗时的同步网络、同步IO、运算等操作不要在主线程上跑，以避免阻塞
+         dispatch_get_main_queue()会返回关联到主线程的那个任务队列。
+         */
+        
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            
+            [audioPlayer play];
+            
+        });
+    });
+    
+}
+
+
+/*----------------播放音乐----------------*/
+-(void)player
+{
+    [audioPlayer play];
+    if(audioPlayer.playing)
+    {
+
+       self.materialCell.Sound.hidden=NO;
+
+   }
+   else
+   {
+        self.materialCell.Sound.hidden=YES;
+
+    }
+
+}
+
+
+//检测已经播放完成的方法
+- (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag
+{
+    
+    self.materialCell.Sound.hidden=YES;
+    
+}
+
+#pragma mark - MaterialCellDelegate
+
+//点击下载按钮
+
+- (void)downAction:(UIButton *)item
+
+{
+    
+    self.inf = (MaterialInf*)mMaterials[item.tag];
+    
+    [item setTitle:@" 下载中" forState:0];
+    
+    item.selected=NO;
+
+    int newVerCode = _inf.ver_code;
+    
+    NSArray *downloadedArray = [DownloadedSticker queryByID:_inf.id];
+    
+    if(downloadedArray.count > 0)
+    {
+        verCode = ((DownloadedSticker*)downloadedArray[0]).version_code.intValue;
+    }
+    
+    NSString * base_url;
+    
+    switch (self.materialType)
+    {
+        case MaterialTypeSouce:
+        {
+            base_url =downVoiceUrl;
+            [StickerDownloader sharedInstance].materialType = MaterialTypeSouce;
+        }
+            break;
+        case MaterialTypeSoundtrack:
+        {
+            base_url = downSoundUrl;
+            [StickerDownloader sharedInstance].materialType = MaterialTypeSoundtrack;
+        }
+            break;
+        default:
+            break;
+    }
+    NSString *lan = [Util preferredLanguage];
+    lan = [Util currentLanguageIszhCN] ? @"zh-CN" : lan;
+    NSString *requestId = [NSString stringWithFormat:@"%f%u",[[NSDate date]timeIntervalSince1970] *1000,arc4random() % 1000];
+    NSString *urlStr = [NSString stringWithFormat:@"%@/?materialId=%d&requestId=%@",base_url,_inf.id,requestId];
+    
+    [[StickerDownloader sharedInstance] addDownloadTask:[NSURL URLWithString:urlStr] stickerID:_inf.id isUpdate:(newVerCode > verCode)];
+}
+
+-(NSMutableArray *) requestPostWithPageIndex:(int)index
+{
+    NSString *lan = [Util currentLanguageIszhCN] ? @"zh-CN" : @"en-US";
+    
+    NSString *url ;
+    NSMutableDictionary * dic = [[NSMutableDictionary alloc]init];
+    switch (self.materialType)
+    {
+        case MaterialTypeSouce:
+        {
+            url = requestVocieUrl;
+            [dic setValue:@"7" forKey:@"materialType"];
+        }
+            break;
+        case MaterialTypeSoundtrack:
+        {
+            url = requestSoundUrl;
+            
+            [dic setValue:self.typeId forKey:@"typeId"];
+            
+            [dic setValue:@"7" forKey:@"materialType"];
+            
+        }
+            break;
+            
+        default:
+            
+            break;
+    }
+    
+    [dic setValue:0 forKey:@"startId"];
+    
+    [dic setValue:lan forKey:@"lang"];
+    [dic setValue:@"1.9.5" forKey:@"versionName"];
+    
+    NSString *requestId = [NSString stringWithFormat:@"%i%u",(int)[[NSDate date]timeIntervalSince1970] *1000,arc4random() % 10000];
+    
+    [dic setValue: requestId forKey:@"requestId"];
+    
+    NSString * result = [BaseService doPostRequestcUrl:url dict:dic];
+    
+    if (result==nil || [result isEqualToString:@""])
+    {
+        
+        return nil;
+        
+    }
+    
+    NSDictionary *dict = [result objectFromJSONString];
+    
+    if(dict && [dict[@"retMsg"] isEqualToString:@"success"])
+    {
+        
+        NSArray * jsonArr = dict[@"materiallist"];
+        
+        return [MaterialInf initFromArr:jsonArr];
+        
+    }
+    else
+    {
+        return nil;
+    }
+    
+    return nil;
+}
+- (int)checkStickerStatus:(int)materialID version:(int)version
+{
+    DownloadedSticker * tmpSticker=[DownloadedSticker queryByMaterialID:materialID];
+    int res = 0;    //download
+    if(tmpSticker.material_id.intValue == materialID)
+    {//先判断是否已经下载过
+        if(tmpSticker.version_code.intValue < version)
+        {
+            res = 1;//update
+        }
+        else
+            
+        {
+            res = 2;//finished
+            
+        }
+        
+    }
+    
+    if(res == 0){//判断是否处于下载中
+        if(predownloadList && predownloadList.count > 0){
+            for(DownloadingSticker *tmp in predownloadList){
+                if(tmp.material_id.integerValue == materialID){
+                    res = 3;//downloading
+                    break;
+                }
+            }
+        }
+    }
+    return res;
+}
+/*----------------设置下载按钮的状态----------------*/
+- (void)setButtonStyleWithStickerStatus:(int)status
+{
+    _inf.status=status;
+    
+    switch (status) {
+            
+        case 0://download
+            self.materialCell.downbutton.selected=NO;
+            
+            [self.materialCell.downbutton setTitle:@"下载" forState:UIControlStateNormal];
+       
+            
+            break;
+            
+        case 1://update
+
+            [self.materialCell.downbutton setTitle:@"下载" forState:UIControlStateNormal];
+            
+
+            
+        case 2://finished
+            
+            [self.materialCell.downbutton setTitle:@"已下载" forState:1];
+            
+            self.materialCell.downbutton.selected=NO;
+            
+            self.materialCell.downbutton.alpha=0.6;
+            
+            [self.materialCell.downbutton setBackgroundColor:[UIColor grayColor]];
+            
+            
+            break;
+            
+        case 3://downloading
+           
+            [self.materialCell.downbutton setTitle:@"下载中" forState:1];
+            self.materialCell.downbutton.selected=NO;
+    
+            break;
+            
+        default:
+            break;
+    }
+}
+
+- (void)stickerFailDownload:(int)stickerID
+{ if(stickerID == _inf.id)
+{
+    [self.view makeToast:NSLocalizedString(@"Download Fail", nil) duration:1.5 position:@"bottom"];
+    NSArray *array = [DownloadedSticker queryByID:stickerID];
+    if(array && array.count > 0){
+        [self setButtonStyleWithStickerStatus:1];//update
+    }else{
+        [self setButtonStyleWithStickerStatus:0];//download
+    }
+}
+}
+
+- (void)stickerFinishDownload:(int)stickerID
+{
+    
+    if(stickerID ==_inf.id){
+        [self setButtonStyleWithStickerStatus:2];
+        //finished
+    }
+    predownloadList = [DownloadingSticker queryAll];
+ 
+    [self.tableView reloadData];
+}
+
+- (void)stickerStartDownload:(int)stickerID
+{
+    
+    if(stickerID ==_inf.id)
+    {
+        //downloading
+        
+        [self setButtonStyleWithStickerStatus:3];
+    }
+    
+     [self updateCurrentDownloadingCell:stickerID];
+}
+
+- (void)updateCurrentDownloadingCell:(int)stickerID
+
+{
+    for(int i = 0; i < mMaterials.count; i++)
+    {
+        MaterialInf * inf = mMaterials[i];
+        
+        if(inf.id == stickerID)
+        {
+            [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForItem:i inSection:0]] withRowAnimation:UITableViewRowAnimationFade];
+            break;
+        }
+    }
+}
+
+#pragma mark - StickerDownloaderDelegate
+
+- (void)sticker:(int)stickerID downloadProgress:(float)progress
+{
+    
+    if(stickerID == _inf.id)
+    {
+
+        self. materialCell = [downMarialDic objectForKey:[[NSString alloc]initWithFormat:@"%i",stickerID]];
+
+        
+        
+        NSString* value=[NSString stringWithFormat:@"%0.f%%",progress*100];
+  
+        NSLog(@"material progress 进度 %@",value);
+    }
+}
+
+- (void)layoutSubviews
+{
+    for (PlayMusicView *view in self.superclass)
+    {
+        if ([view isKindOfClass:[PlayMusicView class]])
+        {
+            CGRect rect = view.frame;
+            //50 是初始化的y值 最好不要用rect.origin.y作+=运算
+            rect.origin.y = 50 + self.tableView.   contentOffset.y;
+            view.frame = rect;
+        }
+        
+    }
+}
+@end

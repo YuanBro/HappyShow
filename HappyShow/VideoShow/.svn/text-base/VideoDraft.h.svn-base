@@ -1,0 +1,24 @@
+//
+//  VideoDraft.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-8-27.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+
+@class qxTimeline;
+
+/** 用于预览的草稿 */
+@interface VideoDraft : NSObject<NSCoding>
+
+@property (nonatomic,assign) NSInteger videoMode;//视频模式---智能/方块
+@property (nonatomic,strong) qxTimeline *timeline;
+@property (nonatomic,strong,readonly) NSDate *createDate;
+@property (nonatomic,strong) NSString *draftPath;//该属性没有参与归档
+
+/** 使用timeline初始化草稿 */
+- (id)initWithTimeline:(qxTimeline*)timeline;
+
+@end

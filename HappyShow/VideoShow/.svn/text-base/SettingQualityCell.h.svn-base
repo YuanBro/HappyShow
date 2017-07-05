@@ -1,0 +1,16 @@
+//
+//  SettingQualityCell.h
+//  VideoShow
+//
+//  Created by lance on 15/5/7.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+@interface SettingQualityCell : UITableViewCell
+
+@property (nonatomic,weak) IBOutlet UILabel * labelText;
+@property (nonatomic,weak) IBOutlet UIButton * btnMarker;
+
+@end

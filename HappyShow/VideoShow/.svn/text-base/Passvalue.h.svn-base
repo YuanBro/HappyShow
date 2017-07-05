@@ -1,0 +1,26 @@
+//
+//  Passvalue.h
+//  VideoShow
+//
+//  Created by admin on 16/2/3.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+
+@interface Passvalue : NSObject
+
+
+@property (nonatomic,strong)NSDictionary * dic;
+//
+//@property (nonatomic,assign)NSNumber * themeVerCode;
+//@property (nonatomic,strong)NSNumber * musicVerCode;
+//@property (nonatomic,strong)NSNumber * soundVerCode;
+
+//[dicc setObject:_dict[@"themeVerCode"] forKey:@"themeVerCode"];
+//[dicc setObject:_dict[@"musicVerCode"] forKey:@"musicVerCode"];
+//[dicc setObject:_dict[@"soundVerCode"] forKey:@"soundVerCode"];
+
+
++(instancetype)share;
+@end

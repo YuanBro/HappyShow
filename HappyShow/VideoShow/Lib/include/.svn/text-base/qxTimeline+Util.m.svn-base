@@ -1,0 +1,161 @@
+//
+//  qxTimeline+Util.m
+//  VideoShow
+//
+//  Created by lance on 15/6/2.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "qxTimeline+Util.h"
+#import "qxTrack+Util.h"
+#import "qxMediaObject+Util.h"
+
+@implementation qxTimeline (Util)
+
+
+// 返回视频通道
+- (qxTrack *)getTrackForVideo {
+    return [self getTrackFromTimeline:0];
+}
+
+// 返回配乐通道
+- (qxTrack *)getTrackForMusic {
+    return [self getTrackFromTimeline:1];
+}
+
+// 返回音频通道
+- (qxTrack *)getTrackForAudio {
+    return [self getTrackFromTimeline:2];
+}
+
+// 返回字幕或者sticker
+- (qxTrack *)getTrackForOverlay {
+    return [self getTrackFromTimeline:3];
+}
+
+/** 获取所有的sticker集合 */
+- (NSMutableArray *)getAllStickers {
+    
+    qxTrack *track = [self getTrackForOverlay];
+    return [track findStickerObjects];
+}
+
+/** 获取所有的字幕集合 */
+- (NSMutableArray *)getAllSubtitles {
+    
+    qxTrack *track = [self getTrackForOverlay];
+    return [track findTextObjects];
+}
+
+// 获取指定时间的sticker列表
+- (NSMutableArray*) getStickerObjectsAtTime:(CGFloat)second {
+
+    qxTrack *overlayTrack = [self getTrackForOverlay];
+    NSMutableArray *resultArray = [overlayTrack findStickerObjectsAtSecond:second];
+    
+    return resultArray;
+}
+
+// 获取指定时间的text列表
+- (NSMutableArray *)getTextObjectsAtTime:(CGFloat)second {
+    qxTrack *overlayTrack = [self getTrackForOverlay];
+    NSMutableArray *resultArray = [overlayTrack findTextObjectsAtSecond:second];
+    
+    return resultArray;
+}
+
+- (BOOL)hasSubtitle
+{
+    BOOL flag = NO;
+    NSArray *array = [self getTrackFromTimeline:3].mpMediaObjArray;
+    if(array.count > 0){
+        for(qxMediaObject *obj in array){
+            if([obj isTextObj]){
+                flag = YES;
+                break;
+            }
+        }
+    }
+    return flag;
+}
+
+/** 默认添加拍摄的视频后初始化对象 */
++ (qxTimeline*)timelineWithVideoPath:(NSString*)videoPath
+{
+    if(videoPath==nil){
+        return nil;
+    }
+    qxTimeline *timeline = [[qxTimeline alloc] init];
+    float percent=0.5;
+    //
+    qxTrack *videoTrack = [[qxTrack alloc] initWithTrackType:eMT_Video];
+    qxMediaObject *obj = [[qxMediaObject alloc] init];
+    [obj setFilePath:videoPath withType:eMT_Video fromAssetLibrary:YES];
+    
+    [videoTrack addMediaObject:obj];
+    [timeline addTrack:videoTrack];
+    //music
+    qxTrack *musicTrack = [[qxTrack alloc] initWithTrackType:eMT_Audio];
+    [timeline addTrack:musicTrack];
+    //audio
+    qxTrack *audioTrack = [[qxTrack alloc] initWithTrackType:eMT_Audio];
+    [timeline addTrack:audioTrack];
+    //sticker
+    qxTrack *stickerTrack = [[qxTrack alloc] initWithTrackType:eMT_Overlay];
+    [timeline addTrack:stickerTrack];
+    
+    [timeline setAudioPercent:percent];
+    
+    return timeline;
+}
+
+/** 设置视频与音频的音量---按百分比计算 */
+- (void) setAudioPercent:(float) audioPercent
+{
+    qxTrack *videoTrack = [self getTrackFromTimeline:0];
+    qxTrack *musicTrack = [self getTrackFromTimeline:1];
+    qxTrack *audioTrack = [self getTrackFromTimeline:2];
+    [videoTrack setAudioPercent:1-audioPercent];
+    [musicTrack setAudioPercent:audioPercent];
+    [audioTrack setAudioPercent:audioPercent];
+}
+
+/** 利用反序列化的timeline重建---与底层关联 */
++ (qxTimeline *) createTimelineForTimeline:(qxTimeline *)timelinep
+{
+    if (timelinep==nil || [timelinep getTrackCount] < 4) {
+        return nil;
+    }
+    qxTimeline *resultTimeline = [[qxTimeline alloc] init];
+    qxTrack *track = nil;
+    track = [qxTrack createVideoTrack:[timelinep getTrackFromTimeline:0]];
+    if(!track){
+        return nil;
+    }
+    [resultTimeline addTrack:track];
+    
+    //music track
+    track = [qxTrack createMusicTrack:[timelinep getTrackFromTimeline:1]];
+    if(!track){
+        return nil;
+    }
+    [resultTimeline addTrack:track];
+    
+    //audio track
+    track = [qxTrack createAudioTrack:[timelinep getTrackFromTimeline:2]];
+    if(!track){
+        return nil;
+    }
+    [resultTimeline addTrack:track];
+    
+    //overlay track
+    track = [qxTrack createOverlayTrack:[timelinep getTrackFromTimeline:3]];
+    if(!track){
+        return nil;
+    }
+    [resultTimeline addTrack:track];
+    
+    return resultTimeline;
+}
+
+@end

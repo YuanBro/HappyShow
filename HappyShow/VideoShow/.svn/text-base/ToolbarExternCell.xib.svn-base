@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="9531" systemVersion="14F1605" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES">
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="9529"/>
+        <capability name="Aspect ratio constraints" minToolsVersion="5.1"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner"/>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <collectionViewCell opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" reuseIdentifier="ToolbarExternCell" id="gTV-IL-0wX" customClass="ToolbarExternCell">
+            <rect key="frame" x="0.0" y="0.0" width="90" height="120"/>
+            <autoresizingMask key="autoresizingMask"/>
+            <view key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center">
+                <rect key="frame" x="0.0" y="0.0" width="90" height="120"/>
+                <subviews>
+                    <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="a2J-V4-Zop">
+                        <rect key="frame" x="0.0" y="0.0" width="90" height="90"/>
+                        <constraints>
+                            <constraint firstAttribute="width" secondItem="a2J-V4-Zop" secondAttribute="height" multiplier="1:1" id="lAQ-1q-TXU"/>
+                        </constraints>
+                    </imageView>
+                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="oKU-Sp-uWt">
+                        <rect key="frame" x="29" y="95" width="33" height="20"/>
+                        <fontDescription key="fontDescription" type="system" pointSize="13"/>
+                        <color key="textColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                        <nil key="highlightedColor"/>
+                    </label>
+                </subviews>
+                <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="calibratedWhite"/>
+            </view>
+            <constraints>
+                <constraint firstAttribute="bottom" secondItem="oKU-Sp-uWt" secondAttribute="bottom" constant="5" id="3Cg-Yg-HUU"/>
+                <constraint firstItem="a2J-V4-Zop" firstAttribute="top" secondItem="gTV-IL-0wX" secondAttribute="top" id="F08-L3-hrO"/>
+                <constraint firstItem="oKU-Sp-uWt" firstAttribute="top" secondItem="a2J-V4-Zop" secondAttribute="bottom" constant="5" id="LZu-w6-iFi"/>
+                <constraint firstItem="oKU-Sp-uWt" firstAttribute="centerX" secondItem="gTV-IL-0wX" secondAttribute="centerX" id="azo-yd-7ti"/>
+                <constraint firstItem="a2J-V4-Zop" firstAttribute="leading" secondItem="gTV-IL-0wX" secondAttribute="leading" id="oDm-Jd-j7S"/>
+                <constraint firstAttribute="trailing" secondItem="a2J-V4-Zop" secondAttribute="trailing" id="qDa-LE-sxp"/>
+            </constraints>
+            <size key="customSize" width="172" height="153"/>
+            <connections>
+                <outlet property="iconIV" destination="a2J-V4-Zop" id="BCv-Rw-JuB"/>
+                <outlet property="titleLB" destination="oKU-Sp-uWt" id="hPR-GJ-fNx"/>
+            </connections>
+            <point key="canvasLocation" x="430" y="355"/>
+        </collectionViewCell>
+    </objects>
+</document>

@@ -1,0 +1,128 @@
+//
+//  DemoFilterViewController.m
+//  VideoShow
+//
+//  Created by MingweiShen on 16/2/26.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "DemoFilterViewController.h"
+#import "MBProgressHUD.h"
+
+#import "qxEffectMgr.h"
+
+#import "PlayerViewController.h"
+
+@interface DemoFilterViewController ()
+-(IBAction)addFilter:(id)sender;
+-(IBAction)showFilter:(id)sender;
+-(IBAction)removeFilter:(id)sender;
+
+-(IBAction)closeAction:(id)sender;
+@end
+
+@implementation DemoFilterViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    // Do any additional setup after loading the view from its nib.
+}
+
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+/*
+#pragma mark - Navigation
+
+// In a storyboard-based application, you will often want to do a little preparation before navigation
+- (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender {
+    // Get the new view controller using [segue destinationViewController].
+    // Pass the selected object to the new view controller.
+}
+*/
+
+/*
+ 给视频通道里面的第index对象添加第index1滤镜
+ */
+-(IBAction)addFilter:(id)sender{
+    UIAlertController * pv = [UIAlertController alertControllerWithTitle:@"Filter" message:@"add Filter" preferredStyle:UIAlertControllerStyleAlert];
+    [pv addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
+        textField.placeholder = @"Clip Index";
+    }];
+    
+    [pv addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
+        textField.placeholder = @"Effect ID";
+    }];
+
+    UIAlertAction * action = [UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        
+        int index = [pv.textFields[0].text intValue];
+        qxTrack * track = [_timeline getTrackFromTimeline:0];
+        
+        if (index >= track.mpMediaObjArray.count || index < 0){
+            [self showToast:@"Clip Index不对"];
+        }
+        else{
+            int index1 = [pv.textFields[1].text intValue];
+            if (index1 <= eEffect_None || index1 >= eEffect_Count) {
+                [self showToast:@"Effect Id不对"];
+            }
+            else{
+                qxMediaObject * obj = track.mpMediaObjArray[index];
+                [obj setEffect:index1];
+            }
+        }
+    }];
+    [pv addAction:action];
+    [self presentViewController:pv animated:YES completion:nil];
+}
+
+
+-(IBAction)showFilter:(id)sender{
+    NSString * str = @"";
+    qxTrack * track = [_timeline getTrackFromTimeline:0];
+    int index = 0;
+    for (qxMediaObject * obj in track.mpMediaObjArray) {
+        if (obj.effect_def != eEffect_None){ //片段中已经添加上的滤镜
+            str = [str stringByAppendingString:[NSString stringWithFormat:@"片段%d, 滤镜Name:%@\n", index, [[qxEffectMgr sharedInstance] getEffectNameById:obj.effect_def]]];
+        }
+        
+        index ++;
+    }
+    UIAlertController * pv = [UIAlertController alertControllerWithTitle:@"Filter" message:str preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertAction * action = [UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        
+    }];
+    [pv addAction:action];
+    [self presentViewController:pv animated:YES completion:nil];
+}
+
+-(IBAction)removeFilter:(id)sender{
+    qxTrack * track = [_timeline getTrackFromTimeline:0];
+    for (qxMediaObject * obj in track.mpMediaObjArray) {
+        obj.effect_def = eEffect_None;
+    }
+}
+
+-(IBAction)closeAction:(id)sender{
+    if (_delegate){
+        [_delegate videoEdit:self type:EditTypeFilter editFlag:YES];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+-(void)showToast:(NSString*)str{
+    MBProgressHUD* hud = [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+    hud.labelText = str;
+    [self performSelector:@selector(hideHud) withObject:self afterDelay:1.5];
+}
+
+-(void)hideHud{
+    [MBProgressHUD hideHUDForView:self.view animated:NO];
+}
+
+
+
+@end

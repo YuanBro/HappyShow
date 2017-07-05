@@ -1,0 +1,27 @@
+//
+//  UIView+FirstResponder.m
+//  VideoShow
+//
+//  Created by lance on 15/6/17.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "UIView+FirstResponder.h"
+
+@implementation UIView (FirstResponder)
+
+/** 判断键盘是否显示 */
+- (BOOL) hasFirstResponder
+{
+    if ([self isFirstResponder]) {
+        return YES;
+    }
+    
+    for (UIView * subView in self.subviews) {
+        if ([subView hasFirstResponder])
+            return YES;
+    }
+    return NO;
+}
+
+@end

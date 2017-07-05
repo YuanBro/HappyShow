@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="9531" systemVersion="15C50" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES">
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="9529"/>
+        <capability name="Aspect ratio constraints" minToolsVersion="5.1"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner"/>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <tableViewCell contentMode="scaleToFill" selectionStyle="none" indentationWidth="10" reuseIdentifier="StudioVideoCell" rowHeight="320" id="KGk-i7-Jjw" customClass="StudioVideoCell">
+            <rect key="frame" x="0.0" y="0.0" width="320" height="410"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+            <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" tableViewCell="KGk-i7-Jjw" id="H2p-sc-9uM">
+                <rect key="frame" x="0.0" y="0.0" width="320" height="409"/>
+                <autoresizingMask key="autoresizingMask"/>
+                <subviews>
+                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="UjN-hA-CDl">
+                        <rect key="frame" x="0.0" y="0.0" width="320" height="10"/>
+                        <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="calibratedWhite"/>
+                        <constraints>
+                            <constraint firstAttribute="height" constant="10" id="76f-uZ-dmE"/>
+                        </constraints>
+                    </view>
+                    <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Hzy-O6-QkR">
+                        <rect key="frame" x="0.0" y="10" width="320" height="399"/>
+                        <subviews>
+                            <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="2014 - 8 - 23  14 : 24" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Wcw-6h-AYk">
+                                <rect key="frame" x="10" y="0.0" width="130" height="40"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="40" id="SpL-tt-zXt"/>
+                                    <constraint firstAttribute="height" constant="40" id="g9A-Q3-xCZ"/>
+                                </constraints>
+                                <fontDescription key="fontDescription" type="system" pointSize="13"/>
+                                <color key="textColor" white="0.33333333333333331" alpha="1" colorSpace="calibratedWhite"/>
+                                <nil key="highlightedColor"/>
+                                <variation key="default">
+                                    <mask key="constraints">
+                                        <exclude reference="g9A-Q3-xCZ"/>
+                                    </mask>
+                                </variation>
+                                <variation key="heightClass=regular-widthClass=compact">
+                                    <mask key="constraints">
+                                        <include reference="g9A-Q3-xCZ"/>
+                                    </mask>
+                                </variation>
+                            </label>
+                            <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="mgw-Af-SB6">
+                                <rect key="frame" x="0.0" y="38" width="320" height="320"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" secondItem="mgw-Af-SB6" secondAttribute="height" multiplier="1:1" id="epg-2S-pyw"/>
+                                </constraints>
+                            </imageView>
+                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="p59-3s-ihO">
+                                <rect key="frame" x="135" y="171" width="51" height="51"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" secondItem="p59-3s-ihO" secondAttribute="height" multiplier="1:1" id="EGh-Ti-YxO"/>
+                                    <constraint firstAttribute="width" constant="51" id="cNU-lT-RAK"/>
+                                </constraints>
+                                <state key="normal" image="bt_play.png">
+                                    <color key="titleShadowColor" white="0.5" alpha="1" colorSpace="calibratedWhite"/>
+                                </state>
+                                <connections>
+                                    <action selector="controlAction:" destination="KGk-i7-Jjw" eventType="touchUpInside" id="rjU-P5-JVE"/>
+                                </connections>
+                            </button>
+                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="QLA-Kf-fro">
+                                <rect key="frame" x="245" y="366" width="60" height="25"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="60" id="deO-Ha-429"/>
+                                    <constraint firstAttribute="height" constant="25" id="mzA-8K-HqU"/>
+                                </constraints>
+                                <inset key="contentEdgeInsets" minX="5" minY="0.0" maxX="5" maxY="0.0"/>
+                                <state key="normal" image="bt_delete.png">
+                                    <color key="titleColor" white="0.33333333333333331" alpha="1" colorSpace="calibratedWhite"/>
+                                    <color key="titleShadowColor" white="0.5" alpha="1" colorSpace="calibratedWhite"/>
+                                </state>
+                                <connections>
+                                    <action selector="deleteAction:" destination="KGk-i7-Jjw" eventType="touchUpInside" id="Hrc-a0-Btq"/>
+                                </connections>
+                            </button>
+                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="AXi-Aw-aTQ">
+                                <rect key="frame" x="187" y="366" width="50" height="25"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="50" id="Tx5-6Y-Uqw"/>
+                                    <constraint firstAttribute="height" constant="25" id="cpI-w4-Mno"/>
+                                </constraints>
+                                <state key="normal" image="bt_share.png">
+                                    <color key="titleShadowColor" white="0.5" alpha="1" colorSpace="calibratedWhite"/>
+                                </state>
+                                <connections>
+                                    <action selector="shareAction:" destination="KGk-i7-Jjw" eventType="touchUpInside" id="gNh-iR-RZ4"/>
+                                </connections>
+                            </button>
+                        </subviews>
+                        <color key="backgroundColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                        <constraints>
+                            <constraint firstItem="Wcw-6h-AYk" firstAttribute="leading" secondItem="Hzy-O6-QkR" secondAttribute="leading" constant="10" id="1M7-KA-3Al"/>
+                            <constraint firstItem="p59-3s-ihO" firstAttribute="centerY" secondItem="mgw-Af-SB6" secondAttribute="centerY" constant="-1.5" id="8af-5P-tB8"/>
+                            <constraint firstItem="Wcw-6h-AYk" firstAttribute="top" secondItem="Hzy-O6-QkR" secondAttribute="top" id="ABJ-s7-Nov"/>
+                            <constraint firstAttribute="trailing" secondItem="mgw-Af-SB6" secondAttribute="trailing" id="Hk8-rH-s2z"/>
+                            <constraint firstItem="QLA-Kf-fro" firstAttribute="leading" secondItem="AXi-Aw-aTQ" secondAttribute="trailing" constant="8" id="MKR-5e-6Xg"/>
+                            <constraint firstItem="AXi-Aw-aTQ" firstAttribute="centerY" secondItem="QLA-Kf-fro" secondAttribute="centerY" id="NX9-4u-CS8"/>
+                            <constraint firstItem="mgw-Af-SB6" firstAttribute="leading" secondItem="Hzy-O6-QkR" secondAttribute="leading" id="UIV-V6-Bua"/>
+                            <constraint firstItem="p59-3s-ihO" firstAttribute="centerX" secondItem="mgw-Af-SB6" secondAttribute="centerX" constant="0.5" id="d0H-qR-ujN"/>
+                            <constraint firstItem="mgw-Af-SB6" firstAttribute="top" secondItem="Wcw-6h-AYk" secondAttribute="bottom" constant="-2" id="hlX-Vn-gxn"/>
+                            <constraint firstAttribute="bottom" secondItem="QLA-Kf-fro" secondAttribute="bottom" constant="8" id="iyR-AP-Lch"/>
+                            <constraint firstAttribute="trailing" secondItem="QLA-Kf-fro" secondAttribute="trailing" constant="15" id="jGN-oN-F8d"/>
+                        </constraints>
+                    </view>
+                </subviews>
+                <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="calibratedWhite"/>
+                <constraints>
+                    <constraint firstAttribute="trailing" secondItem="Hzy-O6-QkR" secondAttribute="trailing" id="6bV-ju-H8o"/>
+                    <constraint firstItem="Hzy-O6-QkR" firstAttribute="leading" secondItem="H2p-sc-9uM" secondAttribute="leading" id="A21-1e-UZ1"/>
+                    <constraint firstAttribute="trailing" secondItem="UjN-hA-CDl" secondAttribute="trailing" id="QPJ-3u-TgR"/>
+                    <constraint firstItem="UjN-hA-CDl" firstAttribute="top" secondItem="H2p-sc-9uM" secondAttribute="top" id="ZLc-hR-QAS"/>
+                    <constraint firstAttribute="bottom" secondItem="Hzy-O6-QkR" secondAttribute="bottom" id="aAB-Un-4EL"/>
+                    <constraint firstItem="Hzy-O6-QkR" firstAttribute="top" secondItem="H2p-sc-9uM" secondAttribute="top" constant="10" id="aMc-ws-znE"/>
+                    <constraint firstItem="UjN-hA-CDl" firstAttribute="leading" secondItem="H2p-sc-9uM" secondAttribute="leading" id="fnS-mf-pzQ"/>
+                </constraints>
+            </tableViewCellContentView>
+            <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="calibratedWhite"/>
+            <inset key="separatorInset" minX="0.0" minY="0.0" maxX="0.0" maxY="0.0"/>
+            <connections>
+                <outlet property="controlButton" destination="p59-3s-ihO" id="Tzj-Pk-Ydf"/>
+                <outlet property="deleteButton" destination="QLA-Kf-fro" id="DLS-H2-g7A"/>
+                <outlet property="shareButton" destination="AXi-Aw-aTQ" id="qRV-Yo-FMU"/>
+                <outlet property="timeLabel" destination="Wcw-6h-AYk" id="uYd-nu-jud"/>
+                <outlet property="videoImage" destination="mgw-Af-SB6" id="iQQ-Ba-gFe"/>
+            </connections>
+            <point key="canvasLocation" x="288" y="269"/>
+        </tableViewCell>
+    </objects>
+    <resources>
+        <image name="bt_delete.png" width="50" height="25"/>
+        <image name="bt_play.png" width="51" height="51"/>
+        <image name="bt_share.png" width="50" height="25"/>
+    </resources>
+</document>

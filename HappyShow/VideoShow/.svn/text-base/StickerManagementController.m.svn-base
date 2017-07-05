@@ -1,0 +1,217 @@
+//
+//  StickerManagementController.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/16.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "StickerManagementController.h"
+#import "DownloadedSticker+CoreData.h"
+#import "Util.h"
+#import "StickerManagerCell.h"
+#import "Toast+UIView.h"
+#import "StickerItem+CoreData.h"
+#import "UIImage+Util.h"
+
+static NSString *identifier = @"StickerManagerCell";
+
+@interface StickerManagementController()
+{
+    UIButton *listActionBtn;
+    BOOL isEditStatus;
+    NSMutableArray *stickerList;
+     NSMutableArray *arr;
+    
+    NSIndexPath* index;
+    
+    NSInteger a;
+    
+}
+
+@end
+
+@implementation StickerManagementController
+
+
+- (id)initWithStyle:(UITableViewStyle)style
+{
+    if(self = [super initWithStyle:style]){
+        
+    }
+    return self;
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    isEditStatus = NO;
+    stickerList = [NSMutableArray array];
+    arr = [NSMutableArray array];
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"Sticker Management", nil) leftAction:@selector(backTap:)];
+    
+    UINib *cellNib = [UINib nibWithNibName:identifier bundle:nil];
+    [self.tableView registerNib:cellNib forCellReuseIdentifier:identifier];
+    self.tableView.separatorColor = [UIColor colorWithRed:223/255.0 green:223/255.0 blue:223/255.0 alpha:1];
+    if ([self.tableView respondsToSelector:@selector(setSeparatorInset:)]) {
+        [self.tableView setSeparatorInset:UIEdgeInsetsZero];
+    }
+    if ([self.tableView respondsToSelector:@selector(setLayoutMargins:)]) {
+        [self.tableView setLayoutMargins:UIEdgeInsetsZero];
+    }
+    
+    
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(stickerUpdate:) name:@"StickerRequestFinish" object:nil];
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    
+    [self stickerUpdate:nil];
+}
+
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
+{
+    return UIInterfaceOrientationMaskPortrait;
+}
+
+- (void)dealloc
+{
+    
+}
+
+- (void)backTap:(id)sender
+{
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)listAction:(id)sender
+{
+    isEditStatus = !isEditStatus;
+    if(isEditStatus){
+        [listActionBtn setTitle:NSLocalizedString(@"Done", nil) forState:UIControlStateNormal];
+    }else{
+        [listActionBtn setTitle:NSLocalizedString(@"Edit", nil) forState:UIControlStateNormal];
+    }
+    [self.tableView setEditing:YES animated:YES];
+    [self.tableView reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+}
+
+- (void)stickerUpdate:(NSNotification*)notification
+{
+    stickerList = [DownloadedSticker queryWithType:@"2"];
+    if(!stickerList ||stickerList.count == 0){
+        [self.view makeToast:NSLocalizedString(@"NO Sticker", nil) duration:2.0 position:@"bottom"];
+    }
+    if(!self.navigationItem.rightBarButtonItem){
+        UIBarButtonItem *barItem = [[UIBarButtonItem alloc] initWithCustomView:listActionBtn];
+        self.navigationItem.rightBarButtonItem = barItem;
+    }
+    [self.tableView reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+}
+
+#pragma mark - UITableViewDataSource
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+{
+    return 1;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    return stickerList.count;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    return 70.0;
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    if ([cell respondsToSelector:@selector(setSeparatorInset:)]) {
+        [cell setSeparatorInset:UIEdgeInsetsZero];
+    }
+    if ([cell respondsToSelector:@selector(setPreservesSuperviewLayoutMargins:)]) {
+        [cell setPreservesSuperviewLayoutMargins:NO];
+    }
+    if ([cell respondsToSelector:@selector(setLayoutMargins:)]) {
+        [cell setLayoutMargins:UIEdgeInsetsZero];
+    }
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+     DownloadedSticker *sticker = stickerList[indexPath.row];
+    
+    StickerManagerCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
+    NSString *iconFile = [NSString stringWithFormat:@"%@/%@",[Util stickerPath:sticker.material_id.intValue],sticker.material_icon];
+    cell.icon.image = [UIImage imageWithContentsOfFile:iconFile];
+    cell.label.text = sticker.material_name;
+    cell.detail.text = sticker.material_paper;
+    cell.detail.font = [UIFont systemFontOfSize:12.0];
+    cell.label.font = [UIFont systemFontOfSize:14.0];
+    cell.accessoryType = UITableViewCellAccessoryNone;
+    
+    return cell;
+}
+
+
+- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    return YES;
+}
+
+- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    if(editingStyle == UITableViewCellEditingStyleDelete){
+        
+        UIAlertView* v=[[UIAlertView alloc]initWithTitle:@"删除贴图" message:@"确定删除贴图？" delegate:self cancelButtonTitle:@"取消" otherButtonTitles:@"确定", nil];
+        [v show];
+        a=indexPath.row;
+        index=indexPath;
+        
+        
+        [tableView reloadData];
+        
+    }
+}
+
+ /* 点击弹出视图的检测代理 */
+-(void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+    switch (buttonIndex)
+    {
+        case 1:
+        {
+            
+            int stickerID = ((DownloadedSticker*)stickerList[a]).material_id.intValue;
+            [DownloadedSticker deleteDownloadedSticker:stickerID];
+            [Util deleteFile:[NSString stringWithFormat:@"%@/%d",[Util rootDownloadPath],stickerID]];
+            [StickerItem deleteRecentSticker:stickerID];
+            [stickerList removeObjectAtIndex:a];
+            [self.tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:index] withRowAnimation:UITableViewRowAnimationFade];
+        }
+            break;
+            
+        default:
+            break;
+    }
+}
+@end

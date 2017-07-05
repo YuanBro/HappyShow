@@ -1,0 +1,37 @@
+//
+//  StickerDownloader.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/15.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+#import "ASINetworkQueue.h"
+#import "Util.h"
+@class DownloadingSticker;
+@protocol StickerDownloaderDelegate <NSObject>
+@optional
+- (void)sticker:(int)stickerID downloadProgress:(float)progress;
+- (void)stickerStartDownload:(int)stickerID;
+- (void)stickerFinishDownload:(int)stickerID;
+- (void)stickerFailDownload:(int)stickerID;
+- (void)networkError;
+- (void)downloadQueueFinished;
+@end
+
+/** 用于管理下载队列 */
+@interface StickerDownloader : NSObject
+{
+    ASINetworkQueue *networkQueue;  
+}
+
+@property (weak, nonatomic) id<StickerDownloaderDelegate> delegate;
+@property (strong, atomic) NSArray *originalDataList;
+
+@property (assign, nonatomic) MaterialType materialType;
++ (StickerDownloader*)sharedInstance;
+- (void)addDownloadTask:(NSURL*)url stickerID:(int)stickerID isUpdate:(BOOL)update;
+- (NSArray*)operations;
+
+@end

@@ -1,0 +1,19 @@
+//
+//  SettingViewController.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-9-5.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "BaseViewController.h"
+#import "CustomTabBarController.h"
+
+/** 设置界面 */
+@interface SettingViewController : BaseViewController
+
+@property (nonatomic,assign) BOOL disableBack;//是否创建返回键
+@property (nonatomic,strong) CustomTabBarController * customeTabBar;
+
+@end

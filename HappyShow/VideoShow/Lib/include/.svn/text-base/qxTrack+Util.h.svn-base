@@ -1,0 +1,70 @@
+//
+//  qxTrack+Util.h
+//  VideoShow
+//
+//  Created by lance on 15/6/2.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "qxTrack.h"
+
+@interface qxTrack (Util)
+
+/** 根据秒数查找音频 */
+- (qxMediaObject*)findAudioObjAtSecond:(float)second;
+/** 查找指定秒数对应的片段对象 */
+- (qxMediaObject *)findMediaObjectAtSecond:(float)second;
+
+/**
+ 字幕和sticker同一时间可能对应多个
+ @return 返回对应的所有对象
+ */
+- (NSMutableArray *)findStickerObjectsAtSecond:(float)second;
+
+/**
+ 字幕和sticker同一时间可能对应多个
+ @return 返回对应的所有对象
+ */
+- (NSMutableArray *)findTextObjectsAtSecond:(float)second;
+
+/** 重新初始化videoTrack */
++(qxTrack*)createVideoTrack:(qxTrack*)srcTrack;
+
+/** 重新初始化videoTrack */
++(qxTrack*)createMusicTrack:(qxTrack*)srcTrack;
+
+/** 重新初始化audioTrack */
++(qxTrack*)createAudioTrack:(qxTrack*)srcTrack;
+
+/** 重新初始化overlayTrack */
++(qxTrack*)createOverlayTrack:(qxTrack*)srcTrack;
+
+/** 对图片进行初始化---防止内存溢出 */
+-(void)initUsableForSize:(CGSize) screenSize block:(void (^)(void))complete;
+
+-(void)reloadPhoto:(CGSize) screenSize block:(void (^)(void))complete;
+/** 查找指定时间之后最近的一个音频对象 */
+- (qxMediaObject*)findNearestAudioObjAfterTime:(Float64)second;
+
+/** 查找在离指定时间之后的第一个字幕对象 */
+- (qxMediaObject*)findNearestSubtitleObjAfterTime:(Float64)second;
+
+/** 查找在离指定时间之后的第一个sticker对象 */
+- (qxMediaObject*)findNearestStickerObjAfterTime:(Float64)second;
+
+/** 删除指定的媒体文件并返回路径 */
+- (NSString *) delMediaObjectForMediaObj:(qxMediaObject *)mediaObj;
+
+/**删除通道内的多有媒体文件并返回路径 */
+- (void)delAllOfMediaObjects;
+
+/** 查找通道中的所有sticker对象 */
+- (NSMutableArray *)findStickerObjects;
+
+/** 查找通道中的所有字幕对象 */
+- (NSMutableArray *)findTextObjects;
+
+/** 在最后的位置更新时间 */
+-(void) updateTimeAtLastWithStartTime:(CMTime)startTime;
+
+@end

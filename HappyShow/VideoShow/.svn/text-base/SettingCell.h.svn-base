@@ -1,0 +1,46 @@
+//
+//  SettingCell.h
+//  VideoShow
+//
+//  Created by lance on 15/5/5.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+typedef enum _FollowType
+{
+    FollowTypeSina=0,
+    FollowTypeQQ=1,
+    FollowTypeWechat=2,
+    FollowTypeYouku=3,
+    FollowTypeFacebook=4,
+    FollowTypeInstagram=5,
+    FollowTypeTwitter=6
+} FollowType;
+
+@protocol SettingCellDelegate;
+@interface SettingCell : UITableViewCell
+
+@property (nonatomic,weak) id<SettingCellDelegate> delegate;
+@property (nonatomic,weak) IBOutlet UIView * detailPanel;//详情面板
+@property (nonatomic,weak) IBOutlet UIView * followPanel;//关注面板
+
+@property (nonatomic,weak) IBOutlet UILabel * labelText;
+@property (nonatomic,weak) IBOutlet UIButton * btArrow;
+@property (nonatomic,weak) IBOutlet UISwitch * toggleSwitch;
+@property (nonatomic,weak) IBOutlet UILabel * subTitle;
+@property (nonatomic,weak) IBOutlet UILabel * subTitle2;//这个用于显示版本信息
+
+-(IBAction)toogleAction:(id)sender;
+
+-(void) initSettingCell:(int) type;
+
+@end
+
+@protocol SettingCellDelegate <NSObject>
+
+-(void) toggleSwitch:(SettingCell *)cell flag:(BOOL)flag;
+-(void) followSNS:(SettingCell *)cell followType:(FollowType)type;
+
+@end

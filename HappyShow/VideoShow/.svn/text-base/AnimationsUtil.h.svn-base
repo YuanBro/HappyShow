@@ -1,0 +1,70 @@
+//
+//  AnimationsUtil.h
+//  brandshow
+//
+//  Created by lance on 14-4-17.
+//  Copyright (c) 2014年 harry.xie. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+
+//补间动画建值
+#define kPathTranslation @"translation"
+#define kPathOpacity @"opacity"
+#define kPathRotate @"rotate"
+#define kPathScale @"scale"
+#define kPathBounds @"bounds"
+#define kPathPath @"path"
+#define kPathGroup @"group"
+
+//所有的动画类型
+#define kAnimationCube @"cube"
+#define kAnimationSuckEffect @"SuckEffect"
+#define kAnimationOglFlip @"oglFlip"
+#define kAnimationRippleEffect @"rippleEffect"
+#define kAnimationPageCurl @"pageCurl"
+#define kAnimationPageUnCurl @"pageUnCurl"
+#define kAnimationCameraIrisHollowOpen @"cameraIrisHollowOpen"
+#define kAnimationCameraIrisHollowClose @"cameraIrisHollowClose"
+//animation.type = kCATransitionFade;
+//animation.type = kCATransitionPush;
+//animation.type = kCATransitionReveal;
+//animation.type = kCATransitionMoveIn;
+
+//子动画类型 控制从哪个方向出现
+//animation.subtype = kCATransitionFromLeft;
+//animation.subtype = kCATransitionFromBottom;
+//animation.subtype = kCATransitionFromRight;
+//animation.subtype = kCATransitionFromTop;
+
+@interface AnimationsUtil : NSObject
+
+/** 公共封装方法 */
++(void) animationType:(NSString *)animationType withSubtype:(NSString *)kCATransitionSubtype duration:(float)duration completion:(void (^)(BOOL finished))completion;
+
+//======================================主要封装动画===============================
+
+//========================================适合界面切换==========================================
++(void) durationWithFade:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion;
++(void) durationWithPush:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion;
++(void) durationWithReveal:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion;
++(void) durationWithMoveIn:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion;
+
++(void) durationWithSuckEffect:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion;
++(void) durationWithRippleEffect:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion;
++(void) durationWithCube:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion;
++(void) durationWithOglFlip:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion;
++(void) durationWithPageCurl:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion;
++(void) durationWithPageUnCurl:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion;
++(void) durationWithCameraIrisHollowOpen:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion;
++(void) durationWithCameraIrisHollowClose:(float)duration withSubtype:(NSString *)kCATransitionSubtype completion:(void (^)(BOOL finished))completion;
+
+
+
+//======================================适合UI组件==========================================
+
++ (void)viewAnimation:(int)duration view:(UIView *)view completion:(void (^)(void))completion;
+
++ (void)viewAnimation:(int)duration animationType:(UIViewAnimationCurve)curve view:(UIView *)view completion:(void (^)(void))completion;
+
+@end

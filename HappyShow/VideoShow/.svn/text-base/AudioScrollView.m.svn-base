@@ -1,0 +1,202 @@
+//
+//  AudioScrollView.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/10/29.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "AudioScrollView.h"
+#import "qxTimeline.h"
+#import "UIColor+Util.h"
+
+@interface AudioScrollView()<VideoFrameViewDelegate>
+{
+    VideoFrameView *frameView;
+    NSMutableArray *audioViewArray;
+}
+
+@end
+
+@implementation AudioScrollView
+
+@synthesize timeline;
+
+- (id)initWithFrame:(CGRect)frame contentSize:(CGSize)contSize timeline:(qxTimeline*)tl
+{
+    if(self = [super initWithFrame:frame]){
+        timeline = tl;
+        frameView = [[VideoFrameView alloc] initWithFrame:CGRectMake(frame.origin.x, 0, frame.size.width, frame.size.height) mediaArray:[timeline getTrackFromTimeline:0].mpMediaObjArray];
+        frameView.delegate = self;
+        frameView.contentSize = contSize;
+        [self addSubview:frameView];
+        self.scrollEnable = YES;
+    }
+    return self;
+}
+
+- (float)currentSecond
+{
+    return [frameView currentSecond];
+}
+
+- (float)currentPosition
+{
+    return [frameView currentPosition];
+}
+
+- (void)reloadFrames
+{
+    [frameView reloadFrames];
+}
+
+- (void)refreshViewWithAudioTrack:(int)trackIndex
+{
+    [self fillViewWithAudioArray:[timeline getTrackFromTimeline:trackIndex].mpMediaObjArray];
+}
+
+- (void)scrollToSecond:(float)second
+{
+    [frameView scrollToSecond:second tapFlag:NO sendEvent:YES];
+}
+
+#pragma mark - VideoFrameViewDelegate
+//- (void)videoFrameView:(VideoFrameView*)view didScrollTo:(CGFloat)second
+//{
+//    if([self.delegate respondsToSelector:@selector(audioScrollView:scrollToSecond:)]){
+//        [self.delegate audioScrollView:self scrollToSecond:second];
+//    }
+//}
+//
+//- (void)videoFrameLoadDone
+//{
+//    if([self.delegate respondsToSelector:@selector(framesLoadDone)]){
+//        [self.delegate framesLoadDone];
+//    }
+//}
+//
+//- (void)videoFrameViewPaned
+//{
+//    if([self.delegate respondsToSelector:@selector(audioScrollViewPaned)]){
+//        [self.delegate audioScrollViewPaned];
+//    }
+//}
+
+- (void)videoFrameView:(VideoFrameView*)view didScrollTo:(CGFloat)second tapFlag:(BOOL)tapFlag
+{
+    if([self.delegate respondsToSelector:@selector(videoScrollView:didScrollTo:tapFlag:)]){
+        [self.delegate videoScrollView:self didScrollTo:second tapFlag:tapFlag];
+    }
+}
+
+- (void)videoFrameContentViewTapped
+{
+    //[self hiddenEditingView];
+}
+
+- (void)videoFrameLoadDone
+{
+    //[self fillSubtitleView];
+    if([self.delegate respondsToSelector:@selector(framesLoadDone)]){
+        [self.delegate framesLoadDone];
+    }
+}
+
+- (void)videoFrameViewPanDidStart
+{
+    if([self.delegate respondsToSelector:@selector(scrubbingDidStart:)]){
+        [self.delegate scrubbingDidStart:self];
+    }
+}
+
+- (void)videoFrameViewPanDidEnd
+{
+    if([self.delegate respondsToSelector:@selector(scrubbingDidEnd:)]){
+        [self.delegate scrubbingDidEnd:self];
+    }
+}
+
+- (void)setScrollEnable:(BOOL)scrollEnable
+{
+    _scrollEnable = scrollEnable;
+    frameView.scrollEnable = scrollEnable;
+}
+
+- (void)setSelectRectFrom:(float)startSecond to:(float)endSecond
+{
+    [frameView setSelectRectFrom:startSecond to:endSecond];
+}
+
+- (void)clearSelectRect
+{
+    [frameView clearSelectRect];
+}
+
+#pragma mark - Private method
+- (void)fillViewWithAudioArray:(NSArray*)audioArray
+{
+    if(audioArray){
+        [self updateViewWithAudioArray:audioArray];
+        for(UIView *view in audioViewArray){
+            [frameView addContentView:view];
+        }
+    }
+}
+
+- (void)updateViewWithAudioArray:(NSArray*)audioArray
+{
+    if(!audioViewArray){
+        audioViewArray = [[NSMutableArray alloc] init];
+    }
+    for(UIView *view in audioViewArray){
+        [view removeFromSuperview];
+    }
+    [audioViewArray removeAllObjects];
+    for(qxMediaObject *obj in audioArray){
+        [audioViewArray addObject:[self createRectWithMediaObj:obj]];
+    }
+    [self sortAudioViewArray];
+}
+
+-(void)sortAudioViewArray
+{
+    NSArray *tmp = [audioViewArray sortedArrayUsingComparator:^(UIView *v1, UIView *v2){
+        float x1 = v1.frame.origin.x;
+        float x2 = v2.frame.origin.x;
+        NSComparisonResult result = NSOrderedSame;
+        if(x1 > x2){
+            result = NSOrderedDescending;
+        }else if(x1 < x2){
+            result = NSOrderedAscending;
+        }
+        return result;
+    }];
+    [audioViewArray removeAllObjects];
+    [audioViewArray addObjectsFromArray:tmp];
+}
+
+-(UIView*)createRectWithMediaObj:(qxMediaObject*)obj
+{
+    Float64 start = CMTimeGetSeconds(obj.startTimeOfTrack);
+    Float64 duration = CMTimeGetSeconds(obj.actualTimeRange.duration);
+    //NSLog(@"start===>%g   duration===> %g",start,duration);
+    UIView *view = nil;
+    CGRect rect = [self rectWithAudioStart:start duration:duration];
+    view = [[UIView alloc] initWithFrame:rect];
+    view.backgroundColor = [UIColor colorWithRed:102/255.0 green:141/255.0 blue:227/255.0 alpha:0.85];
+    view.layer.borderWidth = 0.5;
+    view.layer.borderColor = [UIColor colorWithHexString:themeColor].CGColor;
+    return view;
+}
+
+-(CGRect)rectWithAudioStart:(double)start  duration:(double)duration
+{
+    CGRect rect = CGRectZero;
+    if(frameView && start >= 0 && duration >= 0){
+        rect = CGRectMake(start * FrameWidthPerSecond + frameView.frame.size.width/2, 0, duration * FrameWidthPerSecond, frameView.frame.size.height);
+    }
+    return rect;
+}
+
+
+@end

@@ -1,0 +1,25 @@
+//
+//  SoundTrackInf.h
+//  VideoShow
+//
+//  Created by Mac on 16/1/12.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+
+@interface SoundTrackInf : NSObject
+
+@property (assign,nonatomic) int id;
+@property (strong,nonatomic) NSString * soundTrack_name;
+@property (strong,nonatomic) NSString * soundTrack_paper;
+@property (strong,nonatomic) NSString * icon_url;
+@property (assign,nonatomic) int ver_code;
+
+@property (strong,nonatomic) NSMutableArray * itemlist;//sticker列表
+
++(NSMutableArray *) initFromArr:(NSArray *)arr;
+
++(SoundTrackInf *) initFromDict:(NSDictionary *)dictp;
+
+@end

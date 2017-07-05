@@ -1,0 +1,40 @@
+//
+//  qxStickerObj.h
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-11-5.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+#import "qxGifHelper.h"
+
+/** 该类用户保存sticker中的一些附加信息 */
+@interface qxStickerObject : NSObject<NSCoding>
+
+// 添加一个附加对象
+@property (nonatomic, strong) id overlayCustomObj;
+
+//保存sticker当时的尺寸参数以便于恢复显示时使用
+@property (nonatomic,assign) CGSize stickerSize;
+//这个对象用于保存gif帧序列
+@property (nonatomic,strong) qxGifObject * gifObj;
+/** sticker中使用到的资源图片名 */
+@property (nonatomic,strong) NSString * stickerName;
+
+/** 0为内置表情 1为扩展表情 */
+@property (nonatomic,assign) int stickerType;
+
+/** 相对原始资源执行的转角 */
+@property (nonatomic,assign) float rotatef;
+
+/** 记录中心点得位置 当旋转之后需要使用到 */
+@property (nonatomic,assign) CGPoint centerPoint;
+
+/** 这个在归档的时候如果是数组能防止key重复 */
+@property (nonatomic,assign) NSString * codingId;
+
+-(id)initWithCoder:(NSCoder *)aDecoder withId:(NSString*)codingId;
+
+@end
+

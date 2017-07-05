@@ -1,0 +1,76 @@
+//
+//  qxMediaObject+Util.m
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-11-5.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "qxMediaObject+Util.h"
+#import "qxStickerObject.h"
+#import "Util.h"
+#import "AppMacros.h"
+
+@implementation qxMediaObject (Util)
+
+- (BOOL) isStickerObj
+{
+    if ((self.eType == eMT_Overlay||self.eType == eMT_OverlayDynamic) && self.overlayCustomObj) {
+        if ([self.overlayCustomObj isKindOfClass:[qxStickerObject class]]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+- (BOOL) isTextObj
+{
+    if ((self.eType == eMT_Overlay)  && self.overlayCustomObj) {
+        if ([self.overlayCustomObj isKindOfClass:[qxMediaObject class]]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+#pragma mark 根据文字创建图片
+-(NSString*)createTextImageWithSize:(CGSize)textSize
+{
+    //
+    NSString *overlayDir = [Util overlayImgDir];
+    if(!overlayDir){
+        return nil;
+    }
+    //
+    long long time = [[NSDate date] timeIntervalSince1970] * 1000;
+    NSString *overlayFile = [overlayDir stringByAppendingPathComponent:[NSString stringWithFormat:@"%lld%@",time,@".png"]];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if(![fileManager fileExistsAtPath:overlayFile]){
+        BOOL ret = [fileManager createFileAtPath:overlayFile contents:nil attributes:nil];
+        if(!ret){
+            return nil;
+        }
+    }
+    //--------------------
+    UIFont *font = self.textFont;
+    UIGraphicsBeginImageContext(textSize);
+    // draw in context
+    if(sysVersion < 7.0){
+        [self.textColor set];
+        [self.text drawInRect:CGRectMake(0, 0, textSize.width, textSize.height) withFont:font lineBreakMode:NSLineBreakByWordWrapping];
+    }else{
+        NSMutableParagraphStyle *style = [[NSParagraphStyle defaultParagraphStyle] mutableCopy];
+        [style setLineBreakMode:NSLineBreakByWordWrapping];
+        NSDictionary *attrsDictionary = @{NSFontAttributeName : font, NSParagraphStyleAttributeName : style, NSForegroundColorAttributeName : self.textColor};
+        [self.text drawInRect:CGRectMake(0, 0, textSize.width, textSize.height) withAttributes:attrsDictionary];
+    }
+    // transfer image
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    if(![UIImagePNGRepresentation(image) writeToFile:overlayFile atomically:YES]){
+        return nil;
+    }
+    return overlayFile;
+}
+
+@end

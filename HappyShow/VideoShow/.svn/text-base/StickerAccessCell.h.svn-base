@@ -1,0 +1,24 @@
+//
+//  StickerAccessCell.h
+//  VideoShow
+//
+//  Created by lance on 15/5/11.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+@class MaterialInf;
+@interface StickerAccessCell : UITableViewCell
+
+@property (weak, nonatomic) IBOutlet UIImageView *statusIcon;
+@property (weak, nonatomic) IBOutlet UIImageView *stickerIcon;
+@property (weak, nonatomic) IBOutlet UILabel *titleLabel;
+@property (weak, nonatomic) IBOutlet UILabel *detailLabel;
+@property (weak, nonatomic) IBOutlet UIButton *finishedStatus;
+@property (weak, nonatomic) IBOutlet UIButton *btnAccess;
+@property (assign, nonatomic) int materialID;
+@property (assign, nonatomic) int status;
+@property (weak,nonatomic) MaterialInf * materialInf;
+
+@end

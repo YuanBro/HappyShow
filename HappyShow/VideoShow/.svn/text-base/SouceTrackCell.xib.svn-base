@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="9531" systemVersion="15C50" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES">
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="9529"/>
+        <capability name="Constraints to layout margins" minToolsVersion="6.0"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner"/>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <tableViewCell contentMode="scaleToFill" selectionStyle="default" indentationWidth="10" rowHeight="70" id="KGk-i7-Jjw" customClass="SouceTrackCell">
+            <rect key="frame" x="0.0" y="0.0" width="320" height="70"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+            <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" tableViewCell="KGk-i7-Jjw" id="H2p-sc-9uM">
+                <rect key="frame" x="0.0" y="0.0" width="320" height="69"/>
+                <autoresizingMask key="autoresizingMask"/>
+                <subviews>
+                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="B8K-J5-XcL">
+                        <rect key="frame" x="76" y="41" width="31" height="15"/>
+                        <fontDescription key="fontDescription" type="system" pointSize="12"/>
+                        <color key="textColor" white="0.66666666666666663" alpha="1" colorSpace="calibratedWhite"/>
+                        <nil key="highlightedColor"/>
+                    </label>
+                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ax4-C1-KMP">
+                        <rect key="frame" x="76" y="15" width="36" height="17"/>
+                        <fontDescription key="fontDescription" type="system" pointSize="14"/>
+                        <color key="textColor" red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="calibratedRGB"/>
+                        <nil key="highlightedColor"/>
+                    </label>
+                    <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="W6M-Lk-enJ">
+                        <rect key="frame" x="8" y="5" width="60" height="60"/>
+                        <constraints>
+                            <constraint firstAttribute="height" constant="60" id="XME-Lq-lUq"/>
+                            <constraint firstAttribute="width" constant="60" id="aBe-dd-Alc"/>
+                        </constraints>
+                    </imageView>
+                    <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" image="ic_discover.png" translatesAutoresizingMaskIntoConstraints="NO" id="8H0-V3-6BZ">
+                        <rect key="frame" x="0.0" y="0.0" width="34" height="33"/>
+                    </imageView>
+                    <button opaque="NO" contentMode="scaleToFill" restorationIdentifier="SouceTrackCell" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="ATH-QI-QPf">
+                        <rect key="frame" x="288" y="24" width="16" height="22"/>
+                        <state key="normal" image="ic_entry_arrow.png">
+                            <color key="titleShadowColor" white="0.5" alpha="1" colorSpace="calibratedWhite"/>
+                        </state>
+                    </button>
+                </subviews>
+                <constraints>
+                    <constraint firstItem="B8K-J5-XcL" firstAttribute="leading" secondItem="ax4-C1-KMP" secondAttribute="leading" id="Eqo-88-TvB"/>
+                    <constraint firstItem="W6M-Lk-enJ" firstAttribute="leading" secondItem="H2p-sc-9uM" secondAttribute="leadingMargin" id="LSg-Ho-VpK"/>
+                    <constraint firstItem="ax4-C1-KMP" firstAttribute="leading" secondItem="W6M-Lk-enJ" secondAttribute="trailing" constant="8" id="PTa-dh-DAZ"/>
+                    <constraint firstItem="W6M-Lk-enJ" firstAttribute="centerY" secondItem="H2p-sc-9uM" secondAttribute="centerY" id="Ro4-ez-vLy"/>
+                    <constraint firstAttribute="trailingMargin" secondItem="ATH-QI-QPf" secondAttribute="trailing" constant="8" id="aly-Ra-suq"/>
+                    <constraint firstItem="ATH-QI-QPf" firstAttribute="centerY" secondItem="W6M-Lk-enJ" secondAttribute="centerY" id="bDa-WN-hQs"/>
+                    <constraint firstItem="B8K-J5-XcL" firstAttribute="top" secondItem="ax4-C1-KMP" secondAttribute="bottom" constant="9" id="cFP-WF-7kH"/>
+                    <constraint firstItem="ax4-C1-KMP" firstAttribute="top" secondItem="H2p-sc-9uM" secondAttribute="topMargin" constant="7" id="hwA-7L-c2f"/>
+                </constraints>
+            </tableViewCellContentView>
+            <connections>
+                <outlet property="btnAccess" destination="ATH-QI-QPf" id="WJ4-6z-fcv"/>
+                <outlet property="detailLabel" destination="B8K-J5-XcL" id="AXN-Kg-SKA"/>
+                <outlet property="souceTrackIcon" destination="W6M-Lk-enJ" id="HtS-c2-qzh"/>
+                <outlet property="statusIcon" destination="8H0-V3-6BZ" id="TCx-oE-KF5"/>
+                <outlet property="titleLabel" destination="ax4-C1-KMP" id="hT8-pw-hBh"/>
+            </connections>
+        </tableViewCell>
+    </objects>
+    <resources>
+        <image name="ic_discover.png" width="34" height="33"/>
+        <image name="ic_entry_arrow.png" width="16" height="16"/>
+    </resources>
+</document>

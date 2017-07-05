@@ -1,0 +1,35 @@
+//
+//  StickerView.h
+//  VideoShow
+//
+//  Created by lance on 15/11/14.
+//  Copyright © 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "OverlayContainerProtocol.h"
+
+@class qxMediaObject;
+@class StickerView;
+
+@protocol StickerViewDelegate <NSObject>
+
+- (void)stickerView:(StickerView *)stickerView withMediaObject:(qxMediaObject *)mediaObject;
+
+@end
+
+// 显示sticker的容器
+@interface StickerView : UIView <OverlayContainerProtocol>
+
+@property (nonatomic, weak) id<StickerViewDelegate> delegate;
+
+// 不允许在外部赋值
+@property (nonatomic, strong, readonly) NSMutableArray *mediaObjects;
+
+// 作为第一步初始化操作
+- (void)setMediaObjects:(NSMutableArray *)mediaObjects;
+
+// 隐藏所有字幕,除了指定字幕外
+- (void)hideAllStickerExcludeMediaObject:(qxMediaObject *)mediaObject;
+
+@end

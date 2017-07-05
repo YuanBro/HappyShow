@@ -1,0 +1,235 @@
+//
+//  MyStudioViewController.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-7-16.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "MyStudioViewController.h"
+#import "MobClick.h"
+#import "AppEvent.h"
+#import "UIColor+Util.h"
+
+#import "UMSocial.h"
+#import "StudioViewController.h"
+#import "UINavigationBar+Util.h"
+#import "PagerViewControllerDelegate.h"
+#import "MBProgressHUD.h"
+
+#define naviLineWidth 100
+#define naviLineHeight 4
+#define tabHeight 40
+
+@interface MyStudioViewController()<UIPageViewControllerDataSource,UIPageViewControllerDelegate,PagerViewControllerDelegate>
+
+@property (nonatomic,assign) NSUInteger selectIndex;
+@property (nonatomic,strong) UIPageViewController *pageController;
+@property (nonatomic,strong) NSMutableArray * controllers;
+
+@property (nonatomic,assign) CGRect screenBounds;
+@property (nonatomic,strong) UIView * naviLine;
+@property (nonatomic,strong) UIButton * btnDraft;
+@property (nonatomic,strong) UIButton * btnVideo;
+
+@end
+
+@implementation MyStudioViewController
+
+@synthesize selectIndex;
+@synthesize pageController;
+@synthesize controllers;
+
+@synthesize screenBounds;
+@synthesize naviLine;
+@synthesize btnDraft;
+@synthesize btnVideo;
+
+#pragma mark - view life cycle
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor colorWithHexString:tableSectionColor];
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"My Studio", nil) leftAction:@selector(backTap:)];
+
+    screenBounds = [UIScreen mainScreen].bounds;
+    
+    [self createTabView];
+    controllers=[NSMutableArray array];
+    
+    StudioViewController *videoControl=[[StudioViewController alloc] init];
+    videoControl.studioMode=StudioModeVideo;
+    videoControl.pagerDelegate=self;
+    
+    StudioViewController *draftControl=[[StudioViewController alloc] init];
+    draftControl.studioMode=StudioModeDraft;
+    draftControl.pagerDelegate=self;
+    
+    [controllers addObject:videoControl];
+    [controllers addObject:draftControl];
+    
+    self.pageController=[[UIPageViewController alloc] initWithTransitionStyle:UIPageViewControllerTransitionStyleScroll navigationOrientation:UIPageViewControllerNavigationOrientationHorizontal options:nil];
+    
+    self.pageController.view.frame=CGRectMake(0, tabHeight, self.view.frame.size.width, self.view.frame.size.height-tabHeight);
+    self.pageController.dataSource=self;
+    self.pageController.delegate=self;
+    
+    NSArray * tmpControls=[NSArray arrayWithObject:videoControl];
+    [self.pageController setViewControllers:tmpControls direction:UIPageViewControllerNavigationDirectionForward animated:NO completion:nil];
+    
+    [self addChildViewController:self.pageController];
+    
+    self.pageController.view.backgroundColor=[UIColor clearColor];
+    [self.view addSubview:self.pageController.view];
+    
+    [self.pageController didMoveToParentViewController:self];
+    
+}
+
+- (void)dealloc {
+    
+}
+
+
+-(void) cleanMemory
+{
+    
+}
+
+-(void) createTabView
+{
+    UIView * tabView=[[UIView alloc] initWithFrame:CGRectMake(0,0,screenBounds.size.width, tabHeight)];
+    tabView.backgroundColor = [UIColor whiteColor];
+    tabView.layer.shadowColor = [UIColor blackColor].CGColor;
+    tabView.layer.shadowOffset = CGSizeMake(0,0);//shadowOffset阴影偏移，默认(0, -3),这个跟shadowRadius配合使用
+    tabView.layer.shadowOpacity = 1;//阴影透明度，默认0
+    tabView.layer.shadowRadius = 1;//阴影半径，默认3
+    
+    //view control
+    //-------------------------------------
+    btnVideo = [UIButton buttonWithType:UIButtonTypeCustom];
+    btnVideo.frame = CGRectMake(0, 0.5, screenBounds.size.width/2, tabView.frame.size.height);
+    btnVideo.tag=0;
+    [btnVideo setTitleColor:[UIColor colorWithHexString:@"#323232"] forState:UIControlStateNormal];
+    [btnVideo setTitle:NSLocalizedString(@"My Video", nil) forState:UIControlStateNormal];
+    btnVideo.contentMode=UIViewContentModeCenter;
+    btnVideo.titleLabel.textAlignment=NSTextAlignmentCenter;
+    btnVideo.titleLabel.font=[UIFont systemFontOfSize:15];
+    [btnVideo addTarget:self action:@selector(tabAction:) forControlEvents:UIControlEventTouchUpInside];
+    
+    btnDraft = [UIButton buttonWithType:UIButtonTypeCustom];
+    btnDraft.frame = CGRectMake(screenBounds.size.width/2, 0.5, screenBounds.size.width/2, tabView.frame.size.height);
+    btnDraft.tag=1;
+    [btnDraft setTitleColor:[UIColor colorWithHexString:@"#323232"] forState:UIControlStateNormal];
+    [btnDraft setTitle:NSLocalizedString(@"My Draft", nil) forState:UIControlStateNormal];
+    btnDraft.contentMode=UIViewContentModeCenter;
+    btnDraft.titleLabel.font=[UIFont systemFontOfSize:15];
+    [btnDraft addTarget:self action:@selector(tabAction:) forControlEvents:UIControlEventTouchUpInside];
+    
+    int startx=btnVideo.center.x-naviLineWidth/2;
+    naviLine=[[UIView alloc] initWithFrame:CGRectMake(startx, tabView.frame.size.height-naviLineHeight-1, naviLineWidth, naviLineHeight)];
+    naviLine.backgroundColor=[UIColor colorWithHexString:themeColor];
+    naviLine.layer.masksToBounds=YES;
+    naviLine.layer.cornerRadius=1.0;
+    naviLine.layer.borderWidth=0.0;
+    
+    UIView * shadowLine=[[UIView alloc] initWithFrame:CGRectMake(0,tabView.frame.size.height-1,screenBounds.size.width, 1)];
+    shadowLine.backgroundColor = [UIColor colorWithHexString:@"#d3d2d5"];
+    
+    [tabView addSubview:btnVideo];
+    [tabView addSubview:btnDraft];
+    [tabView addSubview:naviLine];
+    [tabView addSubview:shadowLine];
+    [self.view addSubview:tabView];
+    
+}
+
+
+-(void) tabAction:(UIButton *)sender
+{
+    btnDraft.selected=NO;
+    btnVideo.selected=NO;
+    sender.selected=YES;
+    int index = (int)sender.tag;
+    if (selectIndex==index) {
+        return;
+    }
+    [self animWithNaviLine:index];
+    selectIndex=index;
+    NSArray * tmpControls=[NSArray arrayWithObject:[self.controllers objectAtIndex:selectIndex]];
+    [self.pageController setViewControllers:tmpControls direction:UIPageViewControllerNavigationDirectionForward animated:NO completion:nil];
+    
+}
+
+-(void) animWithNaviLine:(NSUInteger)index
+{
+    btnDraft.selected=NO;
+    btnVideo.selected=NO;
+    UIButton * btnTab=nil;
+    if (index==0) {
+        btnTab=btnVideo;
+        [MobClick endEvent: CLICK_MAINMENU_MY_WORKS];
+    }else{
+        btnTab=btnDraft;
+        [MobClick endEvent: CLICK_MAINMENU_DRAFTBOX];
+    }
+    btnTab.selected=YES;
+    
+    __weak MyStudioViewController * weakSelf = self;
+    [UIView animateWithDuration:0.3 animations:^{
+        int startx=btnTab.center.x-naviLineWidth/2;
+        CGRect rect = CGRectMake(startx, self.naviLine.frame.origin.y, naviLineWidth, naviLineHeight);
+        weakSelf.naviLine.frame=rect;
+    } completion:^(BOOL finished){
+        
+    }];
+}
+
+- (void)controllerDidAppear:(UIViewController *)controller
+{
+    selectIndex=[self.controllers indexOfObject:controller];
+    [self animWithNaviLine:selectIndex];
+}
+
+- (void)controllerDidDisappear:(UIViewController *)controller
+{
+    
+}
+
+//是否处于加载数据中---主要用于在编辑草稿箱的草稿后返回的处理
+- (void)controllerLoadData:(BOOL)flag
+{
+    if(flag){
+        [MBProgressHUD showHUDAddedTo:self.navigationController.view animated:YES];
+    }else{
+        [MBProgressHUD hideAllHUDsForView:self.navigationController.view animated:YES];
+    }
+}
+
+- (UIViewController *)pageViewController:(UIPageViewController *)pageViewController viewControllerBeforeViewController:(UIViewController *)viewController
+{
+    NSUInteger curIndex=[self.controllers indexOfObject:viewController];
+    if (curIndex>0) {
+        return [self.controllers objectAtIndex:(curIndex-1)];
+    }
+    
+    return nil;
+}
+
+- (UIViewController *)pageViewController:(UIPageViewController *)pageViewController viewControllerAfterViewController:(UIViewController *)viewController
+{
+    NSUInteger curIndex=[self.controllers indexOfObject:viewController];
+    if (curIndex<self.controllers.count-1) {
+        return [self.controllers objectAtIndex:(curIndex+1)];
+    }
+    
+    return nil;
+}
+
+#pragma mark - button acion
+- (void)backTap:(id)sender
+{
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+@end

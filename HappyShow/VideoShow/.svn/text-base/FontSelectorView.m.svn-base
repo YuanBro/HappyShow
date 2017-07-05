@@ -1,0 +1,229 @@
+//
+//  FontSelectorView.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-8-12.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "FontSelectorView.h"
+#import "AppEvent.h"
+#import "MobClick.h"
+#import "UIImage+Util.h"
+#import "FontItemView.h"
+
+static NSString * cellIdentifier = @"UICollectionViewCell";
+
+@interface FontSelectorView()<FontItemViewDelegate>
+{
+    NSMutableArray *itemViewArray;
+    NSInteger selectedIndex;
+    CGRect contentRect;
+}
+
+@property (nonatomic,strong) NSArray * fontList;//字体属性列表
+//@property (nonatomic,strong) UIView * fontsView;//字体根视图
+//@property (nonatomic,strong) UICollectionView * fontCollect;
+@property (nonatomic,strong) UIScrollView *scrollView;
+
+@end
+
+
+@implementation FontSelectorView
+
+@synthesize fontList;
+//@synthesize fontsView;
+//@synthesize fontCollect;
+@synthesize scrollView;
+
+- (id)initWithFrame:(CGRect)frame
+{
+    self = [super initWithFrame:frame];
+    if (self) {
+        //
+        UIButton *controlBtn = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 29, 29)];
+        [controlBtn setImageEdgeInsets:UIEdgeInsetsMake(5, 0, 5, 5)];
+        [controlBtn setImage:[UIImage imageResource:@"subtitle_font_selector.png"] forState:UIControlStateNormal];
+        [controlBtn addTarget:self action:@selector(selectorControlTochUp:) forControlEvents:UIControlEventTouchUpInside];
+        [self addSubview:controlBtn];
+        //
+        NSString *path = [[NSBundle mainBundle] pathForResource:@"Fonts" ofType:@"plist"];
+        fontList = [NSArray arrayWithContentsOfFile:path];
+        itemViewArray = [[NSMutableArray alloc] initWithCapacity:fontList.count];
+        //
+        contentRect = CGRectMake(34, 0, frame.size.width - 34, frame.size.height);
+//        fontsView = [[UIView alloc] initWithFrame:contentRect];
+//        UICollectionViewFlowLayout * layout = [[UICollectionViewFlowLayout alloc] init];
+//        layout.itemSize = CGSizeMake(FontImageViewWidth, FontImageViewWidth);
+//        layout.sectionInset = UIEdgeInsetsMake(10,10,10,10);
+//        layout.scrollDirection = UICollectionViewScrollDirectionHorizontal;
+//        layout.minimumInteritemSpacing=5;
+//        layout.minimumLineSpacing=5;
+//        fontCollect = [[UICollectionView alloc] initWithFrame:CGRectMake(0, 0, contentRect.size.width, contentRect.size.height) collectionViewLayout:layout];
+//        fontCollect.backgroundColor=[UIColor clearColor];
+//        [fontCollect registerClass:[UICollectionViewCell class] forCellWithReuseIdentifier:cellIdentifier];
+//        fontCollect.alwaysBounceHorizontal=YES;
+//        fontCollect.alwaysBounceVertical=NO;
+//        fontCollect.scrollEnabled=YES;
+//        fontCollect.dataSource=self;
+//        fontCollect.delegate=self;
+//        
+//        [fontsView addSubview:fontCollect];
+//        [self addSubview:fontsView];
+        
+        scrollView = [[UIScrollView alloc] initWithFrame:contentRect];
+        scrollView.backgroundColor = [UIColor clearColor];
+        scrollView.showsHorizontalScrollIndicator = NO;
+        for(int i = 0; i < fontList.count; i++){
+            FontItemView *itemView = [[FontItemView alloc] initWithFrame:CGRectMake(i * (FontImageViewWidth + 5) + 5, 0, FontImageViewWidth, FontImageViewHeight + 5) fontDict:fontList[i]];
+            itemView.index = i;
+            itemView.delegate = self;
+            [scrollView addSubview:itemView];
+            [itemViewArray addObject:itemView];
+        }
+        scrollView.contentSize = CGSizeMake(fontList.count * (FontImageViewWidth + 5) + 5, 30);
+        self.backgroundColor = [UIColor clearColor];
+        [self addSubview:scrollView];
+        selectedIndex = -1;
+    }
+    return self;
+}
+
+-(void)selectorControlTochUp:(id)sender
+{
+    __weak FontSelectorView * weakSelf = self;
+    BOOL flag=scrollView.hidden;
+    if(flag){
+        scrollView.hidden=NO;
+    }
+    
+    [UIView animateWithDuration:0.5 animations:^{
+        if (flag) {
+            weakSelf.scrollView.alpha=1.0;
+            weakSelf.scrollView.frame=contentRect;
+        }else{
+            weakSelf.scrollView.alpha=0.5;
+            weakSelf.scrollView.frame=CGRectMake(contentRect.origin.x, 0, 0, contentRect.size.height);
+        }
+    } completion:^(BOOL finished){
+        if (finished) {
+            if(flag==NO){//如果是隐藏的
+                weakSelf.scrollView.hidden=YES;
+            }
+        }
+    }];
+}
+
+- (void)fontSelected:(FontItemView *)view
+{
+//    switch (view.index) {
+//        case 0:
+//            [MobClick event:OUTPUT_FONT_TYPE_1];
+//            break;
+//        case 1:
+//            [MobClick event:OUTPUT_FONT_TYPE_2];
+//            break;
+//        case 2:
+//            [MobClick event:OUTPUT_FONT_TYPE_3];
+//            break;
+//        case 3:
+//            [MobClick event:OUTPUT_FONT_TYPE_4];
+//            break;
+//        case 4:
+//            [MobClick event:OUTPUT_FONT_TYPE_5];
+//            break;
+//        case 5:
+//            [MobClick event:OUTPUT_FONT_TYPE_6];
+//            break;
+//        case 6:
+//            [MobClick event:OUTPUT_FONT_TYPE_7];
+//            break;
+//        case 7:
+//            [MobClick event:OUTPUT_FONT_TYPE_8];
+//            break;
+//        case 8:
+//            [MobClick event:OUTPUT_FONT_TYPE_9];
+//            break;
+//        case 9:
+//            [MobClick event:OUTPUT_FONT_TYPE_10];
+//            break;
+//        default:
+//            break;
+//    }
+    if(view.index != selectedIndex){
+        for(FontItemView *item in itemViewArray){
+            if(item.index != view.index){
+                [item clearSelection];
+            }
+        }
+        selectedIndex = view.index;
+    }
+    if([self.delegate respondsToSelector:@selector(selectFont:)]){
+        [self.delegate selectFont:view.font];
+    }
+}
+
+- (void)selectFont:(UIFont*)font
+{
+    for(FontItemView *view in itemViewArray){
+        if(font){
+            if([font.fontName isEqualToString:view.font]){
+                [view setSelection:NO];
+            }else{
+                [view clearSelection];
+            }
+        }else{
+            [view clearSelection];
+        }
+    }
+}
+
+
+//- (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section
+//{
+//    return fontList.count;
+//}
+//
+//- (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath
+//{
+//    UICollectionViewCell * cell = [collectionView dequeueReusableCellWithReuseIdentifier:cellIdentifier forIndexPath:indexPath];
+//    NSDictionary * dict = fontList[indexPath.row];
+//    CGRect cellRect=CGRectMake(0, 0, FontImageViewWidth, FontImageViewHeight);
+//    UIImageView * fontImageView=[[UIImageView alloc] initWithFrame:cellRect];
+//    fontImageView.image=[UIImage imageResource:dict[@"ImageName"]];
+//    UIView *bottomLine = [[UIView alloc] initWithFrame:CGRectMake(0, cellRect.size.height-1, cellRect.size.width, cellRect.size.height)];
+//    
+////    FontItemView *itemView = [[FontItemView alloc] initWithFrame:CGRectMake(0, 0, FontImageViewWidth, FontImageViewHeight) fontDict:fontList[indexPath.row]];
+////    
+//    if (indexPath.row==selectedIndex) {
+//        bottomLine.hidden=NO;
+//    }else{
+//        bottomLine.hidden=YES;
+//    }
+//    
+//    [cell addSubview:fontImageView];
+//    [cell addSubview:bottomLine];
+//    
+//    return cell;
+//}
+//
+//- (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath
+//{
+//    if (selectedIndex==indexPath.row) {
+//        return;
+//    }
+//    NSInteger preIndex=selectedIndex;
+//    selectedIndex=indexPath.row;
+//    //[collectionView reloadItemsAtIndexPaths:@[[NSIndexPath indexPathForRow:selectedIndex inSection:0]]];
+//    [collectionView reloadData];
+//    NSDictionary * dict=fontList[indexPath.row];
+//    
+//    NSString * fontName = [dict[@"FontName"] isEqualToString:@"default"] ? [UIFont systemFontOfSize:17].fontName : [UIFont fontWithName:dict[@"FontName"] size:17].fontName;
+//    NSLog(@"fontName===%@",fontName);
+//    if([self.delegate respondsToSelector:@selector(selectFont:)]){
+//        [self.delegate selectFont:fontName];
+//    }
+//    
+//}
+
+@end

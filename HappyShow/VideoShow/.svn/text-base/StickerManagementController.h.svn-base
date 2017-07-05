@@ -1,0 +1,15 @@
+//
+//  StickerManagementController.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/16.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "BaseTableViewController.h"
+
+/** sticker管理界面 */
+@interface StickerManagementController : BaseTableViewController
+
+@end

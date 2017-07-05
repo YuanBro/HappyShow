@@ -1,0 +1,39 @@
+//
+//  PreviewViewController.h
+//  VideoShow
+//
+//  Created by lance on 15/5/14.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+#import "qxPlaybackHelper.h"
+#import "qxPlaybackView.h"
+#import "qxExportHelper.h"
+#import "qxTimeline.h"
+#import "qxTrack+Util.h"
+#import "qxMediaObject.h"
+
+//typedef NS_ENUM(NSInteger, ViewStatus){
+//    ViewStatusPreview,
+//    ViewStatusPhotoDurationSetting,
+//    ViewStatusVideoClip,
+//    ViewStatusRecordAudio,
+//    ViewStatusAddMusic
+//};
+
+typedef NS_ENUM(NSInteger, VideoMode) {
+    VideoModeSmart=0,//智能模式
+    VideoModeSquare=2//方块1:1模式
+};
+
+/** 创建通用的方法 */
+@interface PreviewViewController : BaseViewController
+
+@property (nonatomic,assign) VideoMode videoMode;
+//0 : video track,  1 : music track,  2 : audio track,  3 : overlay track
+@property (nonatomic,strong) qxTimeline  *timeline;
+
+-(CGRect) createPreviewViewRect:(CGRect) viewRect;
+
+@end

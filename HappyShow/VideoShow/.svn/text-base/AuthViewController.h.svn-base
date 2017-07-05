@@ -1,0 +1,30 @@
+//
+//  YoukuAuthController.h
+//  VideoShow
+//
+//  Created by lance on 15/5/4.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+
+typedef NS_ENUM(NSInteger, AuthType){
+    AuthTypeInstagram=0,
+    AuthTypeYouku=1
+};
+
+@protocol AuthViewControllerDelegate;
+
+// 优酷认证页面
+@interface AuthViewController : BaseViewController
+
+@property (nonatomic,assign) AuthType authType;
+@property (nonatomic,weak) id<AuthViewControllerDelegate> authDelegate;
+
+@end
+
+@protocol AuthViewControllerDelegate <NSObject>
+
+-(void) authFinish:(BOOL)isAuthed authType:(AuthType)type;
+
+@end

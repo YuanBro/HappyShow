@@ -1,0 +1,23 @@
+//
+//  SouceTrackCell.h
+//  VideoShow
+//
+//  Created by Mac on 16/1/12.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+@class SoundTrackInf;
+@interface SouceTrackCell : UITableViewCell
+
+
+@property (weak, nonatomic) IBOutlet UIImageView *statusIcon;
+@property (weak, nonatomic) IBOutlet UIImageView *souceTrackIcon;
+@property (weak, nonatomic) IBOutlet UILabel *titleLabel;
+@property (weak, nonatomic) IBOutlet UILabel *detailLabel;
+//@property (weak, nonatomic) IBOutlet UIButton *finishedStatus;
+@property (weak, nonatomic) IBOutlet UIButton *btnAccess;
+@property (assign, nonatomic) int materialID;
+@property (assign, nonatomic) int status;
+@property (weak,nonatomic) SoundTrackInf * soundTrackInf;
+@end

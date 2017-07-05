@@ -1,0 +1,31 @@
+//
+//  PlayMusicView.h
+//  VideoShow
+//
+//  Created by admin on 16/2/1.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import <AVFoundation/AVFoundation.h>
+
+@interface PlayMusicView : UIView{
+    BOOL isplay;
+}
+@property (weak, nonatomic) IBOutlet UILabel *Load;
+@property (weak, nonatomic) IBOutlet UIButton *backBtn;
+@property (weak, nonatomic) IBOutlet UILabel *currentTime;
+@property (weak, nonatomic) IBOutlet UILabel *endTime;
+@property (weak, nonatomic) IBOutlet UIButton *playBtn;
+@property (weak, nonatomic) IBOutlet UILabel *musicName;
+
+@property (weak, nonatomic) IBOutlet UISlider *slider;
+
+@property(copy,nonatomic)NSString* musicType;
+@property(nonatomic,assign)NSData* data;
+@property(nonatomic,strong)AVAudioPlayer* player;
+@property(nonatomic,strong)UIView* backView;
+
+
+-(void)playmusic;
+@end

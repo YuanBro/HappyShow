@@ -1,0 +1,20 @@
+//
+//  TransitionViewController.h
+//  VideoShow
+//
+//  Created by Mac on 16/3/1.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "PlayerViewController.h"
+
+@interface TransitionViewController : BaseViewController
+
+@property (strong, nonatomic) qxTimeline *timeline;
+/** 根据主编辑界面的预览框创建预览矩形 */
+@property (assign, nonatomic) CGRect videoViewRect;
+@property (weak,   nonatomic) id <PlayerViewControllerDelegate> delegate;
+
+@property (assign, nonatomic) BOOL isBefore; //设置转场时，转场是否是插入到对象的前面
+
+@end

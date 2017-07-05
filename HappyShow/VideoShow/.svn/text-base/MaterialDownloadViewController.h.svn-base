@@ -1,0 +1,32 @@
+//
+//  MaterialDownloadViewController.h
+//  VideoShow
+//
+//  Created by Mac on 16/1/12.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "BaseTableViewController.h"
+#import "PagerViewControllerDelegate.h"
+#import "Util.h"
+#import <MediaPlayer/MediaPlayer.h>
+#import <AVFoundation/AVFoundation.h>
+#import "MaterialInf.h"
+#import  <UIKit/UIKit.h>
+#import "Passvalue.h"
+@interface MaterialDownloadViewController : BaseTableViewController{
+    AVAudioPlayer *audioPlayer;
+}
+@property (nonatomic,weak) id<PagerViewControllerDelegate> mainDelegate;
+@property (nonatomic,assign) BOOL disableBack;
+@property (nonatomic,strong) NSString * typeId;
+@property (nonatomic,strong) NSString * titleText;
+@property (nonatomic,assign) BOOL disableSetting;
+@property (nonatomic,assign) MaterialType materialType;
+@property (nonatomic,strong)NSMutableDictionary * downMarialDic;
+
+@property(nonatomic,strong)  MaterialInf*inf;
+
+@property(nonatomic,strong)Passvalue*pass;
+
+@end

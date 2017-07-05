@@ -1,0 +1,18 @@
+//
+//  ExportVideo.m
+//  VideoShow
+//
+//  Created by chengkai.gan on 14-10-22.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "ExportVideo.h"
+
+
+@implementation ExportVideo
+
+@dynamic id;
+@dynamic asseturl;
+@dynamic savetime;
+
+@end

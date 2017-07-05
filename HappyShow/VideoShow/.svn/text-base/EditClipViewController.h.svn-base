@@ -1,0 +1,27 @@
+//
+//  EditClipViewController.h
+//  VideoShow
+//
+//  Created by lance on 15/6/5.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "BaseViewController.h"
+#import "PlayerViewController.h"
+
+@class qxMediaObject;
+
+/** 片段编辑---视频裁剪:片段时长 */
+@interface EditClipViewController : BaseViewController{
+    BOOL photoBatchTime;
+}
+
+@property (strong,nonatomic) qxMediaObject *mediaObj;//传递过来的片段---如果是视频则不能直接操作
+/** 根据主编辑界面的预览框创建预览矩形 */
+@property (assign,nonatomic) CGRect videoViewRect;
+@property (weak,nonatomic) id<PlayerViewControllerDelegate> delegate;
+@property (strong,nonatomic) qxTimeline *mtimeline;
+@property (strong,nonatomic)UIView * photoTimeBgView;
+//@property (strong,nonatomic)UIView * batchSetBgView;
+@end

@@ -1,0 +1,845 @@
+ //
+//  FilterViewController.m
+//  VideoShow
+//
+//  Created by Mac on 16/2/26.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "FilterViewController.h"
+#import "qxFxPlaybackHelper.h"
+#import "qxPlaybackView+Util.h"
+#import "StoryboardViewController.h"
+#import "UIColor+Util.h"
+#import "ToolbarExternCell.h"
+#import "UIImage+Util.h"
+#import "Util.h"
+#import "MBProgressHUD.h"
+#import "qxEffectMgr.h"
+
+@interface FilterViewController () <UICollectionViewDataSource, UICollectionViewDelegate, StoryboardViewDelegate, qxFxPlaybackDelegate, UIAlertViewDelegate, UIActionSheetDelegate>
+
+@property (weak, nonatomic) IBOutlet UIButton *btPlay;
+@property (weak, nonatomic) IBOutlet UIButton *batchBtn; //批量设置按钮
+
+@property (weak, nonatomic) IBOutlet UIView *videoBgView;
+@property (weak, nonatomic) IBOutlet UIView *videoView;
+@property (weak, nonatomic) IBOutlet UIView *bottomPanel;
+
+@property (weak, nonatomic) IBOutlet UIView *toolView;
+@property (weak, nonatomic) IBOutlet UICollectionView *filtersCollectionView;
+@property (strong, nonatomic) NSMutableArray *filterMarks; //相应滤镜的标志
+
+@property (strong, nonatomic) StoryboardViewController *storyPanel; //排序面板
+@property (assign, nonatomic) float storyPanelHeight; //排序面板的高度
+@property (assign, nonatomic) NSInteger startIndexOfStoryPanel; //记录开始的下标
+@property (strong, nonatomic) qxMediaObject *startObj; //记录开始的对象
+
+@property (assign, nonatomic) BOOL isPlaying; //是否正在播放
+@property (strong, nonatomic) qxFxPlaybackHelper *playbackHelper; //用于播放
+//@property (strong, nonatomic) NSIndexPath *indexPathOfSelected; //当前选中的第几个对象和第几种滤镜;indexPathOfSelected.section 存放选中对象下标,indexPathOfSelected.row 存放选中滤镜下标
+@property (assign, nonatomic) NSInteger indexOfSelectedObj; //选中的对象(片段)
+@property (assign, nonatomic) NSInteger indexOfSelectedFilter; //选中的滤镜
+@property (strong, nonatomic) qxTimeline *tempTimeline; //暂时处理用
+@property (strong, nonatomic) NSMutableArray *objs; //按顺序保存非转场的对象
+
+@property (strong, nonatomic) NSMutableArray *recordFiltersOfObjs; //保存所有片段对应的滤镜，以片段下标作为key, eg: @(0)
+
+@property (strong, nonatomic) NSTimer *timer; //由于没有给 播放完通道内一个对象后的协议方法，所以这里只能通过自定义一个定时器来控制
+@property (strong, nonatomic) qxMediaObject *currentObj; //当前播放的对象
+
+////////////暂时先用这个////////////////////////////////////////////
+//工具栏数据源
+@property (nonatomic,strong) NSArray *toolIcons;
+@property (nonatomic,strong) NSArray *toolLabels;
+//////////////////////////////////////////////////////////////////
+
+- (IBAction)playAction:(UIButton *)sender;
+- (IBAction)batch:(UIButton *)sender;
+
+@end
+
+@implementation FilterViewController
+
+#pragma -mark Private Methods
+
+- (void)dealloc {
+    
+    self.currentObj = nil;
+    self.objs = nil;
+    self.timeline = nil;
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    [self allInit];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    
+    if (self.timeline!=nil && [self.timeline getTrackCount]>0) {
+        [self.storyPanel clearMedias]; //清空片段框中的数据
+        qxTrack *videoTrack = [self.timeline getTrackFromTimeline:0];
+        ALAssetsLibrary *assetsLibrary = [Util defaultAssetsLibrary];
+        __weak typeof(self) weakSelf = self;
+        
+        for (int i=0; i<videoTrack.mpMediaObjArray.count; i++) {
+            qxMediaObject *obj = [videoTrack.mpMediaObjArray objectAtIndex:i];
+            //这里得到所有的asset,添加到storyPanel中
+            [assetsLibrary assetForURL:[NSURL URLWithString:obj.strFilePath] resultBlock:^(ALAsset *asset){
+                if (asset!=nil) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        //
+                        [weakSelf.storyPanel addMedia:asset];
+                    
+                    });
+                }
+            } failureBlock:^(NSError *error) {//被禁止访问
+                
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (error==nil) {
+                        [Util showAlert:NSLocalizedString(@"Photo library access deny", nil) title:NSLocalizedString(@"Access deny", nil) tag:0];
+                    } else {
+                        [Util showAlert:error.localizedDescription title:nil tag:0];
+                    }
+                });
+            }];
+        }
+    }
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+  
+    //注销定时器
+    if (_timer.isValid) {
+        [_timer invalidate];
+    }
+    _timer = nil;
+}
+
+- (void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+}
+
+/**
+ *  初始化
+ *
+ */
+- (void)allInit {
+    
+    self.view.backgroundColor = [UIColor colorWithHexString:homeColor];
+    self.bottomPanel.backgroundColor = [UIColor colorWithHexString:bottomViewColor];
+    
+    [self dataInit];
+    [self navInit];
+    [self videoBgViewInit];
+    [self filtersCollectionViewInit];
+    [self storyPanelInit];
+}
+
+/**
+ * 数据初始化
+ *
+ */
+- (void)dataInit {
+    
+    //
+    [[self.timeline getTrackFromTimeline:0].mpMediaObjArray enumerateObjectsUsingBlock:^(qxMediaObject *obj, NSUInteger idx, BOOL *stop) {
+        
+        if (obj.eType != eMT_Transition) {
+            [self.objs addObject:obj];
+        }
+    }];
+    //
+    typeof(self) selfWeak = self;
+    [self showToast:nil];
+    [[self.timeline getTrackFromTimeline:0] reloadPhoto:self.screenRect.size block:^{
+        [selfWeak hideHud];
+    }];
+}
+
+
+/**
+ * 导航初始化
+ *
+ */
+- (void)navInit {
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"Filter", nil)];
+    [self.navigationController.navigationBar initWithViewController:self leftText:NSLocalizedString(@"Back", nil) leftImageName:@"ic_back_arrow.png" action:@selector(cancelAction:)];
+    [self.navigationController.navigationBar initWithViewController:self rightImageName:@"bt_ok.png" action:@selector(confirmAction:)];
+}
+
+/**
+ * 播放视图初始化
+ *
+ */
+- (void)videoBgViewInit {
+
+    //
+    UITapGestureRecognizer *playbackTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapVideoView:)];
+    [self.videoBgView addGestureRecognizer:playbackTap];
+    
+    //
+    self.batchBtn.titleLabel.font = [UIFont boldSystemFontOfSize:15];
+    self.batchBtn.layer.cornerRadius = self.batchBtn.frame.size.height/2;
+    self.batchBtn.layer.borderWidth = 2.0;
+    self.batchBtn.layer.borderColor = [UIColor colorWithRed:227/255. green:39/255. blue:78/255. alpha:1].CGColor;
+    self.batchBtn.clipsToBounds = YES;
+}
+
+/**
+ * 排序面板初始化
+ *
+ */
+- (void)storyPanelInit {
+//    [self.storyPanel attachToController:self superview:self.view frame:CGRectMake(0, self.view.frame.size.height-self.statusHeight-self.naviHeight-self.videoView.frame.size.height-self.toolView.frame.size.height, self.view.frame.size.width, self.storyPanelHeight-64)];
+    [self.storyPanel attachToController:self superview:self.view frame:CGRectMake(0, self.screenRect.size.height-self.storyPanelHeight, self.view.frame.size.width, self.storyPanelHeight - 64)];
+}
+
+/**
+ * 滤镜集合视图初始化
+ *
+ */
+- (void)filtersCollectionViewInit {
+    
+    UICollectionViewFlowLayout *layout = [[UICollectionViewFlowLayout alloc] init];
+    layout.minimumLineSpacing = 15;
+    CGFloat itemSizeHeight = self.filtersCollectionView.frame.size.height;
+    layout.itemSize = CGSizeMake(itemSizeHeight*3/4, itemSizeHeight); //图片宽，高相同，且占cell高度的3/4
+    layout.scrollDirection = UICollectionViewScrollDirectionHorizontal;
+    self.filtersCollectionView.collectionViewLayout = layout;
+    self.filtersCollectionView.backgroundColor=[UIColor colorWithHexString:navigationBarColor];
+    [self.filtersCollectionView registerClass:[ToolbarExternCell class] forCellWithReuseIdentifier:toolbarExternCellID];
+}
+
+/**
+ *  设置选中的滤镜的Cell的数据
+ *  主要设置边框
+ */
+- (void)setSelectedFilterMarksWithIndex:(NSInteger)index isReload:(BOOL)isReload {
+    //
+    self.indexOfSelectedFilter = index;
+
+    //
+    [self.filterMarks enumerateObjectsUsingBlock:^(ToolbarExternModel *model, NSUInteger idx, BOOL *stop) {
+        model.hasBorder = (idx == index);
+    }];
+    //
+    if (isReload) {
+        [self.filtersCollectionView reloadData];
+    }
+}
+
+/**
+ *  给指定下标的对象设置指定下标的滤镜
+ *
+ */
+- (void)setFilterWithIndexOfMediaObject:(NSInteger)objIdx indexOfSelectedFilter:(NSInteger)filterIdx isPrepareForPreview:(BOOL)isPrepareForPreview {
+    
+    //
+    [self recordIndexOfSelectedObject:objIdx indexOfSelectedFilter:filterIdx];
+    
+    objIdx = [self indexOfObj:objIdx track:[self.timeline getTrackFromTimeline:0]];
+    //
+    self.isPlaying = NO;
+    qxTrack * track = [_timeline getTrackFromTimeline:0];
+    
+    if (objIdx >= track.mpMediaObjArray.count || index < 0){
+        
+        [self showToast:@"Clip Index不对"];
+    } else{
+        
+        if (filterIdx < eEffect_None || filterIdx >= eEffect_Count) {
+            
+            [self showToast:@"Effect Id不对"];
+        } else {
+            
+            qxMediaObject * mediaObject = track.mpMediaObjArray[objIdx];
+
+            //添加滤镜, 如果是eEffect_None 就清空滤镜
+            [mediaObject setEffect:(int)filterIdx];
+            if (isPrepareForPreview) {
+                [self prepareForPreview];
+            }
+        }
+    }
+}
+
+/**
+ *  获取timeline实际下标 of (当前选中对象)
+ *  由于在timeline中添加了类型为eMT_Transition的对象所以要把这些东西过滤一下
+ *  @index: self.storyPanel.currentSelectedIndexPath.row的值
+ *  return: 获取非转场对象的下标
+ */
+- (NSInteger)indexOfObj:(NSInteger)index track:(qxTrack *)track {
+    
+    NSInteger flag = 0;
+    for (qxMediaObject *obj in track.mpMediaObjArray) {
+        
+        if (obj.eType != eMT_Transition) {
+            if ((--index) == -1) {
+                return flag;
+            }
+        }
+        flag++;
+    }
+    return flag;
+}
+
+/**
+ *  移动视频播放的位置
+ *
+ */
+- (void)seekTo:(float)second {
+    
+    
+    [self.playbackHelper seekToTime:second];
+}
+
+- (void)removeOldVideoView {
+}
+
+/**
+ *  记录对象选中的滤镜
+ *
+ */
+- (void)recordIndexOfSelectedObject:(NSInteger)objIdx indexOfSelectedFilter:(NSInteger)filterIdx {
+    
+    self.recordFiltersOfObjs[objIdx] = @(filterIdx);
+}
+
+/**
+ * 点击屏幕事件(点击就暂停播放)
+ *
+ */
+- (void)tapVideoView:(UITapGestureRecognizer *)tap {
+    
+    if (self.isPlaying) {
+        [self pausePreview];
+    }
+}
+
+/**
+ * 确定（对号）事件
+ *
+ */
+- (void)confirmAction:(id)sender {
+    
+    [self stopPreview];
+    if (_delegate) {
+        [_delegate videoEdit:self type:EditTypeFilter editFlag:YES];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+/**
+ * 返回，取消事件
+ *
+ */
+- (void)cancelAction:(id)sender {
+    
+    [self stopPreview];
+    if (_delegate) {
+        [_delegate videoEdit:self type:EditTypeFilter editFlag:NO];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+/**
+ * 播放事件
+ *
+ */
+- (IBAction)playAction:(UIButton *)sender {
+    
+    //
+    if(!self.isPlaying){
+        [self startPreview];
+    }else{
+        [self pausePreview];
+    }
+}
+
+/**
+ * 批量设置事件
+ *
+ */
+- (IBAction)batch:(UIButton *)sender {
+    //iOS 8,由于工程最低支持iOS7，所以暂时先不用这个
+    //UIAlertController *alertVC = [UIAlertController alertControllerWithTitle:@"title" message:@"message" preferredStyle:UIAlertControllerStyleAlert];
+    //iOS 7
+//    NSString *titles = @"@\"所有镜头随机设置滤镜\", @\"清除所有的值\"";
+//    if (self.indexOfSelectedFilter != 0) {
+//        titles = [NSString stringWithFormat:@"@\"所有镜头随机设置滤镜\", @\"\"%@\":适用所有镜头\", @\"清除所有的值\"", [self.filterMarks[self.indexOfSelectedFilter] title]];
+//    }
+//    可以转化为：可变变量吗，就是直接适用下面的otherButtonTitles:...
+    
+    if (self.isPlaying) {
+        [self showToast:@"正在播放，请停止播放"];
+        return;
+    }
+    
+    UIActionSheet *sheet = nil;
+    if (self.indexOfSelectedFilter != 0) {
+    
+        sheet = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:nil destructiveButtonTitle:nil otherButtonTitles:@"所有镜头随机设置滤镜",  [NSString stringWithFormat:@"\"%@\": 适用所有镜头", [self.filterMarks[self.indexOfSelectedFilter] title]], @"清除所有的值", nil];
+    } else {
+        
+        sheet = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:nil destructiveButtonTitle:nil otherButtonTitles:@"所有镜头随机设置滤镜", @"清除所有的值", nil];
+    }
+    [sheet showInView:self.view];
+}
+
+- (void)showToast:(NSString*)str {
+    
+    MBProgressHUD* hud = [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+    hud.mode = MBProgressHUDModeText;
+    hud.labelText = str;
+    [self performSelector:@selector(hideHud) withObject:self afterDelay:1.5];
+}
+
+- (void)hideHud {
+    
+    [MBProgressHUD hideHUDForView:self.view animated:NO];
+}
+
+/**
+ *  更新片段cell边框 和 滤镜cell的边框
+ */
+- (void)updateBoderForObject:(NSInteger)objIdx filter:(NSInteger)filterIdx {
+    
+    [self setSelectedFilterMarksWithIndex:filterIdx isReload:YES];
+    [self.storyPanel setBoder:objIdx];
+}
+
+
+#pragma -mark Preview Methods
+
+- (void)setTimelineOfPreview {
+    
+    
+    qxTrack *videoTrack = [self.tempTimeline getTrackFromTimeline:0];
+    [videoTrack delAllOfMediaObjects];
+    
+    qxTrack *track = [self.timeline getTrackFromTimeline:0];
+    //添加从当前选中对象开始的对象直到最后一个对象这段对象
+    for (int i=0; i<track.mpMediaObjArray.count; i++) {
+#if 0
+        if (i>=self.storyPanel.currentSelectedIndexPath.row) {
+            [videoTrack addMediaObject:track.mpMediaObjArray[i]];
+        }
+#else
+      
+        if (i>= [self indexOfObj:self.storyPanel.currentSelectedIndexPath.row track:[self.timeline getTrackFromTimeline:0]]) {
+            [videoTrack addMediaObject:track.mpMediaObjArray[i]];
+        }
+        
+#endif
+    }
+}
+
+- (void)prepareForPreview {
+#if 0
+    
+    [self setTimelineOfPreview];
+    
+    if (self.playbackHelper) {
+        self.playbackHelper.delegate = nil;
+        [self.playbackHelper stop];
+        [self.playbackHelper destroy];
+        self.playbackHelper = nil;
+    }
+    
+    self.playbackHelper = [[qxFxPlaybackHelper alloc] init];
+    self.playbackHelper.delegate = self;
+    
+    float scale = [UIScreen mainScreen].scale;
+    self.tempTimeline.timelineSize = CGSizeMake(self.videoView.frame.size.width*scale, self.videoView.frame.size.height*scale);
+    [self.tempTimeline clearTrans];
+    self.playbackHelper.mpTimeline = self.tempTimeline;
+    [self.playbackHelper initWithUIView:self.videoView];
+    
+    //保存当前播放的对象
+    self.currentObj = [[self.tempTimeline getTrackFromTimeline:0] getMediaObjectFromTrack:0];
+    
+#else
+    
+    if (self.playbackHelper) {
+        self.playbackHelper.delegate = nil;
+        [self.playbackHelper stop];
+        [self.playbackHelper destroy];
+        self.playbackHelper = nil;
+    }
+    
+    self.playbackHelper = [[qxFxPlaybackHelper alloc] init];
+    self.playbackHelper.delegate = self;
+    
+    float scale = [UIScreen mainScreen].scale;
+    self.timeline.timelineSize = CGSizeMake(self.videoView.frame.size.width*scale, self.videoView.frame.size.height*scale);
+    [self.timeline clearTrans];
+    self.playbackHelper.mpTimeline = self.timeline;
+    [self.playbackHelper initWithUIView:self.videoView];
+    
+    NSLog(@"%f", CMTimeGetSeconds(self.startObj.startTimeOfTrack));
+    NSLog(@"%f", CMTimeGetSeconds(self.startObj.endTimeOfTrack));
+    NSLog(@"%f", CMTimeGetSeconds(self.startObj.startTimeOfTrack_BesideTrans)); //有的话就是转场结束的时间，没有的话就是对象开始的时间
+    NSLog(@"%f", CMTimeGetSeconds(self.startObj.mediaOriginalDuration));
+    
+    [self.playbackHelper seekToTime:CMTimeGetSeconds(self.startObj.startTimeOfTrack_BesideTrans)];
+    
+    //保存当前播放的对象
+    self.currentObj = self.startObj;
+    
+#endif
+}
+
+#pragma mark - Preview control Methods
+
+- (void)startPreview {
+    
+    if (!self.isPlaying && self.playbackHelper) {
+        [self.playbackHelper playPause:YES];
+        self.isPlaying = YES;
+        //打开定时器,监测播放到通道的哪个对象了.然后对filterCollectionView 和 storyPanel 进行刷新;
+        [self.timer setFireDate:[NSDate distantPast]];
+    }
+    self.btPlay.hidden = YES;
+}
+
+- (void)pausePreview {
+    
+    if (self.isPlaying && self.playbackHelper) {
+        [self.playbackHelper playPause:NO];
+        self.isPlaying = NO;
+        //关闭定时器
+        [self.timer setFireDate:[NSDate distantFuture]];
+    }
+    self.btPlay.hidden = NO;
+}
+
+- (void)stopPreview {
+
+    if (self.playbackHelper) {
+        self.playbackHelper.delegate = nil;
+        [self.playbackHelper stop];
+        [self.playbackHelper destroy];
+        self.playbackHelper = nil;
+    }
+    self.isPlaying = NO;
+}
+
+#pragma -mark Member Vars
+
+- (float)storyPanelHeight {
+    
+    if (!_storyPanelHeight) {
+        //_storyPanelHeight = self.bottomPanel.frame.size.height - self.toolView.frame.size.height;
+        //_storyPanelHeight =  self.screenRect.size.height - self.videoView.frame.size.height - self.toolView.frame.size.height - 10;
+        _storyPanelHeight = self.screenRect.size.height - self.screenRect.size.width - self.toolView.frame.size.height;
+    }
+    return _storyPanelHeight;
+}
+
+- (StoryboardViewController *)storyPanel {
+    
+    if (!_storyPanel) {
+        _storyPanel = [[StoryboardViewController alloc] init];
+        _storyPanel.storyType = @"editClip"; //这种类型会特殊处理第一个片段，调用- (void)editPrepare:(int)assetIndex; 这个协议方法;
+        _storyPanel.editType = EditTypeFilter; //新添加的类型，表示是哪种编辑类型，以在其内部进行调整
+        _storyPanel.target = self;
+        _storyPanel.delegate = self;
+    }
+    return _storyPanel;
+}
+
+- (qxFxPlaybackHelper *)playbackHelper {
+    
+    if (_playbackHelper) {
+    
+    }
+    return _playbackHelper;
+}
+
+- (NSMutableArray *)filterMarks {
+    
+    if (!_filterMarks) {
+        _filterMarks = [NSMutableArray array];
+        self.toolIcons = @[@"toolbar_media.png",@"toolbar_duration.png",@"toolbar_subtitle.png",@"toolbar_sticker.png",@"toolbar_music.png",@"toolbar_record.png",@"toolbar_record.png"];
+        self.toolLabels = @[@"Tool_clip_add",@"Tool_clip_duration",@"Tool_subtitle",@"Tool_sticker",@"Tool_music",@"Tool_record",@"Tool_filter"];
+        
+        self.indexOfSelectedFilter = 0;
+        for (NSInteger i=0; i<self.toolIcons.count; i++) {
+            
+            ToolbarExternModel *model = [[ToolbarExternModel alloc] init];
+            model.iconImage = [UIImage imageResource:self.toolIcons[i]];
+            model.title     = NSLocalizedString(self.toolLabels[i], nil);
+            model.hasBorder = (i==self.indexOfSelectedFilter); //边框的颜色直接用默认值就可以了，所以这里没有添加颜色属性;
+            [_filterMarks addObject:model];
+        }
+    }
+    return _filterMarks;
+}
+
+- (NSMutableArray *)recordFiltersOfObjs {
+    if (!_recordFiltersOfObjs) {
+        _recordFiltersOfObjs = [NSMutableArray array];
+        
+#if 0
+        for (NSInteger i=0; i<[self.timeline getTrackFromTimeline:0].mpMediaObjArray.count; i++) {
+            [_recordFiltersOfObjs addObject:@(0)];
+        }
+        
+#else 
+
+        //对进来就已经加了转场的对象进行处理一下
+        qxTrack *track = [self.timeline getTrackFromTimeline:0];
+        int index = 0;
+        for (qxMediaObject *obj in track.mpMediaObjArray) {
+            
+            if (obj.eType != eMT_Transition) {
+                
+                [_recordFiltersOfObjs addObject:@(obj.effect_def)];
+            }
+            index++;
+        }
+#endif
+    }
+    return _recordFiltersOfObjs;
+}
+
+- (qxTimeline *)tempTimeline {
+    if (!_tempTimeline) {
+        _tempTimeline = [[qxTimeline alloc] init];
+        qxTrack *track = [[qxTrack alloc] initWithTrackType:eMT_Video];
+        [_tempTimeline addTrack:track];
+    }
+    return _tempTimeline;
+}
+
+- (NSTimer *)timer {
+    if (!_timer.isValid) {
+        _timer = [NSTimer scheduledTimerWithTimeInterval:0.05 target:self selector:@selector(observeProgressOfPlayForObject:) userInfo:nil repeats:YES];
+        [_timer setFireDate:[NSDate distantFuture]];
+    }
+    return _timer;
+}
+
+- (NSMutableArray *)objs {
+    if (!_objs) {
+        _objs = [NSMutableArray array];
+    }
+    return _objs;
+}
+
+#pragma mark - timer
+
+/**
+ *  动态更新片段边框 和 滤镜边框
+ *
+ */
+- (void)observeProgressOfPlayForObject:(NSTimer *)timer {
+    
+    NSTimeInterval tm = [self.playbackHelper playbackProgress];
+    qxMediaObject *obj = [[self.timeline getTrackFromTimeline:0] findMediaObjectAtSecond:tm/1000];
+
+    if (obj && obj != self.currentObj && (obj.eType != eMT_Transition)) {
+        self.currentObj = obj;
+        //根据recordFiltersOfObjs更新UI
+        NSInteger objIdx = [self.objs indexOfObject:obj];
+        [self updateBoderForObject:objIdx filter:[self.recordFiltersOfObjs[objIdx] integerValue]];
+    }
+}
+
+#pragma mark - Collection Delegate
+
+- (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section {
+    return self.filterMarks.count;
+}
+
+- (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath {
+    
+    ToolbarExternCell * cell = [collectionView dequeueReusableCellWithReuseIdentifier:toolbarExternCellID forIndexPath:indexPath];
+    return [cell setCellWithData:self.filterMarks[indexPath.row]];
+}
+
+- (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
+    
+    //
+    [collectionView deselectItemAtIndexPath:indexPath animated:YES];
+    //先刷新filterCollectionView
+    [self setSelectedFilterMarksWithIndex:indexPath.row isReload:YES];
+    //更新recordFiltersOfObjs, 并且更新tempTimeline进行预览
+    [self setFilterWithIndexOfMediaObject:self.storyPanel.currentSelectedIndexPath.row indexOfSelectedFilter:indexPath.row isPrepareForPreview:YES];
+}
+
+#pragma mark - StoryPanel Delegate
+
+/**
+ *  选中storyPanel中的cell时会调用
+ *
+ */
+- (void)editPrepare:(int)assetIndex {
+    
+    //
+    [self pausePreview];
+    //
+    [self updateBoderForObject:assetIndex filter:[self.recordFiltersOfObjs[assetIndex] integerValue]];
+    //
+    self.startObj = [[self.timeline getTrackFromTimeline:0].mpMediaObjArray objectAtIndex:[self indexOfObj:assetIndex track:[self.timeline getTrackFromTimeline:0]]];
+    self.startIndexOfStoryPanel = assetIndex;
+    //
+    [self prepareForPreview];
+}
+
+/**
+ *  删除storyPanel中的cell时会调用
+ *
+ */
+- (void)deleteAsset:(NSInteger)indexOfSelected {
+    
+    UIAlertView *alter = [[UIAlertView alloc] initWithTitle:@"提示" message:@"确定要删除吗？" delegate:self cancelButtonTitle:@"取消" otherButtonTitles:@"确定",nil];
+    [alter show];
+}
+
+/**
+ *  数据改变(删除或添加，不包括移动)后回调
+ *
+ */
+- (void)didDataChange:(StoryboardViewController *)story {
+    //更新timeline
+}
+
+/**
+ *  交换的待纠正！！！
+ *
+ */
+- (void)movefromIndexPath:(NSIndexPath *)fromIndexPath toIndexPath:(NSIndexPath *)toIndexPath {
+    //暂停播放
+    [self pausePreview];
+    
+    //更新timeline
+    qxTrack *videoTrack = [self.timeline getTrackFromTimeline:0];
+    qxMediaObject *fromObj = [videoTrack getMediaObjectFromTrack:(int)fromIndexPath.row];
+    [videoTrack delMediaObject:(int)fromIndexPath.row];
+    [videoTrack insertMediaObject:fromObj atIndex:(int)toIndexPath.row];
+    
+    //更新recordFiltersOfObjs
+    id fromFilter = self.recordFiltersOfObjs[fromIndexPath.row];
+    [self.recordFiltersOfObjs removeObjectAtIndex:fromIndexPath.row];
+    [self.recordFiltersOfObjs insertObject:fromFilter atIndex:toIndexPath.row];
+    
+    //更新startIndexOfStoryPanel
+    if (fromIndexPath.row == self.startIndexOfStoryPanel){
+        self.startIndexOfStoryPanel  = toIndexPath.row;
+    } else if (toIndexPath.row == self.startIndexOfStoryPanel) {
+        self.startIndexOfStoryPanel = fromIndexPath.row;
+    }
+    
+    //更新objs
+    [self.objs removeObject:fromObj];
+    [self.objs insertObject:fromObj atIndex:toIndexPath.row];
+    
+    //
+    [self prepareForPreview];
+}
+
+#pragma mark - UIAlertView Delegate
+
+/**
+ *  删除对象，点击确定按钮时的处理
+ *
+ */
+- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex {
+    if (buttonIndex == 1) {
+        [self.storyPanel deleteObjectMedia];
+    }
+}
+
+#pragma mark - UIActionSheet Delegate
+- (void)actionSheet:(UIActionSheet *)actionSheet clickedButtonAtIndex:(NSInteger)buttonIndex {
+    
+    //
+    if (buttonIndex == 0) { //所有镜头随机设置滤镜
+        NSLog(@"所有镜头随机设置滤镜");
+        
+        for (NSInteger i=self.recordFiltersOfObjs.count-1; i>=0; i--) {
+            
+            NSInteger filterIdx = (arc4random()%(self.filterMarks.count-2)+1);
+            //更新recordFiltersOfObjs, 并且更新tempTimeline进行预览
+            [self setFilterWithIndexOfMediaObject:i indexOfSelectedFilter:filterIdx isPrepareForPreview:NO];
+        }
+        [self setSelectedFilterMarksWithIndex:[self.recordFiltersOfObjs[self.storyPanel.currentSelectedIndexPath.row] integerValue] isReload:NO];
+        
+    } else if (buttonIndex == (actionSheet.numberOfButtons-1)) { //清除所有值
+        NSLog(@"清除所有值");
+        
+        for (NSInteger i=self.recordFiltersOfObjs.count-1; i>=0; i--) {
+            NSInteger filterIdx = 0;
+            [self setFilterWithIndexOfMediaObject:i indexOfSelectedFilter:filterIdx isPrepareForPreview:NO];
+        }
+        [self setSelectedFilterMarksWithIndex:0 isReload:NO];
+    } else { //"xx":适用所有镜头
+        NSLog(@"适用所有镜头");
+        
+        NSInteger filterIdx = self.indexOfSelectedFilter;
+        for (NSInteger i=self.recordFiltersOfObjs.count-1; i>=0; i--) {
+            [self setFilterWithIndexOfMediaObject:i indexOfSelectedFilter:filterIdx isPrepareForPreview:NO];
+        }
+    }
+    
+    [self.filtersCollectionView reloadData];
+    [self prepareForPreview];
+    //
+    [actionSheet removeFromSuperview];
+}
+
+#pragma mark - qxFxPlaybackDelegate
+
+/**
+ * 应用切回前台时和第一次进入播放时回调
+ */
+- (void)readyForPlayback {
+    
+    if (!self.isPlaying) {
+        self.btPlay.hidden = NO;
+        [self seekTo:CMTimeGetSeconds(self.startObj.startTimeOfTrack_BesideTrans)];
+    }
+    [self performSelector:@selector(removeOldVideoView) withObject:nil afterDelay:0.5];
+}
+
+/**
+ * 播放完成时回调
+ */
+- (void)FinishPlayback {
+    
+    //
+    [self pausePreview];
+    
+    //
+    [self.playbackHelper seekToTime:CMTimeGetSeconds(self.startObj.startTimeOfTrack_BesideTrans)];
+    
+    //
+    [self updateBoderForObject:self.startIndexOfStoryPanel filter:[self.recordFiltersOfObjs[self.startIndexOfStoryPanel] integerValue]];
+}
+
+#pragma -mark Public Methods
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@end

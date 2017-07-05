@@ -1,0 +1,83 @@
+//
+//  MusicPickerCell.m
+//  VideoShow
+//
+//  Created by lance on 15/5/18.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "MusicPickerCell.h"
+#import "UIImage+Util.h"
+#import "Util.h"
+#import "UIColor+Util.h"
+
+@implementation MusicPickerCell
+
+- (void)awakeFromNib {
+    
+    UIImage *sliderimg = [UIImage imageResource:@"slider_track.png"];
+    sliderimg = [sliderimg resizableImageWithCapInsets:UIEdgeInsetsMake(0.0, 5.0, 0.0, 5.0)];
+    self.rangeSlider.trackBackgroundImage = sliderimg;
+    
+    sliderimg = [UIImage imageResource:@"slider_track_bg.png"];
+    sliderimg = [sliderimg resizableImageWithCapInsets:UIEdgeInsetsMake(0.0, 5.0, 0.0, 5.0)];
+    self.rangeSlider.trackFillImage = sliderimg;
+    
+    sliderimg = [UIImage imageResource:@"range_slider_left_handle.png"];
+    [sliderimg resizableImageWithCapInsets:UIEdgeInsetsMake(1,1,1,1)];
+    self.rangeSlider.leftHandleImage = sliderimg;
+    self.rangeSlider.leftHandleHighlightedImage = sliderimg;
+    
+    sliderimg = [UIImage imageResource:@"range_slider_right_handle.png"];
+    [sliderimg resizableImageWithCapInsets:UIEdgeInsetsMake(1,1,1,1)];
+    self.rangeSlider.rightHandleImage = sliderimg;
+    self.rangeSlider.rightHandleHighlightedImage = sliderimg;
+    self.rangeSlider.spaceX = sliderimg.size.width;
+}
+
+-(void)playAction:(UIButton*)sender
+{
+    sender.selected=!sender.selected;
+    if ([self.delegate respondsToSelector:@selector(musicPickerCellPlayAction:)]) {
+        [self.delegate musicPickerCellPlayAction:sender];
+    }
+}
+- (void)addAction:(id)sender
+{
+    if([self.delegate respondsToSelector:@selector(musicPickerCellAddAction:)]){
+        [self.delegate musicPickerCellAddAction:sender];
+    }
+}
+
+-(void)sliderValueChanged:(id)sender
+{
+    self.startTime.text = [Util stringWithSeconds:round(self.rangeSlider.leftValue)];
+    self.endTime.text = [Util stringWithSeconds:round(self.rangeSlider.rightValue)];
+}
+
+-(void)sliderTouchDown:(id)sender
+{
+    if ([self.delegate respondsToSelector:@selector(musicPickerCellSliderTouchDown:)]) {
+        [self.delegate musicPickerCellSliderTouchDown:self];
+    }
+}
+
+-(void)sliderTouchUpInside:(id)sender
+{
+    if([self.delegate respondsToSelector:@selector(musicPickerCellSliderTouchUp:)]){
+        [self.delegate musicPickerCellSliderTouchUp:self];
+    }
+}
+
+-(void)dealloc
+{
+    [_rangeSlider removeTarget:self action:@selector(sliderValueChanged:) forControlEvents:UIControlEventValueChanged];
+}
+
+- (void)setSelected:(BOOL)selected animated:(BOOL)animated {
+    [super setSelected:selected animated:animated];
+
+    // Configure the view for the selected state
+}
+
+@end

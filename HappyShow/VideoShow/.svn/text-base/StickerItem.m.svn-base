@@ -1,0 +1,19 @@
+//
+//  StickerItem.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/17.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "StickerItem.h"
+
+
+@implementation StickerItem
+
+@dynamic stickerID;
+@dynamic type;
+@dynamic image;
+@dynamic lastUsedTime;
+
+@end

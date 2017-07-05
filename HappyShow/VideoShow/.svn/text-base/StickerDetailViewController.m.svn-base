@@ -1,0 +1,287 @@
+//
+//  StickerDetailViewController.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/18.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "StickerDetailViewController.h"
+#import "UIImageView+WebCache.h"
+#import "StickerDownloader.h"
+#import "DownloadedSticker+CoreData.h"
+#import "Util.h"
+#import "Toast+UIView.h"
+#import "ASIHTTPRequest.h"
+#import "MaterialInf.h"
+#import "BaseService.h"
+#import "UIImage+Util.h"
+#import "UIColor+Util.h"
+#import "AppMacros.h"
+#import "UINavigationBar+Util.h"
+
+#define downloadColor @"#dd6b6f"
+#define completeColor @"#28dc28"
+
+@interface StickerDetailViewController()<StickerDownloaderDelegate>
+{
+
+}
+
+@property (nonatomic,assign) int stickerStatus;//记录下载状态
+@property (nonatomic,strong) IBOutlet UIScrollView * mScrollView;
+@property (nonatomic,strong) IBOutlet UIView * topView;
+@property (nonatomic,strong) IBOutlet UIImageView * icSticker;
+@property (nonatomic,strong) IBOutlet UILabel * labelName;
+@property (nonatomic,strong) IBOutlet UILabel * labelPrice;
+@property (nonatomic,strong) IBOutlet UILabel * labelTime;
+@property (nonatomic,strong) IBOutlet UIButton * btDownload;
+@property (nonatomic,strong) IBOutlet UIProgressView *progressView;
+
+@property (nonatomic,strong) IBOutlet UIImageView * icPreviewView;//sticker预览效果
+
+-(IBAction)downloadAction:(id)sender;
+
+@end
+
+@implementation StickerDetailViewController
+
+@synthesize stickerStatus;
+@synthesize mScrollView;
+@synthesize topView;
+@synthesize icSticker;
+@synthesize labelName;
+@synthesize labelPrice;
+@synthesize labelTime;
+@synthesize btDownload;
+@synthesize progressView;
+@synthesize icPreviewView;
+
+@synthesize resource_url;
+@synthesize materialInf;
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor colorWithRed:250/255.0 green:250/255.0 blue:250/255.0 alpha:1];
+    [self.navigationController.navigationBar initWithViewController:self title:materialInf.material_name leftAction:@selector(backTap:)];
+    
+    mScrollView = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, [UIScreen mainScreen].bounds.size.height - self.statusHeight-self.naviHeight-CustomTabbarHeight)];
+    mScrollView.backgroundColor = [UIColor colorWithRed:250/255.0 green:250/255.0 blue:250/255.0 alpha:1];
+    mScrollView.alwaysBounceVertical = YES;
+    mScrollView.alwaysBounceHorizontal = NO;
+    mScrollView.showsVerticalScrollIndicator = YES;
+    mScrollView.showsHorizontalScrollIndicator = NO;
+    [self.view addSubview:mScrollView];
+    
+    topView = [[UIView alloc] initWithFrame:CGRectMake(5, 5, mScrollView.frame.size.width - 10, 250)];
+    topView.layer.borderWidth = 0.5;
+    topView.layer.borderColor = [[[UIColor lightGrayColor] colorWithAlphaComponent:0.3] CGColor];
+    topView.layer.cornerRadius = 10;
+    [mScrollView addSubview:topView];
+
+    icSticker = [[UIImageView alloc] initWithFrame:CGRectMake(10, 10, 80, 80)];
+    NSURL *iconURL = [NSURL URLWithString:[NSString stringWithFormat:@"%@%@",resource_url,materialInf.material_icon]];
+    [icSticker setImageWithURL:iconURL placeholderImage:[UIImage imageResource:@"default_gray.png"]];
+    [topView addSubview:icSticker];
+
+    labelName = [[UILabel alloc] initWithFrame:CGRectMake(15, icSticker.frame.origin.y + icSticker.frame.size.height + 8, 200, 40)];
+    labelName.textColor = [[UIColor blackColor] colorWithAlphaComponent:0.6];
+    labelName.text = materialInf.material_name;
+    [topView addSubview:labelName];
+    
+    labelTime = [[UILabel alloc] initWithFrame:CGRectMake(15, labelName.frame.origin.y + labelName.frame.size.height, 100, 30)];
+    labelTime.textColor = [UIColor lightGrayColor];
+    labelTime.text = materialInf.pub_time;
+    [topView addSubview:labelTime];
+
+    labelPrice = [[UILabel alloc] initWithFrame:CGRectMake(topView.frame.size.width - 80 - 15, labelName.frame.origin.y, 80, 40)];
+    labelPrice.text = [self formatPrice:materialInf.price];
+    labelPrice.textColor = [[UIColor blackColor] colorWithAlphaComponent:0.6];
+    [topView addSubview:labelPrice];
+    
+    float btnWidth = topView.frame.size.width - 40;
+    btDownload = [[UIButton alloc] initWithFrame:CGRectMake((topView.frame.size.width - btnWidth)/2, labelTime.frame.origin.y + labelTime.frame.size.height + 20, btnWidth, 40)];
+    [btDownload addTarget:self action:@selector(downloadAction:) forControlEvents:UIControlEventTouchUpInside];
+    btDownload.layer.cornerRadius = 5;
+    [topView addSubview:btDownload];
+
+    progressView = [[UIProgressView alloc] initWithFrame:CGRectMake((topView.frame.size.width - btnWidth)/2, labelTime.frame.origin.y + labelTime.frame.size.height + 30, btnWidth, 40)];
+    progressView.trackTintColor = [UIColor lightGrayColor];
+    progressView.progressTintColor = [UIColor lightTextColor];
+    [topView addSubview:progressView];
+    progressView.hidden=YES;
+
+    stickerStatus=materialInf.status;
+    [self setButtonStyleWithStickerStatus:materialInf.status];
+
+    float imgW = mScrollView.frame.size.width - 10;
+    UIImageView *imageView = [[UIImageView alloc] initWithFrame:CGRectMake(5, topView.frame.origin.y + topView.frame.size.height + 5, imgW, 30)];
+    __block UIImageView *weakImageView = imageView;
+    __block UIScrollView *weakScrollView = mScrollView;
+    __block float contentHeight = 10 + topView.frame.size.height;
+    NSString * urlStr = [NSString stringWithFormat:@"%@%@",resource_url,materialInf.material_pic];
+    NSLog(@"url = %@",urlStr);
+    [imageView setImageWithURL:[NSURL URLWithString:urlStr] placeholderImage:nil completed:^(UIImage *image, NSError *error, SDImageCacheType cacheType){
+        if (image) {
+            CGSize size = image.size;
+            if(size.width > 0 && size.height > 0){
+                float h = imgW * size.height / size.width;
+                weakImageView.frame = CGRectMake(weakImageView.frame.origin.x, weakImageView.frame.origin.y, weakImageView.frame.size.width, h);
+                contentHeight += h;
+                weakScrollView.contentSize = CGSizeMake(weakScrollView.frame.size.width, contentHeight);
+            }
+        }
+    }];
+    imageView.contentMode = UIViewContentModeScaleAspectFit;
+    [mScrollView addSubview:imageView];
+}
+
+-(void) backTap:(id)sender
+{
+    [self.navigationController popViewControllerAnimated:YES];
+}
+
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
+{
+    return UIInterfaceOrientationMaskPortrait;
+}
+
+- (void)checkStatus
+{
+    int tmpStatus = materialInf.status;
+    if(tmpStatus == 0 || tmpStatus == 3){
+        BOOL found = NO;
+        for(ASIHTTPRequest *req in [[StickerDownloader sharedInstance] operations]){
+            if(req.tag == materialInf.id){
+                found = YES;
+                materialInf.id=[[NSNumber numberWithInt:3] intValue];
+                break;
+            }
+        }
+        if(tmpStatus == 3 && !found){
+            materialInf.id=[[NSNumber numberWithInt:2] intValue];
+        }
+    }
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [StickerDownloader sharedInstance].delegate = self;
+}
+
+- (void)setButtonStyleWithStickerStatus:(int)status
+{
+    stickerStatus=status;
+    switch (status) {
+        case 0://download
+            btDownload.selected=NO;
+            btDownload.backgroundColor=[UIColor colorWithHexString:downloadColor];
+            [btDownload setTitle:NSLocalizedString(@"Download", nil) forState:UIControlStateNormal];
+            break;
+            
+        case 1://update
+            btDownload.selected=NO;
+            btDownload.backgroundColor=[UIColor colorWithHexString:completeColor];
+            [btDownload setTitle:NSLocalizedString(@"Update", nil) forState:UIControlStateNormal];
+            break;
+            
+        case 2://finished
+            btDownload.hidden = NO;
+            progressView.hidden = YES;
+            btDownload.selected=YES;
+            btDownload.backgroundColor=[UIColor colorWithHexString:completeColor];
+            [btDownload setTitle:NSLocalizedString(@"Completed", nil) forState:UIControlStateNormal];
+            break;
+            
+        case 3://downloading
+            progressView.hidden = NO;
+            btDownload.hidden = YES;
+            break;
+            
+        default:
+            break;
+    }
+}
+
+- (NSString*)formatPrice:(float)price
+{
+    NSString *priceStr = NSLocalizedString(@"Free", nil);
+    if(price > 0){
+        priceStr = [NSString stringWithFormat:@"$%f",price];
+    }
+    return priceStr;
+}
+
+// 点击下载
+-(IBAction)downloadAction:(id)sender
+{
+    if (stickerStatus==2) {//下载完成
+        [self backTap:nil];
+        return;
+    }
+    int verCode = 0;
+    int newVerCode = materialInf.ver_code;
+    NSArray *downloadedArray = [DownloadedSticker queryByID:materialInf.id];
+    if(downloadedArray && downloadedArray.count > 0){
+        verCode = ((DownloadedSticker*)downloadedArray[0]).version_code.intValue;
+    }
+    NSString * base_url = [BaseService prefixUrl:ServiceTypeSticker];
+    NSString *lan = [Util preferredLanguage];
+    lan = [Util currentLanguageIszhCN] ? @"zh-CN" : lan;
+    NSString *urlStr = [NSString stringWithFormat:@"%@/videoshow/api/v2/config?type=downMaterialItem&lang=%@&osType=2&materialId=%d&verCode=%d&newVerCode=%d",base_url,lan,materialInf.id,verCode,newVerCode];
+    btDownload.hidden = YES;
+    progressView.hidden = NO;
+    [StickerDownloader sharedInstance].materialType = MaterialTypeSticker;
+    [[StickerDownloader sharedInstance] addDownloadTask:[NSURL URLWithString:urlStr] stickerID:materialInf.id isUpdate:(newVerCode > verCode)];
+    
+}
+
+#pragma mark - StickerDownloaderDelegate
+- (void)sticker:(int)stickerID downloadProgress:(float)progress
+{
+    if(stickerID == materialInf.id)
+    {
+        progressView.progress = progress;
+    }
+}
+- (void)stickerStartDownload:(int)stickerID
+{
+    if(stickerID == materialInf.id){
+        [self setButtonStyleWithStickerStatus:3];//downloading
+    }
+}
+
+- (void)stickerFinishDownload:(int)stickerID
+{
+    if(stickerID == materialInf.id){
+        [self setButtonStyleWithStickerStatus:2];//finished
+    }
+}
+
+- (void)stickerFailDownload:(int)stickerID
+{
+    if(stickerID == materialInf.id)
+    {
+        [self.view makeToast:NSLocalizedString(@"Download Fail", nil) duration:1.5 position:@"bottom"];
+        NSArray *array = [DownloadedSticker queryByID:stickerID];
+        if(array && array.count > 0){
+            [self setButtonStyleWithStickerStatus:1];//update
+        }else{
+            [self setButtonStyleWithStickerStatus:0];//download
+        }
+    }
+}
+
+@end

@@ -1,0 +1,38 @@
+//
+//  SoundTrackInf.m
+//  VideoShow
+//
+//  Created by Mac on 16/1/12.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import "SoundTrackInf.h"
+
+@implementation SoundTrackInf
+
+@synthesize itemlist;//sticker列表
+
++(NSMutableArray *) initFromArr:(NSArray *)arr
+{
+    NSMutableArray * results = [NSMutableArray array];
+    for (NSDictionary * dict in arr) {
+        SoundTrackInf * inf=[SoundTrackInf initFromDict:dict];
+        [results addObject:inf];
+    }
+    
+    return results;
+}
+
++(SoundTrackInf *) initFromDict:(NSDictionary *)dictp
+{
+    SoundTrackInf * inf = [[SoundTrackInf alloc] init];
+    inf.id=[dictp[@"id"] intValue];
+    inf.soundTrack_name=dictp[@"name"];
+    inf.soundTrack_paper=dictp[@"des"];
+    inf.icon_url=dictp[@"icon_url"];
+    inf.ver_code=[dictp[@"ver_code"] intValue];
+    //    inf.icon_url=dictp[@"icon_url"];
+    return inf;
+}
+
+@end

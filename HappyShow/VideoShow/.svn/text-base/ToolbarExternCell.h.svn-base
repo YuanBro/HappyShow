@@ -1,0 +1,29 @@
+//
+//  ToolbarExternCell.h
+//  VideoShow
+//
+//  Created by Mac on 16/2/26.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+@interface ToolbarExternModel : NSObject
+
+@property (strong, nonatomic) UIImage  *iconImage;
+@property (strong, nonatomic) NSString *title;
+@property (assign, nonatomic) BOOL      hasBorder;
+@property (strong, nonatomic) UIColor  *borderColor;
+
+@end
+
+static NSString *toolbarExternCellID = @"ToolbarExternCell";
+
+@interface ToolbarExternCell : UICollectionViewCell
+
+@property (weak, nonatomic) IBOutlet UIImageView *iconIV;
+@property (weak, nonatomic) IBOutlet UILabel *titleLB;
+
+- (ToolbarExternCell *)setCellWithData:(ToolbarExternModel *)model;
+
+@end

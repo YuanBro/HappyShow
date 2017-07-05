@@ -1,0 +1,54 @@
+//
+//  SettingFAQViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/5/9.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "SettingFAQViewController.h"
+#import "Util.h"
+#import "UIImage+Util.h"
+
+@interface SettingFAQViewController ()<UIWebViewDelegate>
+
+@property (nonatomic,strong) UIWebView * mWebView;
+
+@end
+
+@implementation SettingFAQViewController
+
+@synthesize mWebView;
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"FAQ", nil)];
+    [self.navigationController.navigationBar initWithViewController:self leftText:NSLocalizedString(@"Setting", nil) leftImageName:@"ic_back_arrow.png" action:@selector(backTap:)];
+    
+    self.mWebView = [[UIWebView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height - self.statusHeight - self.naviHeight)];
+    [self.view addSubview:self.mWebView];
+    
+    NSString * resourceName = @"setting_help_en-US";
+    if ([Util currentLanguageIszhCN]) {
+        resourceName=@"setting_help_zh-CN";
+    }
+    
+    NSString * htmlPath = [[NSBundle mainBundle] pathForResource:resourceName ofType:@"html"];
+
+    NSString * htmlString = [NSString stringWithContentsOfFile:htmlPath encoding:NSUTF8StringEncoding error:nil];
+    
+    NSURL *baseURL = [NSURL fileURLWithPath:[[NSBundle mainBundle] bundlePath]];
+    
+    [mWebView loadHTMLString:htmlString baseURL:baseURL];
+}
+
+-(void) backTap:(UIButton*)sender
+{
+    [self.navigationController popViewControllerAnimated:YES];
+}
+
+- (void)dealloc {
+    
+}
+
+@end

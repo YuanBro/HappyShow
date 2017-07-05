@@ -1,0 +1,43 @@
+//
+//  PlayerViewController.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-7-24.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+#import "PreviewViewController.h"
+
+
+typedef NS_ENUM(NSInteger, EditType) {
+    EditTypeSubtitle=0,//编辑字幕
+    EditTypeSticker=1,//添加表情
+    EditTypeVideoClip=2,//编辑视频片段
+    EditTypeMusic=3,//配乐
+    EditTypeAudio=4,//配音
+    EditTypeFilter=5,//滤镜
+    EditTypeTransition=6,//转场
+    
+};
+/** 
+ * 主要编辑界面 预览功能
+ * 逻辑宽高---需要横屏处理的时候 width > height
+ * 需要竖屏处理的时候   width < height
+ * 方块的时候 width = height
+ * */
+@interface PlayerViewController : PreviewViewController
+
+@end
+
+@protocol PlayerViewControllerDelegate <NSObject>
+
+/** 
+ * 视频编辑界面
+ * 编辑类型
+ * 是否执行了编辑-NO表示撤销
+ **/
+-(void) videoEdit:(UIViewController *)control type:(EditType)type editFlag:(BOOL)flag;
+
+@end

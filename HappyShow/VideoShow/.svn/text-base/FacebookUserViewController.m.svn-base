@@ -1,0 +1,99 @@
+//
+//  FacebookUserViewController.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/11/17.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "FacebookUserViewController.h"
+#import "Util.h"
+#import "UIImage+Util.h"
+
+@implementation FacebookUserViewController
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 7.0) {
+        self.edgesForExtendedLayout = UIRectEdgeNone;
+        self.navigationController.navigationBar.barTintColor = [UIColor colorWithRed:40/255.0 green:35/255.0 blue:35/255.0 alpha:1.0];
+    }else{
+        self.navigationController.navigationBar.tintColor = [UIColor colorWithRed:40/255.0 green:35/255.0 blue:35/255.0 alpha:1.0];
+    }
+    UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 100, 30)];
+    titleLabel.backgroundColor = [UIColor clearColor];
+    titleLabel.text = NSLocalizedString(@"Facebook User", nil);
+    titleLabel.textAlignment = NSTextAlignmentCenter;
+    titleLabel.textColor = [UIColor whiteColor];
+    titleLabel.font=[UIFont boldSystemFontOfSize:17];
+    [titleLabel sizeToFit];
+    self.navigationItem.titleView = titleLabel;
+    
+    //left barbutton
+    UIButton *closeBtn = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 22, 38)];
+    [closeBtn setImage:[UIImage imageNamed:@"ic_back_arrow.png"] forState:UIControlStateNormal];
+    [closeBtn setImageEdgeInsets:UIEdgeInsetsMake(9.5, 0, 9.5, 11)];
+    [closeBtn addTarget:self action:@selector(closeButtonAction:) forControlEvents:UIControlEventTouchUpInside];
+    UIBarButtonItem *leftBarButton = [[UIBarButtonItem alloc] initWithCustomView:closeBtn];
+    self.navigationItem.leftBarButtonItem = leftBarButton;
+    
+    //
+//    profilePictureView = [[FBProfilePictureView alloc] initWithFrame:CGRectMake((self.view.frame.size.width - 80)/2, 100, 80, 80)];
+//    [self.view addSubview:profilePictureView];
+//    
+//    userLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, profilePictureView.frame.origin.y + profilePictureView.frame.size.height + 5, self.view.frame.size.width, 30)];
+//    userLabel.backgroundColor = [UIColor clearColor];
+//    userLabel.textAlignment =  NSTextAlignmentCenter;
+//    userLabel.textColor = [UIColor whiteColor];
+//    [self.view addSubview:userLabel];
+//    
+//    FBLoginView *loginView = [[FBLoginView alloc] initWithReadPermissions:@[@"public_profile", @"email", @"user_friends", @"publish_actions"]];
+//    loginView.delegate = self;
+//    loginView.frame = CGRectMake((self.view.frame.size.width - 200)/2,userLabel.frame.origin.y + userLabel.frame.size.height + 20 , 200, 80);
+//    [self.view addSubview:loginView];
+}
+
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
+{
+    return UIInterfaceOrientationMaskPortrait;
+}
+
+- (void)closeButtonAction:(id)sender
+{
+    [self.navigationController popViewControllerAnimated:YES];
+}
+
+//#pragma mark - FBLoginViewDelegate
+//- (void)loginView:(FBLoginView *)loginView handleError:(NSError *)error
+//{
+//    [Util showAlert:NSLocalizedString(@"Authorization Failure", nil) title:nil tag:0];
+//}
+//
+//- (void)loginViewFetchedUserInfo:(FBLoginView *)loginView user:(id<FBGraphUser>)user
+//{
+//    profilePictureView.profileID = user.objectID;
+//    userLabel.text = user.name;
+//}
+//
+//- (void)loginViewShowingLoggedInUser:(FBLoginView *)loginView
+//{
+//    
+//}
+//
+//- (void)loginViewShowingLoggedOutUser:(FBLoginView *)loginView
+//{
+//    profilePictureView.profileID = nil;
+//    userLabel.text = nil;
+//}
+@end

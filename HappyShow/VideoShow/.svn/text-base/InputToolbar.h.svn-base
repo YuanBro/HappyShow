@@ -1,0 +1,19 @@
+//
+//  InputToolbar.h
+//  VideoShow
+//
+//  Created by lance on 15/6/17.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+//键盘输入工具栏
+@interface InputToolbar : UIView
+
+@property (nonatomic,strong) UITextView * subtitleText;
+
+-(void) addTarget:(id)target dismissAction:(SEL)action;
+-(void) addTarget:(id)target confirmAction:(SEL)action;
+
+@end

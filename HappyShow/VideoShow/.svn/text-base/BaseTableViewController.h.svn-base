@@ -1,0 +1,23 @@
+//
+//  BaseTableViewController.h
+//  VideoShow
+//
+//  Created by lance on 15/4/23.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "UINavigationBar+Util.h"
+
+@interface BaseTableViewController : UITableViewController
+
+//app 进入前台
+-(void) applicationBecomeActive:(NSNotification *)notify;
+//app 进入后台
+-(void) applicationEnterBackground:(NSNotification *)notify;
+- (void)applicationWillResignActive:(NSNotification*)notify;
+
+/** 清理内存 */
+//-(void) cleanMemory;
+
+@end

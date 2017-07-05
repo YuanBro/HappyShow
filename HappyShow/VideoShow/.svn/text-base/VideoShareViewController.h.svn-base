@@ -1,0 +1,22 @@
+//
+//  VideoShareViewController.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-8-21.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import <AssetsLibrary/AssetsLibrary.h>
+#import "BaseViewController.h"
+#import <Social/Social.h>
+#import <MessageUI/MessageUI.h>
+#import <FBSDKShareKit/FBSDKShareKit.h>
+#import <FBSDKMessengerShareKit/FBSDKMessengerShareKit.h>
+/** 视频导出完成的分享界面 */
+@interface VideoShareViewController : BaseViewController<MFMailComposeViewControllerDelegate,FBSDKSharingDelegate>
+
+@property (nonatomic,strong) ALAsset *asset;
+@property (nonatomic, assign) float aspectRatio;
+
+@end

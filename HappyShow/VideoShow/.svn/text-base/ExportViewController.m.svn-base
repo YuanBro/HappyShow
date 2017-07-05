@@ -1,0 +1,103 @@
+//
+//  ExportViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/6/15.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "ExportViewController.h"
+#import "UIImage+Util.h"
+#import "UIColor+Util.h"
+#import "Toast+UIView.h"
+
+#define STOP_INTERVAL 2
+
+@interface ExportViewController()
+
+@property (nonatomic,strong) IBOutlet UIView * dialogView;//对话框容器
+@property (nonatomic,strong) IBOutlet UILabel * labelTitle;
+@property (nonatomic,strong) IBOutlet UISlider * exportSlider;
+@property (nonatomic,strong) IBOutlet UIButton * btStopExport;
+
+@property (nonatomic,assign) BOOL isStopExport;//记录是否点击了停止按钮
+@property (nonatomic,strong) NSTimer * stopExportTimer;
+
+@property (nonatomic,weak) id stopTarget;//执行停止按钮的方法目标
+@property (nonatomic,assign) SEL stopSelector;
+
+@end
+
+@implementation ExportViewController
+
+@synthesize dialogView;
+@synthesize labelTitle;
+@synthesize exportSlider;
+@synthesize btStopExport;
+
+@synthesize isStopExport;
+@synthesize stopExportTimer;
+@synthesize stopSelector;
+
+-(void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor colorWithRed:0 green:0 blue:0 alpha:0.5];
+    
+    dialogView.layer.cornerRadius = 5;
+    labelTitle.text = NSLocalizedString(@"Exporting", nil);
+    
+    exportSlider.tintColor = [UIColor colorWithHexString:themeColor];
+    [exportSlider setThumbImage:[UIImage imageResource:@"slider_handle.png"] forState:UIControlStateNormal];
+    [exportSlider setThumbImage:[UIImage imageResource:@"slider_handle.png"] forState:UIControlStateHighlighted];
+    exportSlider.minimumValue = 0;
+    exportSlider.maximumValue = 1;
+    exportSlider.value = 0;
+    
+    [btStopExport setTitle:NSLocalizedString(@"Stop Export", nil) forState:UIControlStateNormal];
+    [btStopExport setTitleColor:[UIColor colorWithRed:221/255.0 green:107/255.0 blue:111/255.0 alpha:1.0] forState:UIControlStateNormal];
+    [btStopExport setTitleColor:[UIColor grayColor] forState:UIControlStateHighlighted];
+    [btStopExport addTarget:self action:@selector(stopExportAction:) forControlEvents:UIControlEventTouchUpInside];
+    btStopExport.layer.borderWidth = 1;
+    btStopExport.layer.borderColor = [[UIColor colorWithRed:221/255.0 green:107/255.0 blue:111/255.0 alpha:1.0] CGColor];
+    btStopExport.layer.cornerRadius = 5;
+    
+}
+
+- (void)dealloc {
+    
+}
+
+- (void)setExportProgress:(float)fPercent
+{
+    exportSlider.value = fPercent;
+}
+
+//给按钮添加停止事件
+- (void) addTarget:(id)target action:(SEL)selector
+{
+    self.stopTarget=target;
+    self.stopSelector=selector;
+}
+
+-(void) calStopTimer
+{
+    isStopExport=NO;
+}
+
+- (void)stopExportAction:(id)sender
+{
+    if (isStopExport) {
+        isStopExport=NO;
+        [self.stopTarget performSelector:self.stopSelector withObject:nil afterDelay:0];
+    }else{
+        isStopExport=YES;
+        [self.view.superview makeToast:NSLocalizedString(@"Stop Export Hint", nil)];
+        if(stopExportTimer!=nil){
+            [stopExportTimer invalidate];
+        }
+        stopExportTimer=[NSTimer scheduledTimerWithTimeInterval:STOP_INTERVAL target:self selector:@selector(calStopTimer) userInfo:nil repeats:NO];
+    }
+}
+
+@end

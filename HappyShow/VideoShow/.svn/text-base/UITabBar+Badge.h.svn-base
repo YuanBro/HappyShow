@@ -1,0 +1,19 @@
+//
+//  UITabBar+Badge.h
+//  VideoShow
+//
+//  Created by lance on 15/5/19.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+@interface UITabBar (Badge)
+
+- (void)showBadgeOnItemIndex:(NSUInteger)index tabCount:(NSUInteger)count;
+
+- (void)hideBadgeOnItemIndex:(NSUInteger)index;
+
+- (void)removeBadgeOnItemIndex:(NSUInteger)index;
+
+@end

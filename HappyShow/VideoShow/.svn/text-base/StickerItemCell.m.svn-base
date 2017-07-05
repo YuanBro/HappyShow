@@ -1,0 +1,31 @@
+//
+//  StickerItemCell.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/12/8.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "StickerItemCell.h"
+
+@implementation StickerItemCell
+
+- (void)awakeFromNib
+{
+    if(!self.button.userInteractionEnabled){
+        self.button.userInteractionEnabled = YES;
+        UITapGestureRecognizer *gesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(buttonAction:)];
+        [self.button addGestureRecognizer:gesture];
+    }
+}
+
+- (void)buttonAction:(UIGestureRecognizer*) gesture
+{
+    self.button.hidden = YES;
+    self.progressView.hidden = NO;
+    if([self.delegate respondsToSelector:@selector(stickerItemAction:)]){
+        [self.delegate stickerItemAction:self];
+    }
+}
+
+@end

@@ -1,0 +1,13 @@
+//
+//  SettingFAQViewController.h
+//  VideoShow
+//
+//  Created by lance on 15/5/9.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+
+@interface SettingFAQViewController : BaseViewController
+
+@end

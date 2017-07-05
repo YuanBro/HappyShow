@@ -1,0 +1,60 @@
+//
+//  StoryboardView.h
+//  VideoShow
+//
+//  Created by lance on 15/4/14.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import <AssetsLibrary/AssetsLibrary.h>
+#import "BaseViewController.h"
+#import "PlayerViewController.h"
+
+
+@protocol StoryboardViewDelegate;
+
+/** 用于排序使用 */
+@interface StoryboardViewController : BaseViewController
+
+@property (nonatomic,weak) id target;//用于接收事件
+@property (nonatomic,assign) SEL createAction;
+@property (nonatomic,strong) NSMutableArray * mMedias;//片段列表
+@property (nonatomic,strong) NSString *storyType;
+@property (nonatomic,assign) EditType editType; //编辑的类型,表示从哪个界面来的
+@property (nonatomic,weak) id<StoryboardViewDelegate> delegate;
+
+@property (nonatomic,strong) NSIndexPath *lastIndexPath;
+@property (nonatomic,strong) NSIndexPath *currentSelectedIndexPath;
+
+
+/** 添加片段 */
+-(void) addMedia:(ALAsset *)asset;
+-(void) clearMedias;//清空所有片段
+
+/** 关联到父控制器 */
+-(void)attachToController:(UIViewController *)rootController superview:(UIView *)superview frame:(CGRect)frame;
+
+/** 取消与父控制器的关联 */
+-(void)cancelAttachToController;
+
+/** 获取当前的片段列表 */
+-(NSMutableArray *) getMedias;
+
+-(void)deleteObjectMedia;
+
+/*设置指定下标的边框*/
+- (void)setBoder:(NSInteger)index;
+
+@end
+
+@protocol StoryboardViewDelegate <NSObject>
+
+-(void)didDataChange:(StoryboardViewController *)story;
+
+//-(void)deleteAsset;
+-(void)deleteAsset:(NSInteger)indexOfSelected;
+-(void)editPrepare:(int)assetIndex;
+- (void)movefromIndexPath:(NSIndexPath *)fromIndexPath toIndexPath:(NSIndexPath *)toIndexPath;
+
+@end

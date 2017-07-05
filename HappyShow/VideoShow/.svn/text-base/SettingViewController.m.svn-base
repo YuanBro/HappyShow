@@ -1,0 +1,399 @@
+//
+//  SettingViewController.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-9-5.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "SettingViewController.h"
+#import "SettingQualityViewController.h"
+#import "AboutViewController.h"
+#import "AppMacros.h"
+#import "AppEvent.h"
+#import "MobClick.h"
+#import "YouTubeHelper.h"
+#import "MBProgressHUD.h"
+#import "UIColor+Util.h"
+#import "FacebookUserViewController.h"
+#import "UIImage+Util.h"
+#import "Util.h"
+#import "SettingGroup.h"
+#import "SettingCell.h"
+#import "Application.h"
+#import "Prefs.h"
+#import "SCLAlertView.h"
+#import "SettingFAQViewController.h"
+#import "AnimationsUtil.h"
+
+/** 工作室设置 */
+@interface SettingViewController ()<UITableViewDataSource,UITableViewDelegate,SettingCellDelegate>
+{
+    NSMutableArray * sectionArr;//分组数据块
+}
+
+@property (nonatomic,strong) UITableView * settingTable;
+
+@end
+
+static NSString * cellIdentifier = @"SettingCell";
+
+@implementation SettingViewController
+
+@synthesize disableBack;
+
+@synthesize settingTable;
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    
+    self.view.backgroundColor=[UIColor colorWithHexString:tableSectionColor];
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"Setting", nil)];
+    if (disableBack==NO) {//如果是进入push那么可以back
+        [self.navigationController.navigationBar initWithViewController:self leftImageName:@"ic_back_arrow.png" action:@selector(backTap:) ];
+    }
+    [self loadSettingData];
+    CGRect tableRect=CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height-self.statusHeight-self.naviHeight-self.tabbarHeight);
+    self.settingTable = [[UITableView alloc] initWithFrame:tableRect style:UITableViewStyleGrouped];
+    self.settingTable.dataSource=self;
+    self.settingTable.delegate=self;
+    [self.view addSubview:self.settingTable];
+    
+    // 使用这种方式 系统sdk有限制 有些无法显示
+    UINib *tableNib=[UINib nibWithNibName:cellIdentifier bundle:nil];
+    [self.settingTable registerNib:tableNib forCellReuseIdentifier:cellIdentifier];
+    
+}
+
+-(void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [self.settingTable reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationFade];
+}
+
+- (void)dealloc {
+    
+}
+
+-(void) loadSettingData
+{
+    if (sectionArr!=nil) {
+        return;
+    }
+    sectionArr=[NSMutableArray array];
+    NSArray * tmpArr=@[NSLocalizedString(@"Setting_Section_Video", nil),NSLocalizedString(@"Setting_Section_App", nil),NSLocalizedString(@"Setting_Section_About", nil),NSLocalizedString(@"Setting_Section_Auth", nil),
+                       NSLocalizedString(@"Setting_Section_Follow", nil)];
+    for (int i=0; i<tmpArr.count; i++) {
+        SettingGroup * group = [[SettingGroup alloc] init];
+        group.type=0;
+        group.section=i;
+        group.groupName=tmpArr[i];
+        NSMutableArray *data=[NSMutableArray array];
+        switch (i) {
+            case 0:
+                [data addObject:NSLocalizedString(@"Setting_export_quality", nil)];
+                [data addObject:NSLocalizedString(@"Setting_video_tail", nil)];
+                break;
+            case 1:
+                [data addObject:NSLocalizedString(@"Setting_message_push", nil)];
+                break;
+            case 2:
+                [data addObject:NSLocalizedString(@"Setting_about", nil)];
+                [data addObject:NSLocalizedString(@"Setting_software_update", nil)];
+                //[data addObject:NSLocalizedString(@"Setting_FAQ", nil)];
+                //[data addObject:NSLocalizedString(@"Setting_version_history", nil)];
+                break;
+            case 3:
+                //[data addObject:NSLocalizedString(@"Facebook User", nil)];
+                //[data addObject:NSLocalizedString(@"Remove YTB Authorization", nil)];
+                [data addObject:NSLocalizedString(@"Setting_clear_authorization", nil)];
+                break;
+            case 4://这里是几个社交图标
+                group.type=1;//只显示社交图标
+                [data addObject:NSLocalizedString(@"", nil)];//分给数据源显示
+                break;
+            default:
+                break;
+        }
+        group.data=data;
+        [sectionArr addObject:group];
+    }
+    
+}
+
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
+{
+    return UIInterfaceOrientationMaskPortrait;
+}
+
+- (void)backTap:(id)sender
+{
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+#pragma mark - Table view data source
+
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section
+{
+    if(section==0){
+        return 0.001f;
+    }
+    return 40;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section
+{
+    return 0.001f;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    if(indexPath.section==0){
+        return 0;
+    }else if (indexPath.section==4) {
+        return 60;
+    }
+    return 44;
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+{
+    return sectionArr.count;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    if (section==0) {
+        return 0;
+    }
+    SettingGroup * group=sectionArr[section];
+    return group.data.count;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    SettingCell *cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier];
+    cell.delegate = self;
+    SettingGroup * group = sectionArr[indexPath.section];
+    [cell initSettingCell:group.type];
+    
+    NSString * desc=group.data[indexPath.row];
+    
+    cell.labelText.text = desc;
+    
+    if (indexPath.section==0 && indexPath.row==0) {//视频质量
+        cell.subTitle.hidden=NO;
+        cell.btArrow.hidden=NO;
+        NSString * text = nil;
+        switch ([Prefs getQualityConfig]) {
+            case 0:
+                text = NSLocalizedString(@"Setting_quality_manual", nil);
+                break;
+            case 1:
+                text = NSLocalizedString(@"Setting_quality_fast", nil);
+                break;
+            case 2:
+                text = NSLocalizedString(@"Setting_quality_fine", nil);
+                break;
+            default:
+                break;
+        }
+        cell.subTitle.text=text;
+    }else if (indexPath.section==0 && indexPath.row==1) {//视频片尾
+        cell.toggleSwitch.hidden=NO;
+        [cell.toggleSwitch setOn:[Prefs getVideoTailFlag] animated:YES];
+    }else if(indexPath.section==1 && indexPath.row==0){//消息推送
+        cell.toggleSwitch.hidden=NO;
+        [cell.toggleSwitch setOn:[Prefs getMessagePushFlag] animated:YES];
+    }else if(indexPath.section==2 && indexPath.row==1){//app版本
+        cell.subTitle2.hidden=NO;
+        cell.subTitle2.text = [Util stringWithVersion];
+    }else{
+        cell.btArrow.hidden=NO;
+    }
+    
+    return cell;
+}
+
+#pragma mark - TableViewDelegate
+
+- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section
+{
+    SettingGroup * group = [sectionArr objectAtIndex:section];
+    UIView * headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.frame.size.width, 40)];
+    headerView.backgroundColor=[UIColor clearColor];
+    UILabel * label = [[UILabel alloc] initWithFrame:CGRectMake(10, 0, tableView.frame.size.width, headerView.frame.size.height)];
+    if (section==0) {
+        label.text=nil;
+    }else{
+        label.text=group.groupName;
+    }
+    
+    label.textColor=[UIColor colorWithHexString:themeColor];
+    [label setFont:[UIFont systemFontOfSize:15]];
+    [headerView addSubview:label];
+    return headerView;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    switch (indexPath.section) {
+        case 0:
+            if (indexPath.row==0) {
+                SettingQualityViewController * control = [[SettingQualityViewController alloc] init];
+                control.hidesBottomBarWhenPushed=YES;
+                [self.navigationController pushViewController:control animated:YES];
+            }
+            break;
+        case 1:
+            
+            break;
+            
+        case 2:
+            switch (indexPath.row) {
+                case 0:
+                {
+                    //[AnimationsUtil durationWithSuckEffect:1.0 withSubtype:kCATransitionFromLeft completion:^(BOOL finished){
+                        AboutViewController*control = [AboutViewController initFromStoryboard:[AboutViewController class]];
+                        control.hidesBottomBarWhenPushed=YES;
+                        [self.navigationController pushViewController:control animated:YES];
+                    //}];
+                    
+                }
+                    break;
+                case 1:
+                    
+                    break;
+                case 2:
+                {
+                    SettingFAQViewController *control = [[SettingFAQViewController alloc] init];
+                    control.hidesBottomBarWhenPushed=YES;
+                    [self.navigationController pushViewController:control animated:YES];
+                }
+                    break;
+                    
+                default:
+                    break;
+            }
+            break;
+        case 3:
+        {
+//            if(indexPath.row == 0){
+//                FacebookUserViewController *fbUserVC = [[FacebookUserViewController alloc] init];
+//                fbUserVC.view.backgroundColor = [UIColor colorWithHexString:homeColor];
+//                fbUserVC.hidesBottomBarWhenPushed=YES;
+//                [self.navigationController pushViewController:fbUserVC animated:YES];
+//            }else if(indexPath.row == 1){
+//                YouTubeHelper *helper = [[YouTubeHelper alloc] initWithDelegate:nil];
+//                [helper signOut];
+//                MBProgressHUD * hud = [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+//                hud.labelText=NSLocalizedString(@"Remove Success", nil);
+//                hud.mode=MBProgressHUDModeText;
+//                [hud showAnimated:YES whileExecutingBlock:^{
+//                    sleep(2);
+//                } completionBlock:^{
+//                    [hud removeFromSuperview];
+//                }];
+//                
+//            }else
+                if(indexPath.row == 0){
+                    YouTubeHelper *helper = [[YouTubeHelper alloc] initWithDelegate:nil];
+                                    [helper signOut];
+                MBProgressHUD * hud = [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+                hud.labelText=NSLocalizedString(@"Remove Success", nil);
+                hud.mode=MBProgressHUDModeText;
+                [hud showAnimated:YES whileExecutingBlock:^{
+                    sleep(2);
+                } completionBlock:^{
+                    [hud removeFromSuperview];
+                }];
+            }
+        }
+            break;
+            
+        default:
+            break;
+    }
+}
+
+#pragma mark - SettingCellDelegate
+-(void) toggleSwitch:(SettingCell *)cell flag:(BOOL)flag
+{
+    NSIndexPath * indexPath=[self.settingTable indexPathForCell:cell];
+    if (indexPath.section==0 && indexPath.row==1) {
+        [Prefs saveVideoTailFlag:flag];
+    }else if(indexPath.section==1 && indexPath.row==0){
+        [Prefs saveMessagePushFlag:!flag];
+    }
+}
+
+-(void) followSNS:(SettingCell *)cell followType:(FollowType)type
+{
+    switch (type) {
+        case FollowTypeSina:
+        {
+            [[UIApplication sharedApplication] openURL:[NSURL URLWithString:@"http://www.weibo.com/u/3946714889"]];
+        }
+            break;
+        case FollowTypeQQ:
+        {
+            UIAlertView * alert = [[UIAlertView alloc] initWithTitle:@"" message:NSLocalizedString(@"Follow_qq", nil) delegate:self cancelButtonTitle:NSLocalizedString(@"OK", nil) otherButtonTitles:nil, nil];
+            [alert show];
+        }
+            
+            break;
+        case FollowTypeWechat:
+        {
+            UIAlertView * alert = [[UIAlertView alloc] initWithTitle:@"" message:NSLocalizedString(@"Follow_wechat", nil) delegate:self cancelButtonTitle:NSLocalizedString(@"OK", nil) otherButtonTitles:nil, nil];
+            [alert show];
+        }
+            break;
+        case FollowTypeYouku:
+            [[UIApplication sharedApplication] openURL:[NSURL URLWithString:@"http://i.youku.com/videoshowapp"]];
+            break;
+        case FollowTypeFacebook:
+        {
+            [MobClick endEvent: MENU_FOLLOW_ON_FACEBOOK];
+            [[UIApplication sharedApplication] openURL:[NSURL URLWithString:@"https://www.facebook.com/videoshowapp?fref=ts"]];
+        }
+            break;
+        case FollowTypeInstagram:
+        {
+            [MobClick endEvent: MENU_FOLLOW_ON_INSTAGRAM];
+            NSURL *instagramURL = [NSURL URLWithString:@"instagram://user?username=videoshowapp"];
+            if ([[UIApplication sharedApplication] canOpenURL:instagramURL]) {
+                [[UIApplication sharedApplication] openURL:instagramURL];
+            }else{
+                [[UIApplication sharedApplication] openURL:[NSURL URLWithString:@"http://instagram.com/videoshowapp"]];
+            }
+        }
+            break;
+        case FollowTypeTwitter:
+        {
+            [MobClick endEvent: MENU_FOLLOW_ON_TWITTER];
+            NSURL *twitterURL = [NSURL URLWithString:[NSString stringWithFormat:@"twitter://user?id=%@",TWITTER_USERID]];
+            if ([[UIApplication sharedApplication] canOpenURL:twitterURL]) {
+                [[UIApplication sharedApplication] openURL:twitterURL];
+            }else{
+                [[UIApplication sharedApplication] openURL:[NSURL URLWithString:@"https://twitter.com/videoshowapp"]];
+            }
+        }
+            break;
+        default:
+            break;
+    }
+}
+
+@end

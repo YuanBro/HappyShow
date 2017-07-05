@@ -1,0 +1,118 @@
+//
+//  NSString+ArrayUtil.m
+//  wallintermobile
+//
+//  Created by lance on 13-11-26.
+//  Copyright (c) 2013年 ganchengkai. All rights reserved.
+//
+
+#import "NSString+Util.h"
+#import "AppMacros.h"
+#import <CommonCrypto/CommonDigest.h>
+#import "FileHandle.h"
+
+@implementation NSString (Util)
+
+- (NSString *) relativeSandboxDocPath
+{
+    NSString * docPath = [FileHandle getDocumentDir];
+    //找到第一个Documents目录之前的路径,移除之后添加新的documents路径---一定不能出现常规的变量路径
+    NSRange range = [self rangeOfString:@"Documents/" options:NSLiteralSearch];//区分大小写
+    NSString * relativePath = self;
+    if (range.location != NSNotFound) {
+        relativePath = [self substringFromIndex:range.location+range.length];
+    }
+    NSString * filePath = [docPath stringByAppendingPathComponent:relativePath];
+    return filePath;
+}
+
+/** 相对app的路径---对于内置的资源作处理---升级后UUID会改变 */
+- (NSString *) relativeAppPath
+{
+    NSString * bundlePath = [NSBundle mainBundle].bundlePath;
+    NSString * appDir = [NSString stringWithFormat:@"%@/",[bundlePath lastPathComponent]];
+    NSRange range = [self rangeOfString:appDir options:NSLiteralSearch];//区分大小写
+    NSString * relativePath = self;
+    if (range.location != NSNotFound) {
+        relativePath = [self substringFromIndex:range.location+range.length];
+    }
+    NSString * filePath = [bundlePath stringByAppendingPathComponent:relativePath];
+    return filePath;
+}
+
+//去掉换行符
+-(NSString*) removeLine {
+    NSString * str=[self stringByReplacingOccurrencesOfString:@"\n" withString:@""];
+    str = [str stringByReplacingOccurrencesOfString:@"\r" withString:@""];
+    return [str stringByReplacingOccurrencesOfString:@"\t" withString:@""];
+}
+
+//检测是否包含指定的字符
+-(BOOL) containString:(NSString*)containString{
+    NSRange foundObj=[self rangeOfString:containString options:NSCaseInsensitiveSearch];
+    return foundObj.length>0;
+}
+
+
+//修复空白
+-(NSString *)trim{
+    return [self stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+}
+
+//不足len位长度前面补0
++ (NSString*)stringWithInt:(int)index length:(int)len
+{
+    NSMutableString * str=[NSMutableString stringWithFormat:@"%d",index];
+    while (str.length<len) {
+        [str insertString:@"0" atIndex:0];
+    }
+    return  str;
+}
+
+- (void) convertToArray:(float*)rotatef
+{
+    NSArray * arr=[self componentsSeparatedByString:@","];
+    for (int i=0; i<arr.count; i++) {
+        rotatef[i]=[[arr objectAtIndex:i] floatValue];
+    }
+}
+
++ (BOOL) isNull:(NSString *)string
+{
+    if (string == nil || string == NULL) {
+        return YES;
+    }
+    if ([string isKindOfClass:[NSNull class]]) {
+        return YES;
+    }
+    if ([[string stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]] length]==0) {
+        return YES;
+    }
+    return NO;
+}
+
+//将字符串进行MD5加密---32位算法
+-(NSString *) md5HexDigest{
+    const char *original_str = [self UTF8String];
+    unsigned char result[CC_MD5_DIGEST_LENGTH];
+    CC_MD5(original_str, strlen(original_str), result);
+    NSMutableString *hash = [NSMutableString string];
+    for (int i = 0; i < CC_MD5_DIGEST_LENGTH; i++){
+        [hash appendFormat:@"%02X", result[i]];
+    }
+    return [hash lowercaseString];
+}
+
+/** 判断是否匹配手机号 */
+-(BOOL) isMatchePhone{
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"SELF MATCHES %@",PHONE_REGEX];
+    return [predicate evaluateWithObject:self];
+}
+
+/** 判断是否匹配邮箱 */
+-(BOOL) isMatcheEmail{
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"SELF MATCHES %@",EMAIL_REGEX];
+    return [predicate evaluateWithObject:self];
+}
+
+@end

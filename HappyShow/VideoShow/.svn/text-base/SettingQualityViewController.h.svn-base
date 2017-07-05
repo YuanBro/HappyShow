@@ -1,0 +1,14 @@
+//
+//  SettingQualityViewController.h
+//  VideoShow
+//
+//  Created by lance on 15/5/7.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+
+/** 设置视频的导出质量 */
+@interface SettingQualityViewController : BaseViewController
+
+@end

@@ -1,0 +1,16 @@
+//
+//  qxGifObject+Util.h
+//  VideoShow
+//
+//  Created by lance on 15/6/2.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "qxGifHelper.h"
+
+@interface qxGifObject (Util)
+
+/** 在原文件名的基础上添加 */
+- (NSMutableArray *) createGifPathsForSize:(CGSize)stickerSize rotatef:(float)rotatef;
+
+@end

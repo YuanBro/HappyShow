@@ -1,0 +1,48 @@
+//
+//  AudioScrollView.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14/10/29.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "VideoFrameView.h"
+
+@class qxTimeline;
+@class AudioScrollView;
+
+@protocol AudioScrollViewDelegate <NSObject>
+
+// 指向视频的某一个时间 tapFlag 是否点击执行的滚动
+- (void)videoScrollView:(AudioScrollView*)view didScrollTo:(CGFloat)second tapFlag:(BOOL)tapFlag;
+
+- (void)framesLoadDone;
+
+// 开始拖动
+- (void)scrubbingDidStart:(AudioScrollView *)view;
+
+// 松手
+- (void)scrubbingDidEnd:(AudioScrollView *)view;
+
+@end
+
+@interface AudioScrollView : UIView
+
+//0 : video track,  1 : music track,  2 : audio track,  3 : overlay track
+@property(nonatomic,strong) qxTimeline *timeline;
+
+- (id)initWithFrame:(CGRect)frame contentSize:(CGSize)contSize timeline:(qxTimeline*)tl;
+- (float)currentSecond;
+- (float)currentPosition;
+/** 1---music   2---audio */
+- (void)refreshViewWithAudioTrack:(int)trackIndex;
+- (void)scrollToSecond:(float)second;
+- (void)reloadFrames;
+- (void)setSelectRectFrom:(float)startSecond to:(float)endSecond;
+- (void)clearSelectRect;
+
+@property (nonatomic,weak) id<AudioScrollViewDelegate> delegate;
+@property (nonatomic,assign) BOOL scrollEnable;
+
+@end

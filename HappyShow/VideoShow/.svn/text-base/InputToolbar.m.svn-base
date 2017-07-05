@@ -1,0 +1,105 @@
+//
+//  InputToolbar.m
+//  VideoShow
+//
+//  Created by lance on 15/6/17.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "InputToolbar.h"
+#import "UIColor+Util.h"
+#import "UIImage+Util.h"
+
+@interface InputToolbar()
+
+@property (nonatomic,strong) UIButton * btDismiss;
+@property (nonatomic,strong) UIButton * btOk;
+
+@property (nonatomic,weak) id actionTarget;
+@property (nonatomic,assign) SEL dismissSelector;
+@property (nonatomic,assign) SEL confirmSelector;
+
+@end
+
+@implementation InputToolbar
+
+@synthesize btDismiss;
+@synthesize btOk;
+@synthesize subtitleText;
+
+@synthesize actionTarget;
+@synthesize dismissSelector;
+@synthesize confirmSelector;
+
+-(instancetype)initWithFrame:(CGRect)frame
+{
+    self=[super initWithFrame:frame];
+    if (self) {
+        float kToolBarH=self.frame.size.height;
+        
+        UIImageView *bgView = [[UIImageView alloc] init];
+        bgView.frame = CGRectMake(0, 0, self.frame.size.width, kToolBarH);
+        bgView.image = [UIImage imageResource:@"toolbar_bottom_bg.png"];
+        bgView.userInteractionEnabled = YES;
+        [self addSubview:bgView];
+        
+        btDismiss = [UIButton buttonWithType:UIButtonTypeCustom];
+        btDismiss.frame = CGRectMake(0, 0, kToolBarH, kToolBarH);
+        [btDismiss setImage:[UIImage imageResource:@"bt_clip_delete.png"] forState:UIControlStateNormal];
+        [btDismiss addTarget:self action:@selector(inputDismissAction:) forControlEvents:UIControlEventTouchUpInside];
+        [bgView addSubview:btDismiss];
+        
+        btOk = [UIButton buttonWithType:UIButtonTypeCustom];
+        btOk.frame = CGRectMake(self.frame.size.width - kToolBarH, 0, kToolBarH, kToolBarH);
+        [btOk setImage:[UIImage imageResource:@"btn_dialog_ok_selected.png"] forState:UIControlStateNormal];
+        [btOk addTarget:self action:@selector(inputConfirmAction:) forControlEvents:UIControlEventTouchUpInside];
+        [bgView addSubview:btOk];
+        
+        UIImage *inputBg = [UIImage imageResource:@"toolbar_bottom_textfield.png"];
+        inputBg=[inputBg stretchableImageWithLeftCapWidth:20 topCapHeight:20];
+        
+        CGRect inputRect=CGRectMake(kToolBarH, 5, self.frame.size.width - 2 * kToolBarH, kToolBarH-5*2);
+        
+        UIImageView * inputBgView=[[UIImageView alloc] initWithFrame:inputRect];
+        inputBgView.contentMode=UIViewContentModeScaleToFill;
+        inputBgView.image=inputBg;
+        [bgView addSubview:inputBgView];
+        
+        subtitleText = [[UITextView alloc] init];
+        subtitleText.returnKeyType = UIReturnKeyDefault;
+        subtitleText.text=@"";
+        subtitleText.font=[UIFont systemFontOfSize:16];
+        subtitleText.tintColor=[UIColor colorWithHexString:themeColor];
+        subtitleText.enablesReturnKeyAutomatically = YES;
+        subtitleText.frame = inputRect;
+        subtitleText.backgroundColor = [UIColor clearColor];
+        
+        [bgView addSubview:subtitleText];
+    }
+    return self;
+}
+
+-(void) inputDismissAction:(id)sender
+{
+    [subtitleText resignFirstResponder];
+    [self.actionTarget performSelector:self.dismissSelector withObject:nil afterDelay:0];
+}
+
+-(void) inputConfirmAction:(id)sender
+{
+    [self.actionTarget performSelector:self.confirmSelector withObject:nil afterDelay:0];
+}
+
+-(void) addTarget:(id)target dismissAction:(SEL)action
+{
+    self.actionTarget=target;
+    self.dismissSelector=action;
+}
+
+-(void) addTarget:(id)target confirmAction:(SEL)action
+{
+    self.actionTarget=target;
+    self.confirmSelector=action;
+}
+
+@end

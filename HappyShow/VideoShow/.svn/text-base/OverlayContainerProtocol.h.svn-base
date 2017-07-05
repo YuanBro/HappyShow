@@ -1,0 +1,33 @@
+//
+//  OverlayContainerProtocol.h
+//  VideoShow
+//
+//  Created by lance on 15/11/14.
+//  Copyright © 2015年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+
+@class qxMediaObject;
+
+@protocol OverlayContainerProtocol <NSObject>
+
+// 更新overlay的相关属性
+- (void) updateMediaObject:(qxMediaObject *)mediaObject hidden:(BOOL)isHidden;
+
+// 隐藏某个overlay YES为隐藏 NO为显示
+- (void) hideMediaObject:(qxMediaObject *)mediaObject flag:(BOOL)flag;
+
+// 滚动后判断哪些可以绘制
+- (void) scrollToSecond:(CGFloat)second;
+
+// 添加overlay
+- (void) addMediaObject:(qxMediaObject *)mediaObject;
+
+// 删除overlay
+- (void) deleteMediaObject:(qxMediaObject *)mediaObject;
+
+// 清理所有overlay的组件引用
+- (void) clearAll;
+
+@end

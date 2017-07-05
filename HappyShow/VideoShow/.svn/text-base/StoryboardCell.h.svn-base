@@ -1,0 +1,29 @@
+//
+//  StoryboardCell.h
+//  VideoShow
+//
+//  Created by lance on 15/4/14.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+
+@protocol StoryboardCellDelegate;
+@interface StoryboardCell : UICollectionViewCell
+
+@property (nonatomic,weak) id<StoryboardCellDelegate> delegate;
+
+@property (weak, nonatomic) IBOutlet UIView *topView;
+@property (nonatomic,weak) IBOutlet UIImageView * assetImage;//添加媒体片段的缩略图
+@property (nonatomic,weak) IBOutlet UIButton * btDel;//删除按钮
+
+-(IBAction)deleteAction:(id)sender;
+
+@end
+
+@protocol StoryboardCellDelegate <NSObject>
+
+-(void)deleteMedia:(StoryboardCell*)cell;
+
+@end

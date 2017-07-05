@@ -1,0 +1,101 @@
+//
+//  Util.h
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-7-23.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+#import <AssetsLibrary/AssetsLibrary.h>
+#import <CoreMedia/CoreMedia.h>
+#import <Photos/Photos.h>
+#define VideoShowAlbum  @"VideoShow"
+
+typedef enum {
+    FilterTypeNone,
+    FilterTypePhoto,
+    FilterTypeVideo
+} FilterType;
+
+
+//typedef enum {
+//    MaterialTypeSticker,  //贴图
+//    MaterialTypeSouce,    // 配乐
+//    MaterialTypeSoundtrack //音效
+//} MaterialType;
+//typedef void (^GenerateFrameComplementionHandler)(NSMutableArray *frames, float spi, Float64 duraion);
+//
+//@class VideoDraft;
+//@class qxTimeline;
+//@class qxMediaObject;
+//@class qxTrack;
+@interface Util : NSObject
+
+///** 用于添加配乐和添加配音 1-music 2-audio -1时间太短 -2底层库问题 0 添加成功 flag=YES 系统音乐库中的音乐*/
+//+ (int)addAudio:(qxMediaObject*)audioObj WithTrack:(qxTrack*)track startTime:(float)second duration:(CMTime)duration flag:(BOOL)flag;
+//
+///** 相对沙盒目录的documents路径 */
+//+ (NSString *) relativeSandboxDocPath:(NSString *)srcPath;
+//
+//+ (NSString*)instagramAccessToken;
+//
+//+ (void)saveInstagramAccessToken:(NSString*)accessToken;
+//
+//+ (NSString*)stringWithSeconds:(long)duration;
+//
++(UIAlertView *) showAlert:(NSString *)message title:(NSString *)title tag:(int) tag;
+//
+//+(void)saveVideo:(NSURL *)videoURL  toAlbum:(NSString *)customAlbumName  completionBlock:(void (^)(NSURL *videoUrl))completionBlock  failureBlock:(void (^)(NSError *error))failureBlock;
+//
+//+(BOOL)deleteFile:(NSString*)filepath;
+//
++(ALAssetsLibrary *)defaultAssetsLibrary;
+//
+//+(NSString*)archiveDraft:(VideoDraft*)draft;
+//
+//+(VideoDraft*)unArchiveDraft:(NSString*)draftFile;
+//
+//
+//+ (void)uploadVideoALAssetToFacebook:(NSString*)videoPath forView:(UIView *)view;
+//
+//+(void)clearPhotoTrack:(qxTrack*)track;
+//
+//+ (BOOL)deleteDraft:(NSString*)filename;
+//
+//+ (NSString*)generateTempFileFromALAsset:(ALAsset*)asset;
+///** 创建一个临时的录音文件 */
+//+ (NSString *) createRecordFile;
+//
+//+(NSString*)recordDir;
+//
+//+(NSString*)overlayImgDir;
+//
+//+(NSString*)draftDir;
+///** 临时上传目录---媒体库文件需要先保存到沙盒目录中才能上传 */
+//+(NSString*)tmpUploadDir;
+//
+//+(NSMutableArray*)rgbValueFromColor:(UIColor*)color;
+//
+//+ (NSString*)preferredLanguage;
+//
+//+(BOOL)fileExists:(NSString*)file;
+//
+//+ (NSString*)stickerDownloadFile:(int)stickerID;
+//
+//+ (NSString*)rootDownloadPath;
+//
+//+ (NSString*)stickerPath:(int)stickerID;
+//
+////将弧度计算成0~45度之间的值
+//+(float) ABSConvertTo45:(float)radianp;
+//
+///** 获取当前app版本 */
+//+(NSString *) stringWithVersion;
+//
+///** 获取当前设置的语言 */
+//+(NSString *) currentLanguage;
+//
+//+(BOOL) currentLanguageIszhCN;
+
+@end

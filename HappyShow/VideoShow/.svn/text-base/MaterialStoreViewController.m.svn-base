@@ -1,0 +1,556 @@
+//
+//  MaterialStoreViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/12/1.
+//  Copyright © 2015年 energy. All rights reserved.
+//
+#import "MaterialStoreViewController.h"
+#import "StickerDownloadViewController.h"
+#import "FeaturedViewController.h"
+#import "AppMacros.h"
+#import "UIColor+Util.h"
+#import "PagerViewControllerDelegate.h"
+#import "MusicCategoryViewController.h"
+#import "TouchableView.h"
+#import "Util.h"
+#import "SoundtrackViewController.h"
+#import "MaterialDownloadViewController.h"
+#import "AFNetworking.h"
+#import "BaseService.h"
+#import "JSONKit.h"
+#import "MaterMainInf.h"
+#import "AppDelegate.h"
+#import <CoreData/CoreData.h>
+
+#import "Passvalue.h"
+
+#define MainRequstUrl  @"http://tsso.videoshowapp.com:88/zone/1.0.1/materialClient/getMaterialVer.htm?"
+
+#define naviLineHeight 4
+
+#define Mydefaults  [NSUserDefaults standardUserDefaults]
+//
+// NSNumber* a=0;
+// NSNumber* b=0;
+// NSNumber* c=0;
+
+static int pagerNaviHeight = 44;//这里要包含状态栏的高度
+
+@interface MaterialStoreViewController ()<PagerViewControllerDelegate, UIPageViewControllerDataSource, UIPageViewControllerDelegate>{
+    CGRect screenBounds;
+    
+}
+
+@property (nonatomic, assign) CGFloat naviLineWidth;
+
+@property (nonatomic, assign) NSUInteger selectIndex;
+@property (nonatomic, strong) UIPageViewController *pageController;
+@property (nonatomic, strong) NSMutableArray * controllers;
+
+@property (nonatomic, strong) UIView *customNavibar;
+@property (nonatomic, strong) UIButton * btnMusic;
+@property (nonatomic, strong) UIButton * btnSticker;
+@property (nonatomic, strong) UIView * naviLine;
+@property (nonatomic, strong) UIScrollView * scrollView;
+@property (nonatomic, strong)StickerDownloadViewController * storeControl;
+//@property (nonatomic, strong)SoundtrackViewController * soundTrackControl;
+@property(nonatomic,strong)UIImageView* Imagev;
+
+@property (nonatomic, assign) NSUInteger pageIndex;
+
+@property(nonatomic,strong)NSDictionary *dict;
+
+@property(nonatomic,strong)MaterMainInf* info;
+
+@property(nonatomic,strong)UIImageView* imagev1;
+@property(nonatomic,strong)UIImageView* imagev2;
+@property(nonatomic,strong)UIImageView* imagev3;
+@property(nonatomic,strong)UIImageView* imagev4;
+@property(nonatomic,strong)UIImageView* imagev5;
+
+@property(nonatomic,strong)Passvalue * u;
+
+
+@end
+
+@implementation MaterialStoreViewController
+
+@synthesize btnMusic;
+@synthesize btnSticker;
+@synthesize naviLine;
+@synthesize scrollView,storeControl;
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    self.view.backgroundColor = [UIColor colorWithHexString:bgColor];
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"Material Store", nil)];
+    screenBounds = [UIScreen mainScreen].bounds;
+    if (self.scrollView == nil) {
+        CGRect rectScoll = CGRectMake(0, 0, screenBounds.size.width, self.view.frame.size.height);
+        self.scrollView = [[UIScrollView alloc]initWithFrame:rectScoll];
+        scrollView.backgroundColor = [UIColor whiteColor];
+        // 是否支持滑动最顶端
+        //    scrollView.scrollsToTop = NO;
+        scrollView.delegate = self;
+        // 设置内容大小
+        scrollView.contentSize = CGSizeMake(screenBounds.size.width, self.view.frame.size.height +30);
+        // 是否反弹
+        scrollView.bounces = YES;
+        // 是否分页
+        //    scrollView.pagingEnabled = YES;
+        // 是否滚动
+        scrollView.scrollEnabled = YES;
+        scrollView.showsHorizontalScrollIndicator = NO;
+        // 设置indicator风格
+        scrollView.indicatorStyle = UIScrollViewIndicatorStyleWhite;
+        // 设置内容的边缘和Indicators边缘
+        //    scrollView.contentInset = UIEdgeInsetsMake(0, 50, 50, 0);
+        //    scrollView.scrollIndicatorInsets = UIEdgeInsetsMake(0, 50, 0, 0);
+        // 提示用户,Indicators flash
+        [scrollView flashScrollIndicators];
+        // 是否同时运动,lock
+        scrollView.directionalLockEnabled = YES;
+        
+        scrollView.canCancelContentTouches=NO;
+    }
+    
+    [self.view addSubview:scrollView];
+    
+    int margin=40*screenBounds.size.width/720;
+    CGRect rectTheme = CGRectMake(margin, margin, screenBounds.size.width/2-margin*1.5, screenBounds.size.width/2-margin*1.5);
+    CGRect rectSoundtrack = CGRectMake(screenBounds.size.width/2+margin*0.5, margin, screenBounds.size.width/2-margin*1.5, screenBounds.size.width/2-margin*1.5);
+    CGRect rectStickers = CGRectMake(margin, rectTheme.size.height + 2*margin, screenBounds.size.width/2-margin*1.5, screenBounds.size.width/2-margin*1.5);
+    CGRect rectSound = CGRectMake(screenBounds.size.width/2+margin*0.5, rectTheme.size.height + 2*margin, screenBounds.size.width/2-margin*1.5,screenBounds.size.width/2-margin*1.5);
+    CGRect rectTypeface = CGRectMake(margin, rectStickers.size.height*2 + 3*margin, screenBounds.size.width/2-margin*1.5,screenBounds.size.width/2-margin*1.5);
+    
+    UIView * viewTheme=[self createViewWithFrame:rectTheme imageName:@"theme.png" labelText:@"主题" sectionColor:[UIColor colorWithHexString:home_section_color_0] sectionSelectColor:[UIColor colorWithHexString:home_section_select_color_0] tag:0];
+    UIView * viewSoundtrack=[self createViewWithFrame:rectSoundtrack imageName:@"music.png" labelText:@"配乐" sectionColor:[UIColor colorWithHexString:home_section_color_1] sectionSelectColor:[UIColor colorWithHexString:home_section_select_color_1] tag:1];
+    UIView * viewStickers=[self createViewWithFrame:rectStickers imageName:@"sticker.png" labelText:@"贴图" sectionColor:[UIColor colorWithHexString:home_section_color_2] sectionSelectColor:[UIColor colorWithHexString:home_section_select_color_2] tag:2];
+    UIView * viewSound=[self createViewWithFrame:rectSound imageName:@"sound.png" labelText:@"音效" sectionColor:[UIColor colorWithHexString:home_section_color_3] sectionSelectColor:[UIColor colorWithHexString:home_section_select_color_3] tag:3];
+    UIView * viewTypeface=[self createViewWithFrame:rectTypeface imageName:@"font.png" labelText:@"字体" sectionColor:[UIColor colorWithHexString:home_section_color_3] sectionSelectColor:[UIColor colorWithHexString:home_section_select_color_3] tag:4];
+    
+    _imagev1=[[UIImageView alloc]initWithImage:[UIImage imageNamed:@"main_new.png"]];
+    _imagev2=[[UIImageView alloc]initWithImage:[UIImage imageNamed:@"main_new.png"]];
+    _imagev3=[[UIImageView alloc]initWithImage:[UIImage imageNamed:@"main_new.png"]];
+    _imagev4=[[UIImageView alloc]initWithImage:[UIImage imageNamed:@"main_new.png"]];
+    _imagev5=[[UIImageView alloc]initWithImage:[UIImage imageNamed:@"main_new.png"]];
+    _imagev1.frame=CGRectMake(0, 0 , 40, 40);
+    _imagev2.frame=CGRectMake(0, 0 , 40, 40);
+    _imagev3.frame=CGRectMake(0, 0 , 40, 40);
+    _imagev4.frame=CGRectMake(0, 0 , 40, 40);
+    _imagev5.frame=CGRectMake(0, 0 , 40, 40);
+    
+    [viewTheme addSubview:_imagev1];
+    [viewSoundtrack addSubview:_imagev2];
+    [viewStickers addSubview:_imagev3];
+    [viewSound addSubview:_imagev4];
+    [viewTypeface addSubview:_imagev5];
+    
+    
+    
+    [scrollView addSubview:viewTheme];
+    [scrollView addSubview:viewSoundtrack];
+    [scrollView addSubview:viewStickers];
+    [scrollView addSubview:viewSound];
+    [scrollView addSubview:viewTypeface];
+    [self.pageController didMoveToParentViewController:self];
+    [self setupRefresh];
+    
+}
+
+- (void)setupRefresh
+{
+    
+    __weak MaterialStoreViewController* weakself=self;
+    
+    MaterMainInf* inf=[weakself requestPostWithPageIndex];
+    
+    [self compare:inf];
+    
+}
+-(MaterMainInf *) requestPostWithPageIndex
+{
+    NSString *lan =  @"en-US";
+    
+    //  NSString * base_url = [BaseService prefixUrl:ServiceTypeSticker];
+    
+    NSString * url =MainRequstUrl;
+    
+    NSMutableDictionary * dic = [[NSMutableDictionary alloc]init];
+    
+    [dic setValue:@"0" forKey:@"materialType"];
+    
+    [dic setValue:lan forKey:@"lang"];
+    
+    [dic setValue:@"1.9.5" forKey:@"versionName"];
+    
+    NSString *requestId = [NSString stringWithFormat:@"%i%u",(int)[[NSDate date]timeIntervalSince1970] *1000,arc4random() % 10000];
+    
+    [dic setValue: requestId forKey:@"requestId"];
+    
+    NSString * result = [BaseService doPostRequestcUrl:url dict:dic];
+    
+    
+    self.dict = [result objectFromJSONString];
+    
+    if(_dict && [_dict[@"retMsg"] isEqualToString:@"success"])
+    {
+        return [MaterMainInf materWithDictionary:_dict];
+        
+    }
+    
+    else
+    {
+        return nil;
+    }
+    return nil;
+    
+}
+
+/** 创建首页的块视图 */
+-(UIView *) createViewWithFrame:(CGRect)sectionRect imageName:(NSString *)imageName labelText:(NSString *)text sectionColor:(UIColor *)sectionColor
+             sectionSelectColor:(UIColor *)sectionSelectColor tag:(NSUInteger)tag
+{
+    UIImage * image = [UIImage imageNamed:imageName];
+    TouchableView *sectionView = [[TouchableView alloc] initWithFrame:sectionRect];
+    sectionView.tag=tag;
+    sectionView.backgroundColor = sectionColor;
+    sectionView.normalBackgroundColor = sectionColor;
+    sectionView.selectBackgroundColor = sectionSelectColor;
+    sectionView.userInteractionEnabled = YES;
+    sectionView.layer.cornerRadius = 2;
+    sectionView.layer.masksToBounds = YES;
+    UITapGestureRecognizer *gesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
+    [sectionView addGestureRecognizer:gesture];
+    
+    UIImageView *sectionImageView = [[UIImageView alloc] initWithImage:image];
+    
+    sectionImageView.frame = sectionRect;
+    sectionImageView.center = CGPointMake(sectionView.frame.size.width/2, sectionView.frame.size.height/2);
+    
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, sectionImageView.frame.size.width, sectionImageView.frame.size.height)];
+    //    [label setFont:[UIFont systemFontOfSize:16]];
+    [label setFont:[UIFont fontWithName:@"Helvetica-Bold" size:24.0]];
+    label.textAlignment = NSTextAlignmentCenter;
+    
+    //    CGPoint point = sectionImageView.center;
+    //    point.y += (sectionImageView.frame.size.height/2 );
+    label.center = sectionImageView.center;
+    
+    label.text = text;
+    label.backgroundColor = [UIColor clearColor];
+    label.textColor = [UIColor whiteColor];
+    
+    [sectionImageView addSubview:label];
+    [sectionView addSubview:sectionImageView];
+    
+    return sectionView;
+}
+- (void)handleTap:(UITapGestureRecognizer*)gesture
+{
+    switch (gesture.view.tag) {
+        case 0:
+        {
+            
+            
+        }
+            break;
+        case 1:
+        {
+            SoundtrackViewController * soundTrackControl= [[SoundtrackViewController alloc] init];
+            
+            UINavigationController *navControl=[[UINavigationController alloc] initWithRootViewController:soundTrackControl];
+            
+            [self presentViewController:navControl animated:YES completion:nil];
+            self.imagev2.hidden=YES;
+            
+            
+        }
+            break;
+            
+        case 2:
+        {
+            
+            storeControl = [[StickerDownloadViewController alloc] init];
+            storeControl.materialType = MaterialTypeSticker;
+            UINavigationController *naviControl=[[UINavigationController alloc] initWithRootViewController:storeControl];
+            [self presentViewController:naviControl animated:YES completion:nil];
+            
+            self.imagev3.hidden=YES;
+            
+        }
+            break;
+            
+        case 3:
+        {
+            
+            MaterialDownloadViewController * materialView = [[MaterialDownloadViewController alloc] init];
+            
+            materialView.materialType = MaterialTypeSouce;
+            
+            materialView.titleText = @"音效";
+            
+            materialView.disableSetting = YES;
+            
+            UINavigationController *naviControl=[[UINavigationController alloc] initWithRootViewController:materialView];
+            
+            [self presentViewController:naviControl animated:YES completion:nil];
+            
+            self.imagev4.hidden=YES;
+        }
+            break;
+            
+        default:
+            
+            break;
+    }
+}
+
+-(void) createTabView
+{
+    UIView * tabView=[[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, pagerNaviHeight)];
+    tabView.backgroundColor=[UIColor colorWithHexString:navigationBarColor];
+    UIView *splitView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 1, tabView.bounds.size.height - 4)];
+    splitView.backgroundColor = [UIColor darkTextColor];
+    [tabView addSubview:splitView];
+    splitView.center = tabView.center;
+    
+    int btnWidth = self.view.bounds.size.width / 2;
+    
+    NSString *unSelectColor=@"#959596";
+    btnMusic=[UIButton buttonWithType:UIButtonTypeCustom];
+    btnMusic.frame=CGRectMake((self.view.frame.size.width-btnWidth*2)/2, 0, btnWidth, pagerNaviHeight);
+    btnMusic.selected=YES;
+    btnMusic.tag=0;
+    [btnMusic setTitle:NSLocalizedString(@"Sticker", nil) forState:UIControlStateNormal];
+    btnMusic.titleLabel.font=[UIFont systemFontOfSize:15];
+    [btnMusic setTitleColor:[UIColor colorWithHexString:unSelectColor] forState:UIControlStateNormal];
+    [btnMusic setTitleColor:[UIColor whiteColor] forState:UIControlStateSelected];
+    [btnMusic addTarget:self action:@selector(tabAction:) forControlEvents:UIControlEventTouchUpInside];
+    
+    btnSticker=[UIButton buttonWithType:UIButtonTypeCustom];
+    btnSticker.frame=CGRectMake(btnMusic.frame.origin.x+btnMusic.frame.size.width, 0, btnWidth, pagerNaviHeight);
+    btnSticker.tag=1;
+    [btnSticker setTitle:NSLocalizedString(@"Music Download", nil) forState:UIControlStateNormal];
+    btnSticker.titleLabel.font=[UIFont systemFontOfSize:15];
+    [btnSticker setTitleColor:[UIColor colorWithHexString:unSelectColor] forState:UIControlStateNormal];
+    [btnSticker setTitleColor:[UIColor whiteColor] forState:UIControlStateSelected];
+    [btnSticker addTarget:self action:@selector(tabAction:) forControlEvents:UIControlEventTouchUpInside];
+    
+    self.naviLineWidth = self.view.bounds.size.width / 2;
+    
+    naviLine=[[UIView alloc] initWithFrame:CGRectMake(0, pagerNaviHeight-naviLineHeight-2, self.naviLineWidth, naviLineHeight)];
+    naviLine.tag=3;
+    naviLine.backgroundColor=[UIColor colorWithHexString:themeColor];
+    naviLine.layer.masksToBounds=YES;
+    naviLine.layer.cornerRadius=3.0;
+    naviLine.layer.borderWidth=0.5;
+    
+    [tabView addSubview:btnMusic];
+    [tabView addSubview:btnSticker];
+    [tabView addSubview:naviLine];
+    self.customNavibar=tabView;
+    [self.view addSubview:tabView];
+}
+
+-(void) tabAction:(UIButton *)sender
+{
+    btnMusic.selected=NO;
+    btnSticker.selected=NO;
+    sender.selected=YES;
+    
+    int index = (int)sender.tag;
+    if (self.selectIndex==index)
+    {
+        return;
+    }
+    [self animWithNaviLine:index];
+    self.selectIndex=index;
+    NSArray * tmpControls=[NSArray arrayWithObject:[self.controllers objectAtIndex:self.selectIndex]];
+    [self.pageController setViewControllers:tmpControls direction:UIPageViewControllerNavigationDirectionForward animated:NO completion:nil];
+    
+}
+
+-(void) animWithNaviLine:(NSUInteger)index
+{
+    btnMusic.selected=NO;
+    btnSticker.selected=NO;
+    UIButton * btnTab=nil;
+    if (index==0) {
+        btnTab = btnMusic;
+    }else{
+        btnTab = btnSticker;
+    }
+    btnTab.selected=YES;
+    
+    __weak MaterialStoreViewController * weakSelf = self;
+    [UIView animateWithDuration:0.3 animations:^{
+        
+        int startx=btnTab.frame.origin.x;
+        CGRect rect = CGRectMake(startx, pagerNaviHeight-naviLineHeight-2, weakSelf.naviLineWidth, naviLineHeight);
+        weakSelf.naviLine.frame=rect;
+    }
+                     completion:^(BOOL finished)
+     {
+         
+     }];
+}
+
+- (void)controllerDidAppear:(UIViewController *)controller
+{
+    self.selectIndex=[self.controllers indexOfObject:controller];
+    [self animWithNaviLine:self.selectIndex];
+}
+
+- (void)controllerDidDisappear:(UIViewController *)controller
+{
+    
+}
+
+//是否处于加载数据中
+- (void)controllerLoadData:(BOOL)flag
+{
+    
+    
+}
+
+- (UIViewController *)pageViewController:(UIPageViewController *)pageViewController viewControllerBeforeViewController:(UIViewController *)viewController
+{
+    NSUInteger curIndex=[self.controllers indexOfObject:viewController];
+    if (curIndex>0)
+    {
+        return [self.controllers objectAtIndex:(curIndex-1)];
+    }
+    
+    return nil;
+}
+
+- (UIViewController *)pageViewController:(UIPageViewController *)pageViewController viewControllerAfterViewController:(UIViewController *)viewController
+{
+    NSUInteger curIndex=[self.controllers indexOfObject:viewController];
+    if (curIndex<self.controllers.count-1)
+    {
+        return [self.controllers objectAtIndex:(curIndex+1)];
+    }
+    
+    return nil;
+}
+-(void)compare:(MaterMainInf*)inf;
+{
+    
+    BOOL   a= [Mydefaults boolForKey:@"themeVerCode"];
+    BOOL   b= [Mydefaults boolForKey:@"musicVerCode"];
+    BOOL   c= [Mydefaults boolForKey:@"soundVerCode"];
+    //    BOOL   b= [Mydefaults boolForKey:@"musicVerCode"];
+    //    BOOL   b= [Mydefaults boolForKey:@"musicVerCode"];
+    
+    
+    if(a==YES)
+    {
+        
+        NSNumber* theme=[Mydefaults objectForKey:@"themeVerCode"];
+        
+        NSLog(@"1音乐入口%@",theme);
+        
+        
+        
+        if(theme<inf.themeVerCode)
+        {
+            NSLog(@"2音乐入口的a");
+            
+            
+            self.imagev1.hidden=NO;
+            
+            [Mydefaults setObject:inf.themeVerCode forKey:@"themeVerCode"];
+            
+            [Mydefaults synchronize];
+            
+        }
+        
+        if(theme==inf.themeVerCode)
+        {
+            
+            self.imagev1.hidden=YES;
+        }
+    }
+    else
+    {
+        self.imagev1.hidden=NO;
+        
+        [Mydefaults setObject:inf.themeVerCode forKey:@"themeVerCode"];
+        
+        [Mydefaults synchronize];
+        
+    }
+    
+    
+    if(b==YES)
+    {
+        
+        NSNumber* music=[Mydefaults objectForKey:@"musicVerCode"];
+        
+        NSLog(@"3音乐入口%@",music);
+        
+        if(music<inf.musicVerCode)
+        {
+            
+            self.imagev2.hidden=NO;
+            
+            [Mydefaults setObject:inf.musicVerCode forKey:@"musicVerCode"];
+            
+            [Mydefaults synchronize];
+            
+        }
+        if(music==inf.musicVerCode)
+        {
+            
+            self.imagev2.hidden=YES;
+        }
+    }
+    else
+    {
+        self.imagev2.hidden=NO;
+        [Mydefaults setObject:inf.musicVerCode forKey:@"musicVerCode"];
+        
+        [Mydefaults synchronize];
+        
+    }
+    
+    if(c==YES)
+    {
+        
+        NSNumber* sound=[Mydefaults objectForKey:@"soundVerCode"];
+        
+        NSLog(@"4音乐入口%@",sound);
+        
+        if(sound<inf.soundVerCode)
+        {
+            
+            self.imagev4.hidden=NO;
+            
+            [Mydefaults setObject:inf.soundVerCode forKey:@"soundVerCode"];
+            
+            [Mydefaults synchronize];
+            
+        }
+        else
+        {
+            
+            self.imagev4.hidden=YES;
+            
+        }
+    }
+    else
+    {
+        self.imagev4.hidden=NO;
+        
+        [Mydefaults setObject:inf.soundVerCode forKey:@"soundVerCode"];
+        
+        [Mydefaults synchronize];
+    }
+}
+
+@end
+
+

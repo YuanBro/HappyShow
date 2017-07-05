@@ -1,0 +1,118 @@
+//
+//  BaseTableViewController.m
+//  VideoShow
+//
+//  Created by lance on 15/4/23.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "BaseTableViewController.h"
+#import "AppMacros.h"
+#import "Application.h"
+#import "Colors.h"
+#import "UIColor+Util.h"
+#import "MobClick.h"
+
+@interface BaseTableViewController()
+
+@property (nonatomic,assign) float brandKeyboardHeight;
+
+@end
+
+@implementation BaseTableViewController
+
+
+-(void) viewDidLoad
+{
+    [super viewDidLoad];
+    self.view.backgroundColor=[UIColor whiteColor];
+
+    UIColor * barColor=[UIColor colorWithHexString:navigationBarColor];
+    if (sysVersion >= 7.0) {
+        self.edgesForExtendedLayout = UIRectEdgeNone;//这里处理成默认从导航栏下方开始绘制
+        self.navigationController.navigationBar.barTintColor = barColor;
+    }else{
+        self.navigationController.navigationBar.tintColor = barColor;
+    }
+    self.navigationController.navigationBar.translucent=NO;
+    
+    [self printScreenParams];
+}
+
+-(void)didReceiveMemoryWarning
+{
+    [super didReceiveMemoryWarning];
+    NSLog(@"%@内存警告",NSStringFromClass([self class]));
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [MobClick beginLogPageView:NSStringFromClass([self class])];
+    NSNotificationCenter * notifyCenter=[NSNotificationCenter defaultCenter];
+    [notifyCenter addObserver:self selector:@selector(applicationWillResignActive:) name:kNotificationWillResignActive object:nil];
+    [notifyCenter addObserver:self selector:@selector(applicationBecomeActive:) name:kNotificationBecomeActive object:nil];
+    [notifyCenter addObserver:self selector:@selector(applicationEnterBackground:) name:kNotificationEnterBackground object:nil];
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    [MobClick endLogPageView:NSStringFromClass([self class])];
+    NSNotificationCenter * notifyCenter=[NSNotificationCenter defaultCenter];
+    [notifyCenter removeObserver:self name:kNotificationWillResignActive object:nil];
+    [notifyCenter removeObserver:self name:kNotificationBecomeActive object:nil];
+    [notifyCenter removeObserver:self name:kNotificationEnterBackground object:nil];
+}
+
+- (void)dealloc
+{
+    NSLog(@"%@:dealloc",NSStringFromClass([self class]));
+   
+}
+
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
+{
+    return UIInterfaceOrientationMaskPortrait;
+}
+
+-(void) printScreenParams
+{
+    int statusHeight=[Application sharedApplication].statusBarFrame.size.height;
+    CGRect rect=[UIScreen mainScreen ].bounds;
+    NSLog(@"statusHeight=%d   screenWidth=%f   screenHeight=%f",statusHeight,rect.size.width,rect.size.height);
+    if (self.navigationController!=nil) {
+        int naviHeight=self.navigationController.navigationBar.frame.size.height;
+        NSLog(@"naviHeight=%d",naviHeight);
+    }
+    
+}
+
+/***************************************app进入前后台的通知******************************************/
+
+-(void) applicationBecomeActive:(NSNotification *)notify
+{
+    
+}
+
+-(void) applicationEnterBackground:(NSNotification *)notify
+{
+    
+}
+
+- (void)applicationWillResignActive:(NSNotification*)notify
+{
+    
+}
+
+@end

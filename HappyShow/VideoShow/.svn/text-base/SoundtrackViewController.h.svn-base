@@ -1,0 +1,15 @@
+//
+//  SoundtrackViewController.h
+//  VideoShow
+//
+//  Created by Mac on 16/1/11.
+//  Copyright © 2016年 energy. All rights reserved.
+//
+#import <UIKit/UIKit.h>
+#import "BaseTableViewController.h"
+#import "PagerViewControllerDelegate.h"
+@interface SoundtrackViewController : BaseTableViewController
+
+@property (nonatomic,weak) id<PagerViewControllerDelegate> mainDelegate;
+@property (nonatomic,assign) BOOL disableBack;
+@end

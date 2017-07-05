@@ -1,0 +1,26 @@
+//
+//  SCLAlertView.h
+//  SCLAlertView
+//
+//  Created by Diogo Autilio on 9/26/14.
+//  Copyright (c) 2014 AnyKey Entertainment. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+@class SCLButton;
+
+typedef void (^ActionBlock) (void);//定义按钮的响应块
+typedef NSAttributedString* (^SCLAttributedFormatBlock)(NSString *value);
+
+@interface SCLAlertView : UIViewController
+
+@property UILabel *labelTitle;
+@property UITextView *viewText;
+@property (nonatomic, assign) BOOL shouldDismissOnTapOutside;
+@property (nonatomic, copy) SCLAttributedFormatBlock attributedFormatBlock;
+
+- (void)hideView;
+- (SCLButton *)addButton:(NSString *)title actionBlock:(ActionBlock)action;
+- (void)showTitle:(UIViewController *)vc title:(NSString *)title subTitle:(NSString *)subTitle closeButtonTitle:(NSString *)closeButtonTitle duration:(NSTimeInterval)duration;
+
+@end

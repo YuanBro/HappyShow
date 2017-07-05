@@ -1,0 +1,19 @@
+//
+//  SubtitleViewController.h
+//  VideoShow
+//
+//  Created by lance on 15/5/14.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+#import "PlayerViewController.h"
+
+@interface SubtitleViewController : BaseViewController
+
+//0 : video track,  1 : music track,  2 : audio track,  3 : overlay track
+@property (strong,nonatomic) qxTimeline *timeline;
+@property (assign,nonatomic) CGRect videoViewRect;
+@property (nonatomic,weak) id<PlayerViewControllerDelegate> delegate;
+
+@end

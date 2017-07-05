@@ -1,0 +1,35 @@
+//
+//  StickerPanel.h
+//  VideoShow
+//
+//  Created by lance on 15/6/15.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "BaseViewController.h"
+
+@class StickerItem;
+@protocol StickerPickerViewControllerDelegate;
+/** 用于显示sticker底部弹出面板 */
+@interface StickerPickerViewController : BaseViewController
+
+@property (nonatomic,weak) id<StickerPickerViewControllerDelegate> delegate;
+
+-(void) refreshStickerPicker;//刷新sticker列表
+-(void) addTarget:(id)target downloadAction:(SEL)action;
+-(void) addTarget:(id)target manageAction:(SEL)action;
+
+/** 关联到父控制器 */
+-(void)attachToController:(UIViewController *)rootController superview:(UIView *)superview;
+
+/** 取消与父控制器的关联 */
+-(void)cancelAttachToController;
+
+@end
+
+
+@protocol StickerPickerViewControllerDelegate <NSObject>
+
+- (void) stickerDidSelected:(StickerItem *)stickerItem;
+
+@end

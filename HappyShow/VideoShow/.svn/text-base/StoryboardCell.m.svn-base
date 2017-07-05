@@ -1,0 +1,49 @@
+//
+//  StoryboardCell.m
+//  VideoShow
+//
+//  Created by lance on 15/4/14.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "StoryboardCell.h"
+
+@implementation StoryboardCell
+
+@synthesize assetImage;
+@synthesize btDel;
+
+/** 在之前的版本如果不这样调用会出现找不到cell中对应的组件 */
+-(instancetype) initWithFrame:(CGRect)frame
+{
+    self = [super initWithFrame:frame];
+    if (self) {
+        NSArray * nibs=[[NSBundle mainBundle] loadNibNamed:@"StoryboardCell" owner:self options:nil];
+        for (id obj in nibs) {
+            if([obj isKindOfClass:[StoryboardCell class]]){
+                self = obj;
+                break;
+            }
+        }
+    }
+    
+    return self;
+}
+
+-(IBAction)deleteAction:(UIButton*)sender
+{
+    if (self.delegate!=nil)
+    {
+        if([self.delegate respondsToSelector:@selector(deleteMedia:)])
+        {
+            [self.delegate deleteMedia:self];
+        }
+    }
+}
+
+- (void)awakeFromNib
+{
+  
+}
+
+@end

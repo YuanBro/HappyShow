@@ -1,0 +1,286 @@
+//
+//  SubtitleView.m
+//  VideoShow
+//
+//  Created by lance on 15/11/13.
+//  Copyright © 2015年 energy. All rights reserved.
+//
+
+#import "SubtitleView.h"
+#import "qxMediaObject+Util.h"
+
+@interface SubtitleView()
+
+@property (nonatomic, strong) dispatch_queue_t drawQueue;
+
+@end
+
+@implementation SubtitleView
+
+- (instancetype)initWithFrame:(CGRect)frame
+{
+    self = [super initWithFrame:frame];
+    if (self) {
+        
+        self.userInteractionEnabled = YES;
+        // 创建一个主线程的队列
+        self.drawQueue = dispatch_queue_create("serial queue", DISPATCH_QUEUE_SERIAL);
+        
+        self.mediaObjects = [NSMutableArray array];
+        
+    }
+    return self;
+}
+
+// 添加字幕
+- (void) addMediaObject:(qxMediaObject *)mediaObject {
+    if(mediaObject == nil){
+        return;
+    }
+    
+    UIImageView *imageView = [self imageWithMediaObject:mediaObject hidden:NO];
+    
+    qxMediaObject * textObject = mediaObject.overlayCustomObj;
+    
+    textObject.overlayCustomObj = imageView;
+
+    imageView.hidden = YES;
+    
+    [self addSubview:imageView];// 直接添加到父视图
+    
+    [self.mediaObjects addObject:mediaObject];
+    
+}
+
+// 删除字幕
+- (void) deleteMediaObject:(qxMediaObject *)mediaObject {
+    if (mediaObject == nil) {
+        return;
+    }
+    
+    qxMediaObject *textObject = mediaObject.overlayCustomObj;
+    
+    UIImageView *imageView = textObject.overlayCustomObj;
+    [imageView removeFromSuperview];
+    imageView = nil;
+    
+    [self.mediaObjects removeObject:mediaObject];
+
+}
+
+// 滚动后判断哪些可以绘制
+- (void) scrollToSecond:(CGFloat)second {
+    
+    __weak typeof (self) weakSelf = self;
+    dispatch_async(self.drawQueue, ^{
+        
+        // 迭代集合来隐藏和现实对应的字幕
+        for (qxMediaObject *mediaObj in weakSelf.mediaObjects) {
+            
+            qxMediaObject *textObj = mediaObj.overlayCustomObj;
+            float start = CMTimeGetSeconds(mediaObj.startTimeOfTrack);
+            float duration = CMTimeGetSeconds(mediaObj.actualTimeRange.duration);
+            
+            if (second >= start && second <= start + duration) {
+                
+                UIImageView *imageView = textObj.overlayCustomObj;
+
+                if (imageView && imageView.hidden == YES) {
+                    
+                    dispatch_sync(dispatch_get_main_queue(), ^{
+                        imageView.hidden = NO;
+                    });
+                }
+            } else {
+                UIImageView *imageView = textObj.overlayCustomObj;
+                
+                if (imageView && imageView.hidden == NO) {
+                    
+                    dispatch_sync(dispatch_get_main_queue(), ^{
+                        imageView.hidden = YES;
+                    });
+                }
+            }
+        }
+        
+    });
+    
+}
+
+- (void) clearAll {
+    for (qxMediaObject *mediaObject in self.mediaObjects) {
+        
+        qxMediaObject *textObject = mediaObject.overlayCustomObj;
+        
+        textObject.overlayCustomObj = nil;
+        
+    }
+    
+    [self.mediaObjects removeAllObjects];
+}
+
+@synthesize mediaObjects = _mediaObjects;
+
+- (void)setMediaObjects:(NSMutableArray *)mediaObjects {
+    _mediaObjects = mediaObjects;
+    
+    for (qxMediaObject *mediaObj in mediaObjects) {
+        UIImageView *imageView = [self imageWithMediaObject:mediaObj hidden:YES];
+        
+        qxMediaObject *textObj = mediaObj.overlayCustomObj;
+        textObj.overlayCustomObj = imageView;
+        
+        [self addSubview:imageView];// 直接添加到父视图
+    }
+    
+}
+
+- (NSMutableArray *)mediaObjects {
+    
+    return _mediaObjects;
+}
+
+// 隐藏某个字幕
+- (void) hideMediaObject:(qxMediaObject *)mediaObject flag:(BOOL)flag {
+    if(mediaObject == nil){
+        return;
+    }
+    
+    qxMediaObject *textObject = mediaObject.overlayCustomObj;
+    
+    UIImageView * imageView = textObject.overlayCustomObj;
+
+    if(imageView){
+        imageView.hidden = flag;
+    }
+
+}
+
+// 更新字幕的相关属性 --- 一般都是出于编辑状态
+- (void) updateMediaObject:(qxMediaObject *)mediaObject hidden:(BOOL)isHidden {
+    
+    qxMediaObject *textObject = mediaObject.overlayCustomObj;
+    
+    CGRect displayRect = mediaObject.textDisplayRect;
+    
+    CGFloat originx = displayRect.origin.x * self.frame.size.width;
+    CGFloat originy = displayRect.origin.y * self.frame.size.height;
+    
+    CGFloat width = displayRect.size.width * self.frame.size.width;
+    CGFloat height = displayRect.size.height * self.frame.size.height;
+    
+    CGRect frame = CGRectMake(originx, originy, width, height);
+    
+    UIImageView *imageView = textObject.overlayCustomObj;
+    
+    imageView.frame = frame;
+    
+    imageView.image = [UIImage imageWithContentsOfFile:mediaObject.strFilePath];
+    
+    if ([[NSFileManager defaultManager] fileExistsAtPath:mediaObject.strFilePath]) {
+        //NSLog(@"");
+    }else{
+        NSLog(@"update subtitle 图片路径不存在");
+    }
+    
+    imageView.hidden = isHidden;
+}
+
+// 通过标签查找对应的字幕
+- (qxMediaObject *)mediaObjectWithImageView:(UIImageView *)imageView {
+    for (qxMediaObject *mediaObject in self.mediaObjects) {
+        
+        qxMediaObject *textObject = mediaObject.overlayCustomObj;
+        
+        if(imageView == textObject.overlayCustomObj) {
+            return mediaObject;
+        }
+    }
+    
+    return nil;
+}
+
+/** 字幕点击事件 */
+- (void) handleSubtitleTap:(UIGestureRecognizer *)recognizer{
+    
+    UIView * view = recognizer.view;
+    if ([view isKindOfClass:[UIImageView class]]) {
+        UIImageView *imageView = (UIImageView *)view;
+        imageView.hidden = YES;
+        
+        qxMediaObject *tapMediaObject = [self mediaObjectWithImageView:imageView];
+        
+        if(tapMediaObject == nil){
+            return;
+        }
+        
+        if ([self.delegate respondsToSelector:@selector(subtitleView:withMediaObject:)]) {
+            [self.delegate subtitleView:self withMediaObject:tapMediaObject];
+        }
+    }
+    
+}
+
+//- (void)showAllSubtitleExcludeMediaObject:(qxMediaObject *)mediaObject {
+//    // 迭代集合来隐藏和现实对应的字幕
+//    for (qxMediaObject *mediaObj in self.mediaObjects) {
+//        
+//        qxMediaObject *textObj = mediaObj.overlayCustomObj;
+//        UILabel *label = textObj.overlayCustomObj;
+//        
+//        if (mediaObj == mediaObject) {
+//            label.hidden = YES;
+//        }else{
+//            label.hidden = NO;
+//        }
+//        
+//    }
+//}
+
+- (void)hideAllSubtitleExcludeMediaObject:(qxMediaObject *)mediaObject {
+    // 迭代集合来隐藏和现实对应的字幕
+    for (qxMediaObject *mediaObj in self.mediaObjects) {
+        
+        qxMediaObject *textObj = mediaObj.overlayCustomObj;
+        UIImageView *imageView = textObj.overlayCustomObj;
+        
+        if (mediaObj == mediaObject) {
+            imageView.hidden = NO;
+        }else{
+            imageView.hidden = YES;
+        }
+       
+    }
+}
+
+// 创建图片组件
+- (UIImageView *)imageWithMediaObject:(qxMediaObject *)mediaObject hidden:(BOOL)isHidden {
+    
+    CGRect displayRect = mediaObject.textDisplayRect;
+    CGFloat originx = displayRect.origin.x * self.frame.size.width;
+    CGFloat originy = displayRect.origin.y * self.frame.size.height;
+    
+    CGFloat width = displayRect.size.width * self.frame.size.width;
+    CGFloat height = displayRect.size.height * self.frame.size.height;
+    
+    CGRect frame = CGRectMake(originx, originy, width, height);
+    
+    UIImageView *imageView = [[UIImageView alloc] initWithFrame:frame];
+    imageView.userInteractionEnabled = YES;
+    
+    imageView.image = [UIImage imageWithContentsOfFile:mediaObject.strFilePath];
+    imageView.hidden = isHidden;
+    
+    if ([[NSFileManager defaultManager] fileExistsAtPath:mediaObject.strFilePath]) {
+        //NSLog(@"");
+    }else{
+        NSLog(@"init subtitle 图片路径不存在");
+    }
+    
+    UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleSubtitleTap:)];
+    [imageView addGestureRecognizer:tapGesture];
+    
+    return imageView;
+}
+
+@end

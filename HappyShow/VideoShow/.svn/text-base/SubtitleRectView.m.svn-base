@@ -1,0 +1,70 @@
+//
+//  SubtitleRectView.m
+//  X-VideoShow
+//
+//  Created by Jerry Chen  on 14-7-9.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "SubtitleRectView.h"
+#import "UIColor+Util.h"
+
+static float selectBorderWidth = 0.5;
+@implementation SubtitleRectView
+{
+    UITapGestureRecognizer *tapGestureRecoginizer;
+}
+
+- (id)initWithFrame:(CGRect)frame Pending:(BOOL)pending IndexOnTrack:(NSUInteger)index
+{
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.backgroundColor = [UIColor colorWithRed:102/255.0 green:141/255.0 blue:227/255.0 alpha:0.85];
+        self.layer.borderWidth = selectBorderWidth;
+        self.layer.borderColor = [UIColor colorWithHexString:themeColor].CGColor;
+        [self addObserver:self forKeyPath:@"editing" options:NSKeyValueObservingOptionNew context:NULL];
+        tapGestureRecoginizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tap:)];
+        tapGestureRecoginizer.numberOfTapsRequired = 1;
+        tapGestureRecoginizer.numberOfTouchesRequired = 1;
+        [self addGestureRecognizer:tapGestureRecoginizer];
+        self.userInteractionEnabled = YES;
+        _editing = NO;
+        if(pending){
+            _indexOnTrack = -1;
+        }else{
+            _indexOnTrack = index;
+        }
+    }
+    return self;
+}
+
+-(void)tap:(UIGestureRecognizer*)recognizer
+{
+    // 点击视图的位置
+    CGPoint point = [recognizer locationInView:recognizer.view];
+    if([self.delegate respondsToSelector:@selector(subtitleRectViewTaped:touchPoint:)]){
+        [self.delegate subtitleRectViewTaped:self touchPoint:point];
+    }
+}
+
+-(void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
+{
+    if([keyPath isEqualToString:@"editing"]){
+        if ([(NSNumber*)change[NSKeyValueChangeNewKey] boolValue]) {
+            self.backgroundColor = [UIColor clearColor];
+            self.layer.borderWidth = 0;
+            self.layer.borderColor = [UIColor clearColor].CGColor;
+        }else{
+            self.backgroundColor = [UIColor colorWithRed:102/255.0 green:141/255.0 blue:227/255.0 alpha:0.85];
+            self.layer.borderWidth = selectBorderWidth;
+            self.layer.borderColor = [UIColor colorWithHexString:themeColor].CGColor;
+        }
+    }
+}
+
+-(void)dealloc
+{
+    [self removeObserver:self forKeyPath:@"editing"];
+    [self removeGestureRecognizer:tapGestureRecoginizer];
+}
+@end

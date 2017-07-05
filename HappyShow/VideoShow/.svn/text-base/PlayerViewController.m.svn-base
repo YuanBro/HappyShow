@@ -1,0 +1,1140 @@
+//
+//  PlayerViewController.m
+//  VideoShow
+//
+//  Created by Jerry Chen  on 14-7-24.
+//  Copyright (c) 2014年 energy. All rights reserved.
+//
+
+#import "PlayerViewController.h"
+#import "SubtitleViewController.h"
+#import "StickerViewController.h"
+#import "AlbumsViewController.h"
+#import "MusicViewController.h"
+#import "AudioViewController.h"
+#import "EditClipViewController.h"
+#import "FilterViewController.h"
+#import "TransitionViewController.h"
+#import "MBProgressHUD.h"
+#import "UIColor+Util.h"
+#import "MobClick.h"
+#import "Util.h"
+#import "MyLabel.h"
+#import "VideoShareViewController.h"
+#import "RotateNavigationController.h"
+#import "VideoDraft.h"
+#import "DraftVideo+CoreData.h"
+#import "Toast+UIView.h"
+#import "AppEvent.h"
+#import <sys/param.h>
+#import <sys/mount.h>
+#import "FileHandle.h"
+#import "UIImage+Util.h"
+#import "ToolbarCell.h"
+#import "AppMacros.h"
+#import "UIColor+Util.h"
+#import "AudioScrollView.h"
+#import "qxStickerObject.h"
+#import "ASValueTrackingSlider.h"
+//#import "qxPlaybackView+Util.h"
+#import "ExportViewController.h"
+#import "qxFxPlaybackHelper.h"
+#import "qxFxExportHelper.h"
+
+
+//连按2秒停止导出
+#define STOP_INTERVAL 2
+#define ToolbarHeight 95
+#define ToolbarCellSize 60
+#define ToolbarItemCount 6
+
+
+#import "DemoFilterViewController.h"
+#import "DemoTransitionViewController.h"
+
+static NSString * toolCellIdentifier = @"ToolbarCell";
+
+@interface PlayerViewController()<UICollectionViewDataSource,UICollectionViewDelegate,UIAlertViewDelegate,qxFxPlaybackDelegate,qxFxExportDelegate,PlayerViewControllerDelegate,UIActionSheetDelegate,ASValueTrackingSliderDataSource>
+{
+    CMTime duration;//视频时长
+    NSTimer *playControlTimer;
+    qxMediaObject *currentMediaObject;
+
+}
+
+@property (nonatomic,strong) qxFxPlaybackHelper *tmpPlaybackHelper;//用于在模式更改时起交换作用
+@property (nonatomic,strong) UIView *tmpVideoView;
+
+@property (nonatomic,assign) BOOL exporting;
+@property (nonatomic,assign) BOOL playing;
+@property (nonatomic,assign) BOOL prePlaying;//拖动滑块之前是否处于播放状态
+//一个用于播放,临时的用于视图替换相关
+@property (nonatomic,strong) qxFxPlaybackHelper *playbackHelper;
+
+//编辑配乐和配音临时保存的timeline对象
+@property (nonatomic,strong) qxTimeline * editTimeline;
+
+//工具栏数据源
+@property (nonatomic,strong) NSArray * toolIcons;
+@property (nonatomic,strong) NSArray * toolLabels;
+
+//导出对话框
+@property (nonatomic,strong) qxFxExportHelper *exportHelper;
+@property (nonatomic,strong) ExportViewController * exportControl;//用于显示进度
+//
+@property (nonatomic,strong) UIButton *btExport;
+
+////////////////////////////// nib ////////////////////////////////////////////
+
+@property (nonatomic,strong) UIView *leftBtnView;
+
+@property (nonatomic,strong) IBOutlet UIButton *btPlay;
+@property (nonatomic,strong) IBOutlet UIView *videoView;
+@property (nonatomic,strong) IBOutlet UIView *videoBgView;
+
+@property (nonatomic,strong) IBOutlet ASValueTrackingSlider *previewSlider;
+
+@property (nonatomic,strong) IBOutlet MyLabel *labelCurrent;
+@property (nonatomic,strong) IBOutlet MyLabel *labelTotal;
+@property (nonatomic,strong) IBOutlet UIView *bottomToolBar;
+
+@property (nonatomic,strong) IBOutlet UIView * toolView;//工具栏容器
+@property (nonatomic,strong) IBOutlet UIImageView * spliteImageView;
+@property (nonatomic,strong) IBOutlet UICollectionView * mToolCollect;//工具集合
+
+@property (nonatomic, assign) BOOL needRefreshVideoBeforePreview;
+
+@property (nonatomic, assign) BOOL isBefore; //表示是在对象前面还是后面添加转场, 默认设置为NO
+
+-(IBAction)playAction:(id)sender;
+
+@end
+
+@implementation PlayerViewController
+
+@synthesize tmpPlaybackHelper;
+@synthesize tmpVideoView;
+
+@synthesize exportHelper;
+@synthesize playbackHelper;
+@synthesize exportControl;
+@synthesize leftBtnView;
+
+@synthesize videoBgView;
+@synthesize videoView;
+@synthesize btPlay;
+@synthesize btExport;
+@synthesize previewSlider;
+@synthesize labelCurrent;
+@synthesize labelTotal;
+@synthesize bottomToolBar;
+
+@synthesize toolView;
+@synthesize spliteImageView;
+@synthesize mToolCollect;
+@synthesize toolIcons;
+@synthesize toolLabels;
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor colorWithHexString:homeColor];
+
+    [self initNavigationBar];
+    UITapGestureRecognizer *playbackTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(playbackViewTap:)];
+    [videoBgView addGestureRecognizer:playbackTap];
+    
+    labelCurrent.drawOutline = YES;
+    labelTotal.drawOutline = YES;
+    
+    toolView.backgroundColor=[UIColor colorWithHexString:bottomViewColor];
+    spliteImageView.backgroundColor=[UIColor colorWithHexString:bottomViewSpliteColor];
+    UICollectionViewFlowLayout * layout = [[UICollectionViewFlowLayout alloc] init];
+    if(isPad){
+        float itemWidth=self.view.bounds.size.width/ToolbarItemCount;
+        layout.itemSize = CGSizeMake(itemWidth, ToolbarCellSize);
+    }else{
+        float itemWidth = self.view.bounds.size.width/4.5;
+        layout.itemSize = CGSizeMake(itemWidth, ToolbarCellSize+20);
+    }
+    
+    layout.minimumLineSpacing=0;
+    layout.scrollDirection=UICollectionViewScrollDirectionHorizontal;
+    mToolCollect.collectionViewLayout=layout;
+    mToolCollect.backgroundColor=[UIColor colorWithHexString:navigationBarColor];
+    [mToolCollect registerClass:[ToolbarCell class] forCellWithReuseIdentifier:toolCellIdentifier];
+
+    toolIcons=@[@"toolbar_media.png",@"toolbar_duration.png",@"toolbar_subtitle.png",@"toolbar_sticker.png",@"toolbar_music.png",@"toolbar_record.png",@"toolbar_record.png",@"toolbar_record.png"];
+    toolLabels=@[@"Tool_clip_add",@"片段编辑",@"Tool_subtitle",@"Tool_sticker",@"Tool_music",@"Tool_record",@"Tool_filter",@"Tool_transition"];
+    
+    previewSlider.tag=1;
+    previewSlider.dataSource=self;
+    [previewSlider addTarget:self action:@selector(sliderValueChanged:) forControlEvents:UIControlEventValueChanged];
+    [previewSlider addTarget:self action:@selector(sliderTouchUpInside:) forControlEvents:UIControlEventTouchUpInside];
+    //previewSlider.maximumValue = 100.0;
+    previewSlider.font = [UIFont systemFontOfSize:14];
+    previewSlider.textColor = [UIColor whiteColor];
+    previewSlider.popUpViewWidthPaddingFactor = 1.5;
+    previewSlider.popUpViewColor = [UIColor colorWithHexString:themeColor];
+    previewSlider.popUpViewArrowLength = 12.0;
+    previewSlider.tintColor  = [UIColor colorWithHexString:themeColor];
+    [previewSlider setThumbImage:[UIImage imageResource:@"slider_handle.png"] forState:UIControlStateNormal];
+    [previewSlider setThumbImage:[UIImage imageResource:@"slider_handle.png"] forState:UIControlStateHighlighted];
+    //[previewSlider popUpViewVisible:NO];
+    previewSlider.autoAdjustTrackColor=NO;
+    
+    self.btPlay.center=self.view.center;
+    
+    [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+    __weak PlayerViewController * weakSelf = self;
+    //handle media
+//    [[self.timeline getTrackFromTimeline:0] initUsableForSize:self.screenRect.size block:^{
+//        [MBProgressHUD hideAllHUDsForView:weakSelf.view animated:YES];
+//        [weakSelf prepareForPreview];
+//    }];
+     self.needRefreshVideoBeforePreview=YES;
+    [[self.timeline getTrackFromTimeline:0] reloadPhoto:self.screenRect.size block:^{
+        [MBProgressHUD hideAllHUDsForView:weakSelf.view animated:YES];
+        [weakSelf prepareForPreview];
+    }];
+    [self resetMediaWithDurationChanged];
+}
+
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    [self pausePreview];
+}
+
+- (void)dealloc {
+    self.timeline = nil;
+    [self cleanMemory];
+}
+
+-(void)cleanMemory
+{
+    self.playbackHelper =nil;
+    self.toolIcons = nil;
+    self.toolLabels = nil;
+    self.tmpPlaybackHelper = nil;
+    self.editTimeline = nil;
+//    self.exportHelper = nil;
+//    self.exportControl = nil;
+}
+
+-(void) initNavigationBar
+{
+    self.navigationController.navigationBar.translucent=YES;
+    [self.navigationController.navigationBar initWithViewController:self title:NSLocalizedString(@"Video Edit", nil)];
+    [self.navigationController.navigationBar initWithViewController:self leftText:NSLocalizedString(@"Back", nil) leftImageName:@"ic_back_arrow.png" action:@selector(backViewTap:)];
+    
+    //top, CGFloat left, CGFloat bottom, CGFloat right
+    UIView * rightView=[[UIView alloc] initWithFrame:CGRectMake(0, 0, 80, 40)];
+    UIButton * btnSetting = [UIButton buttonWithType:UIButtonTypeCustom];
+    btnSetting.frame=CGRectMake(5,5, 30, 30);
+    [btnSetting setImage:[UIImage imageNamed:@"bt_setting_normal.png"] forState:UIControlStateNormal];
+    [btnSetting setImage:[UIImage imageNamed:@"bt_setting_pressed.png"] forState:UIControlStateHighlighted];
+    [btnSetting addTarget:self action:@selector(modelSetAction:) forControlEvents:UIControlEventTouchUpInside];
+    [rightView addSubview:btnSetting];
+    
+    //right bar button
+    UIImage * rightImage=[UIImage imageResource:@"bt_export.png"];
+    btExport = [[UIButton alloc] initWithFrame:CGRectMake(btnSetting.frame.origin.x+btnSetting.frame.size.width+10, 5, 30,30)];
+    [btExport setImage:rightImage forState:UIControlStateNormal];
+    //[exportBtn setImageEdgeInsets:UIEdgeInsetsMake(0,0,0,0)];
+    btExport.imageView.contentMode=UIViewContentModeScaleAspectFit;
+    [btExport addTarget:self action:@selector(exportAction:) forControlEvents:UIControlEventTouchUpInside];
+    [rightView addSubview:btExport];
+    //
+    UIBarButtonItem *rightBarButton = [[UIBarButtonItem alloc] initWithCustomView:rightView];
+    rightBarButton.tintColor = [UIColor blueColor];
+    self.navigationItem.rightBarButtonItem = rightBarButton;
+    
+}
+
+-(void) modelSetAction:(id)sender
+{
+    UIActionSheet * sheet=[[UIActionSheet alloc] initWithTitle:NSLocalizedString(@"Select video mode", nil) delegate:self cancelButtonTitle:NSLocalizedString(@"Cancel", nil) destructiveButtonTitle:nil otherButtonTitles:NSLocalizedString(@"Mode capacity", nil),NSLocalizedString(@"Mode square", nil), nil];
+    
+    [sheet showInView:self.view];
+}
+
+- (void)actionSheet:(UIActionSheet *)actionSheet clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+//    VideoMode tmpMode = VideoModeSmart;
+//    switch (buttonIndex) {
+//        case 0:
+//            tmpMode=VideoModeSmart;
+//            break;
+//        case 1:
+//            tmpMode=VideoModeSquare;
+//            break;
+//        default:
+//            return;
+//    }
+//    
+//    if (tmpMode!=self.videoMode) {
+//        self.videoMode=tmpMode;
+//        [self prepareForPreview];
+//    }
+    if (buttonIndex == 0){
+        DemoFilterViewController * pv = [[DemoFilterViewController alloc] initWithNibName:@"DemoFilterViewController" bundle:nil];
+        pv.timeline = self.timeline;
+        pv.delegate = self;
+        [self.navigationController presentViewController:pv animated:YES completion:nil];
+    }
+    if (buttonIndex == 1){
+        DemoTransitionViewController * pv = [[DemoTransitionViewController alloc] initWithNibName:@"DemoTransitionViewController" bundle:nil];
+        pv.timeline = self.timeline;
+        pv.delegate = self;
+        [self.navigationController presentViewController:pv animated:YES completion:nil];
+//        [self.navigationController pushViewController:pv animated:YES];
+    }
+}
+
+- (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section
+{
+    return toolIcons.count;
+}
+
+- (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath
+{
+    ToolbarCell * cell = [collectionView dequeueReusableCellWithReuseIdentifier:toolCellIdentifier forIndexPath:indexPath];
+    cell.toolIcon.image=[UIImage imageResource:toolIcons[indexPath.row]];
+    cell.toolLabel.text=NSLocalizedString(toolLabels[indexPath.row], nil);
+    
+    return cell;
+}
+
+- (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath
+{
+    [collectionView deselectItemAtIndexPath:indexPath animated:YES];
+    switch (indexPath.row) {
+        case 0:
+            [self addMediaAction:nil];
+            break;
+        case 1:
+        {
+            if(currentMediaObject==nil){
+                currentMediaObject = [[self.timeline getTrackFromTimeline:0] getMediaObjectFromTrack:0];
+            }
+
+            EditClipViewController *control = [EditClipViewController initFromStoryboard:[EditClipViewController class]];
+            RotateNavigationController *naviControl=[[RotateNavigationController alloc] initWithRootViewController:control];
+            control.videoViewRect=videoView.frame;
+            control.delegate = self;
+//            control.mediaObj = currentMediaObject;
+//            control.mtimeline = [self.timeline clone:YES];;
+            control.mtimeline = self.timeline;
+            [self.navigationController presentViewController:naviControl animated:YES completion:nil];
+            
+        }
+            break;
+        case 2:
+        {
+            SubtitleViewController *control = [SubtitleViewController initFromStoryboard:[SubtitleViewController class]];
+            RotateNavigationController *naviControl=[[RotateNavigationController alloc] initWithRootViewController:control];
+            control.timeline = [self.timeline clone:YES];
+            control.videoViewRect = videoView.frame;
+            control.delegate = self;
+            [self presentViewController:naviControl animated:YES completion:nil];
+        }
+            break;
+        case 3:
+        {
+            StickerViewController *control=[StickerViewController initFromStoryboard:[StickerViewController class]];
+            RotateNavigationController *naviControl=[[RotateNavigationController alloc] initWithRootViewController:control];
+            control.timeline = [self.timeline clone:YES];
+            control.videoViewRect = videoView.frame;
+            control.delegate = self;
+            [self presentViewController:naviControl animated:YES completion:nil];
+        }
+            break;
+        case 4:
+        {
+            MusicViewController *control = [MusicViewController initFromStoryboard:[MusicViewController class]];
+            RotateNavigationController *naviControl=[[RotateNavigationController alloc] initWithRootViewController:control];
+            control.timeline = [self.timeline clone:YES];
+            control.videoViewRect = videoView.frame;
+            control.delegate = self;
+            [self presentViewController:naviControl animated:YES completion:nil];
+        }
+            break;
+        case 5:
+        {
+            
+            AudioViewController *control = [AudioViewController initFromStoryboard:[AudioViewController class]];
+            RotateNavigationController *naviControl=[[RotateNavigationController alloc] initWithRootViewController:control];
+            control.timeline = [self.timeline clone:YES];
+            control.videoViewRect = videoView.frame;
+            control.delegate = self;
+            [self presentViewController:naviControl animated:YES completion:nil];
+        }
+            break;
+        case 6:
+        {
+ 
+            FilterViewController *filterVC = [FilterViewController initFromStoryboard:[FilterViewController class]];
+            RotateNavigationController *naviControl = [[RotateNavigationController alloc] initWithRootViewController:filterVC];
+            //filterVC.timeline = [self.timeline clone:YES];
+            filterVC.timeline = self.timeline;
+            filterVC.isBefore = self.isBefore;
+            filterVC.videoViewRect = videoView.frame;
+            filterVC.delegate = self;
+            [self presentViewController:naviControl animated:YES completion:nil];
+            
+        }
+            break;
+        case 7:
+        {
+            
+            TransitionViewController *transitionVC = [TransitionViewController initFromStoryboard:[TransitionViewController class]];
+            RotateNavigationController *naviControl = [[RotateNavigationController alloc] initWithRootViewController:transitionVC];
+            transitionVC.timeline = self.timeline;
+            transitionVC.isBefore = self.isBefore;
+            transitionVC.videoViewRect = videoView.frame;
+            transitionVC.delegate = self;
+            [self presentViewController:naviControl animated:YES completion:nil];
+            
+        }
+            break;
+        default:
+            break;
+    }
+    
+    NSLog(@"prepareRect--->%@",NSStringFromCGRect(videoView.frame));
+}
+
+
+
+-(void)loopAction:(UIButton*)sender
+{
+    sender.selected=!sender.selected;
+}
+
+//app 进入前台
+-(void) applicationBecomeActive:(NSNotification *)notify
+{
+}
+//app 进入后台
+-(void) applicationEnterBackground:(NSNotification *)notify
+{
+    [self pausePreview];
+}
+
+- (void)applicationWillResignActive:(NSNotification *)notify
+{
+    if(self.exporting && exportHelper){
+        [exportHelper cancelSave];
+        [self exportStatus:2];
+    }
+}
+
+- (BOOL)shouldAutorotate
+{
+    return NO;
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    return UIInterfaceOrientationPortrait;
+}
+
+- (BOOL)isBefore {
+    return NO;
+}
+
+//返回添加片段
+#pragma mark - button event
+- (void)addMediaAction:(id)sender
+{
+    if(playbackHelper){
+        [self stopPreview];
+    }
+
+    // 清空片段列表
+    [Util clearPhotoTrack:[self.timeline getTrackFromTimeline:0]];
+
+    AlbumsViewController * control = nil;
+    
+    NSArray * controls=self.navigationController.viewControllers;
+    for (UIViewController * contrl in controls) {
+        if ([contrl isKindOfClass:[AlbumsViewController class]]) {
+            control=(AlbumsViewController*)contrl;
+            break;
+        }
+    }
+    if (control!=nil) {
+        control.reeditTimeline=self.timeline;
+        [self.navigationController popToViewController:control animated:YES];
+    }else{
+        AlbumsViewController * control = [[AlbumsViewController alloc] init];
+        control.reeditTimeline=self.timeline;
+        [self.navigationController pushViewController:control animated:YES];
+    }
+    
+}
+
+- (IBAction)playAction:(id)sender
+{
+    if (self.needRefreshVideoBeforePreview) {
+        [self prepareForPreview];
+    }else{
+        [self startPreview];
+    }
+}
+
+- (void)exportAction:(id)sender
+{
+    //save draft
+    VideoDraft * draft = [[VideoDraft alloc] initWithTimeline:self.timeline];
+    draft.videoMode=self.videoMode;
+    NSString * draftPath = [Util archiveDraft:draft];
+    qxTrack *track = [draft.timeline getTrackFromTimeline:0];
+    if(track && track.mpMediaObjArray.count > 0){
+        qxMediaObject *obj = track.mpMediaObjArray[0];
+//        [DraftVideo saveDraft:obj.strFilePath path:draftPath clips:track.mpMediaObjArray.count duration:CMTimeGetSeconds(playbackHelper.playerItem.duration)];
+        [DraftVideo saveDraft:obj.strFilePath path:draftPath clips:track.mpMediaObjArray.count duration:CMTimeGetSeconds(draft.timeline.timelineDuration)];
+
+    }
+    //export
+    [self startExport];
+}
+
+
+#pragma mark - handle gesture
+- (void)backViewTap:(UITapGestureRecognizer*)gesture
+{
+    UIAlertView * alert = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"Exit Video Editing", nil) message:nil delegate:self cancelButtonTitle:NSLocalizedString(@"Cancel", nil) otherButtonTitles:NSLocalizedString(@"Confirm", nil),NSLocalizedString(@"Save to drafts", nil), nil];
+    alert.tag=1;
+    [alert show];
+}
+
+- (void)playbackViewTap:(UITapGestureRecognizer*)gesture
+{
+    if(self.exporting){
+        return;
+    }
+    
+    if(self.playing){
+        [self pausePreview];
+    }else{
+
+    }
+}
+
+#pragma mark - UIAlertViewDelegate
+- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+    if(alertView.tag==1){//退出对话框
+        switch (buttonIndex) {
+            case 0://cancel
+
+                break;
+                
+            case 1://confirm
+                
+                if(playbackHelper){
+                    [self stopPreview];
+                }
+                [Util clearPhotoTrack:[self.timeline getTrackFromTimeline:0]];
+                [self dismissViewControllerAnimated:YES completion:nil];
+                break;
+            
+            case 2://save to drafts
+            {
+                VideoDraft * draft = [[VideoDraft alloc] initWithTimeline:self.timeline];
+                draft.videoMode=self.videoMode;
+                NSString * draftPath = [Util archiveDraft:draft];
+                if(draftPath==nil){//archive failed
+                    UIAlertView *alertView = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"Draft Saving Failed", nil) message:nil delegate:nil cancelButtonTitle:NSLocalizedString(@"OK", nil) otherButtonTitles:nil, nil];
+                    [alertView show];
+                    return;
+                }else{
+                    qxTrack *track = [draft.timeline getTrackFromTimeline:0];
+                    if(track && track.mpMediaObjArray.count > 0){
+                        qxMediaObject *obj = track.mpMediaObjArray[0];
+//                        [DraftVideo saveDraft:obj.strFilePath path:draftPath clips:track.mpInstrctionsArray.count duration:CMTimeGetSeconds(playbackHelper.playerItem.duration)];
+                        [DraftVideo saveDraft:obj.strFilePath path:draftPath clips:track.mpInstrctionsArray.count duration:CMTimeGetSeconds(draft.timeline.timelineDuration)];
+
+                    }
+                    
+                }
+                if(playbackHelper){
+                    [self stopPreview];
+                }
+                [Util clearPhotoTrack:[self.timeline getTrackFromTimeline:0]];
+                [self dismissViewControllerAnimated:YES completion:nil];
+            }
+                break;
+        }
+    }
+}
+
+-(void)prepareForPreview
+{
+    [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+    
+    __weak PlayerViewController * weakSelf=self;
+    
+    [UIView animateWithDuration:0.3 animations:^{
+        if(weakSelf.playbackHelper){
+            [weakSelf.playbackHelper stop];
+        }
+        weakSelf.tmpPlaybackHelper = weakSelf.playbackHelper;
+        weakSelf.tmpVideoView = weakSelf.videoView;
+        
+        CGRect previewRect = [weakSelf createPreviewViewRect:weakSelf.videoBgView.frame];
+        CGSize videoSize = previewRect.size;
+        if (previewRect.size.height>weakSelf.view.frame.size.width) {//如果高大于宽的情况---那么调整videoView在
+            float ratio=previewRect.size.height/weakSelf.view.frame.size.width;
+            float width=videoSize.width/ratio;
+            videoSize=CGSizeMake(weakSelf.view.frame.size.width, width);
+        }
+        //playback view -- 预览视图
+        //
+        UIView *vView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, videoSize.width, videoSize.height)];
+        [weakSelf.videoBgView insertSubview:vView belowSubview:weakSelf.videoView];
+        weakSelf.videoView = vView;
+        self.videoView.center=self.videoBgView.center;
+        //
+        float scale = [UIScreen mainScreen].scale;
+        CGSize size=CGSizeMake(weakSelf.videoView.frame.size.width*scale, weakSelf.videoView.frame.size.height*scale);
+        weakSelf.timeline.timelineSize = size;
+        
+        qxFxPlaybackHelper *pHelper = [[qxFxPlaybackHelper alloc] init];
+        pHelper.delegate = weakSelf;
+        pHelper.mpTimeline = weakSelf.timeline;
+        
+//        [pHelper initWithUIView:weakSelf.videoView withMode:weakSelf.videoMode];
+        [pHelper initWithUIView:weakSelf.videoView];
+        weakSelf.playbackHelper = pHelper;
+    
+        
+    } completion:^(BOOL finished){
+        [MBProgressHUD hideAllHUDsForView:weakSelf.view animated:YES];
+    }];
+    
+}
+
+#pragma mark - qxPlaybackDelegate 应用切回前台时回调
+- (void)readyForPlayback
+{
+    if (!self.playing) {
+        btPlay.hidden = NO;
+//        duration = playbackHelper.playerItem.duration;
+        duration = playbackHelper.mpTimeline.timelineDuration;
+        previewSlider.maximumValue = CMTimeGetSeconds(duration);
+        labelCurrent.text = [Util stringWithSeconds:0];
+        labelTotal.text = [Util stringWithSeconds:round(previewSlider.maximumValue)];
+        [self seekTo:0];
+        previewSlider.value = 0;
+    
+    }
+    
+    if (self.needRefreshVideoBeforePreview) {
+        self.needRefreshVideoBeforePreview=NO;
+        [self startPreview];
+    }
+    
+    // 0.5秒之后移除旧视图
+    [self performSelector:@selector(removeOldVideoView) withObject:nil afterDelay:0.5];
+}
+
+- (void)removeOldVideoView
+{
+    __weak PlayerViewController * weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if(weakSelf.tmpPlaybackHelper){
+            [weakSelf.tmpVideoView removeFromSuperview];
+            [weakSelf.tmpPlaybackHelper destroy];
+            weakSelf.tmpPlaybackHelper = nil;
+            weakSelf.tmpVideoView = nil;
+        }
+    });
+}
+
+- (void)FinishPlayback
+{
+    [self pausePreview];
+    [self seekTo:0];
+    //执行seek后，有时候播放进度值没有立马变为0，这个时候currentMediaObject的指向不对，因此这里显示赋值。
+//    currentMediaObject = [self.timeline getTrackFromTimeline:0].mpMediaObjArray[0];
+}
+
+// 重置媒体时长
+- (void)resetMediaWithDurationChanged
+{
+    NSMutableArray *removeableMedias = nil;
+    Float64 tmp;
+    Float64 mediaTotalDuration = [self calTotalDuration];
+    //music track
+    qxTrack *musicTrack = [self.timeline getTrackFromTimeline:1];
+    if(musicTrack.mpMediaObjArray && musicTrack.mpMediaObjArray.count > 0){
+        removeableMedias = [[NSMutableArray alloc] init];
+        for(qxMediaObject *obj in musicTrack.mpMediaObjArray){
+            tmp = CMTimeGetSeconds(obj.startTimeOfTrack) + CMTimeGetSeconds(obj.actualTimeRange.duration);
+            if(CMTimeGetSeconds(obj.startTimeOfTrack) >= mediaTotalDuration){
+                [removeableMedias addObject:obj];
+            }else if(tmp > mediaTotalDuration){
+                tmp = mediaTotalDuration - CMTimeGetSeconds(obj.startTimeOfTrack);
+                [obj setTrim:CMTimeGetSeconds(obj.actualTimeRange.start) * 1000 withRight:(CMTimeGetSeconds(obj.mediaOriginalDuration) - CMTimeGetSeconds(obj.actualTimeRange.start) - tmp) * 1000];
+            }
+        }
+        //
+        for(qxMediaObject *obj in removeableMedias){
+            [musicTrack delMediaObject:[musicTrack findMediaObject:obj]];
+        }
+        [removeableMedias removeAllObjects];
+    }
+    //audio track
+    qxTrack *audioTrack = [self.timeline getTrackFromTimeline:2];
+    if(audioTrack.mpMediaObjArray && audioTrack.mpMediaObjArray.count > 0){
+        removeableMedias = [[NSMutableArray alloc] init];
+        for(qxMediaObject *obj in audioTrack.mpMediaObjArray){
+            tmp = CMTimeGetSeconds(obj.startTimeOfTrack) + CMTimeGetSeconds(obj.actualTimeRange.duration);
+            if(CMTimeGetSeconds(obj.startTimeOfTrack) >= mediaTotalDuration){
+                [removeableMedias addObject:obj];
+            }else if(tmp > mediaTotalDuration){
+                tmp = mediaTotalDuration - CMTimeGetSeconds(obj.startTimeOfTrack);
+                [obj setTrim:CMTimeGetSeconds(obj.actualTimeRange.start) * 1000 withRight:(CMTimeGetSeconds(obj.mediaOriginalDuration) - CMTimeGetSeconds(obj.actualTimeRange.start) - tmp) * 1000];
+            }
+        }
+        for(qxMediaObject *obj in removeableMedias){
+            [audioTrack delMediaObject:[audioTrack findMediaObject:obj]];
+            //[Util deleteFile:obj.strFilePath];
+        }
+        [removeableMedias removeAllObjects];
+    }
+    //overlay track
+    qxTrack *overlayTrack = [self.timeline getTrackFromTimeline:3];
+    if(overlayTrack.mpMediaObjArray && overlayTrack.mpMediaObjArray.count > 0){
+        removeableMedias = [[NSMutableArray alloc] init];
+        for(qxMediaObject *obj in overlayTrack.mpMediaObjArray){
+            tmp = CMTimeGetSeconds(obj.startTimeOfTrack) + CMTimeGetSeconds(obj.actualTimeRange.duration);
+            if(CMTimeGetSeconds(obj.startTimeOfTrack) >= mediaTotalDuration){
+                [removeableMedias addObject:obj];
+            }else if(tmp > mediaTotalDuration){
+                tmp = mediaTotalDuration - CMTimeGetSeconds(obj.startTimeOfTrack);
+                [overlayTrack updateTimeAtIndex:[overlayTrack findMediaObject:obj] startTime:obj.startTimeOfTrack duration:CMTimeMakeWithSeconds(tmp, obj.startTimeOfTrack.timescale)];
+            }
+        }
+        for(qxMediaObject *obj in removeableMedias){
+            [overlayTrack delMediaObject:[overlayTrack findMediaObject:obj]];
+            //[Util deleteFile:obj.strFilePath];
+        }
+        [removeableMedias removeAllObjects];
+    }
+    
+//    NSLog(@"%f", CMTimeGetSeconds([[self.timeline getTrackFromTimeline:0].mpMediaObjArray.firstObject startTimeOfTrack]));
+//    NSLog(@"%f", CMTimeGetSeconds([[self.timeline getTrackFromTimeline:0].mpMediaObjArray.firstObject endTimeOfTrack]));
+//    NSLog(@"%f", CMTimeGetSeconds([[self.timeline getTrackFromTimeline:0].mpMediaObjArray.firstObject actualTimeRange].start));
+//    NSLog(@"%f", CMTimeGetSeconds([[self.timeline getTrackFromTimeline:0].mpMediaObjArray.firstObject actualTimeRange].duration));
+//    NSLog(@"%f", CMTimeGetSeconds([[self.timeline getTrackFromTimeline:0].mpMediaObjArray.firstObject mediaOriginalDuration]));
+}
+
+- (Float64)calTotalDuration
+{
+    Float64 d = 0;
+    for(qxMediaObject *obj in [self.timeline getTrackFromTimeline:0].mpMediaObjArray){
+        d += CMTimeGetSeconds(obj.actualTimeRange.duration);
+    }
+    return d;
+}
+
+- (void)videoClipCancel
+{
+    self.needRefreshVideoBeforePreview = YES;
+}
+
+#pragma mark - Preview control
+-(void)stopPreview
+{
+    [self stopUpdatePlayStatus];
+    if(playbackHelper){
+        [playbackHelper stop];
+        [playbackHelper destroy];
+    }
+    self.playing = NO;
+}
+
+-(void)startPreview
+{
+    if(!self.playing && playbackHelper){
+        [playbackHelper playPause:YES];
+        self.playing = YES;
+        [self startUpdatePlayStatus];
+    }
+    btPlay.hidden = YES;
+}
+
+-(void)pausePreview
+{
+    if(self.playing && playbackHelper){
+        [playbackHelper playPause:NO];
+        self.playing = NO;
+        [self stopUpdatePlayStatus];
+    }
+    btPlay.hidden = NO;
+}
+
+#pragma mark - Timer
+-(void)updatePlayStatusTask
+{
+    NSTimeInterval tm = [playbackHelper playbackProgress];
+    float time = tm/1000;
+    NSString *str = [Util stringWithSeconds:round(time)];
+    previewSlider.value = time;
+    labelCurrent.text = str;
+    [self updateCurrentMediaObject];
+}
+
+- (void)updateCurrentMediaObject
+{
+    NSTimeInterval tm = [playbackHelper playbackProgress];
+    qxMediaObject *obj = [[self.timeline getTrackFromTimeline:0] findMediaObjectAtSecond:tm/1000];
+    if (obj!=nil) {
+        currentMediaObject = obj;
+    }
+}
+
+-(void)startUpdatePlayStatus
+{
+    if(![playControlTimer isValid]){
+        playControlTimer = [NSTimer scheduledTimerWithTimeInterval:0.05 target:self selector:@selector(updatePlayStatusTask) userInfo:nil repeats:YES];
+    }
+}
+
+-(void)stopUpdatePlayStatus
+{
+    if([playControlTimer isValid]){
+        [playControlTimer invalidate];
+    }
+}
+
+- (void)sliderValueChanged:(ASValueTrackingSlider*)sender
+{
+    if(self.playing){
+        self.prePlaying=YES;
+        [self pausePreview];
+    }
+    [self seekTo:previewSlider.value];
+}
+
+- (void)sliderTouchUpInside:(id)sender
+{
+    [self updateCurrentMediaObject];
+    if (self.prePlaying) {
+        self.prePlaying=NO;
+        [self startPreview];
+    }
+}
+
+- (void)seekTo:(float)second
+{
+    if(CMTimeGetSeconds(duration) > 0){
+//        [playbackHelper.player seekToTime:CMTimeMakeWithSeconds(second/previewSlider.maximumValue*CMTimeGetSeconds(duration), duration.timescale) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
+//        NSString *timeStr = [Util stringWithSeconds:round(second)];
+//        labelCurrent.text = timeStr;
+//        previewSlider.value = second;
+//        [self updateCurrentMediaObject];
+        [playbackHelper seekToTime:second];
+//        [playbackHelper refreshView];
+
+        NSString *timeStr = [Util stringWithSeconds:round(second)];
+        labelCurrent.text = timeStr;
+        previewSlider.value = second;
+    }
+}
+
+- (NSString *)slider:(ASValueTrackingSlider *)slider stringForValue:(float)value
+{
+    if (slider.tag==1) {
+        if (self.playing==NO) {
+//            [playbackHelper.player seekToTime:CMTimeMakeWithSeconds(value/previewSlider.maximumValue*CMTimeGetSeconds(duration), duration.timescale) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
+            [playbackHelper seekToTime:value/previewSlider.maximumValue*CMTimeGetSeconds(duration)];
+
+            NSString *timeStr = [Util stringWithSeconds:round(value)];
+            return timeStr;
+        }
+        return @"00:00";
+    }
+    NSString * popString = [NSString stringWithFormat:@"%.1fs",slider.value * 10];
+    return popString;
+}
+
+/** 重新设置片段的时长---针对所有的片段 */
+- (void)resetPhotoDuration:(float)milsec
+{
+    NSMutableArray *mediaArray = [self.timeline getTrackFromTimeline:0].mpMediaObjArray;
+    for(qxMediaObject *obj in mediaArray){
+        if(obj.eType == eMT_Photo){
+            [obj setDuration:milsec];
+        }
+    }
+}
+
+- (void)hideExportView
+{
+    if(exportControl){
+        exportControl.view.hidden = YES;
+    }
+    self.exporting = NO;
+}
+
+-(float)availDiskSpaceInM{
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    struct statfs tStats;
+    statfs([[paths lastObject] cString], &tStats);
+    float totalSpace = (float)(tStats.f_bavail * tStats.f_bsize);
+    return totalSpace/(1024 * 1024);
+}
+
+- (void)startExport
+{
+    [self pausePreview];
+    //
+    float availSpace = [self availDiskSpaceInM];
+    if(availSpace <= 100 && availSpace > 20){
+        [self.view makeToast:NSLocalizedString(@"May export fail", nil) duration:3.0 position:@"center"];
+    }else if(availSpace <= 20){
+        [Util showAlert:NSLocalizedString(@"Available space below 20M", nil) title:NSLocalizedString(@"Export Failed", nil) tag:0];
+        return;
+    }
+    //
+    if (exportControl==nil) {
+        exportControl=[ExportViewController initFromStoryboard:[ExportViewController class]];
+        [exportControl addTarget:self action:@selector(stopExportAction:)];
+        [self.navigationController.view addSubview:exportControl.view];
+    }
+    exportControl.view.hidden=NO;
+    
+    //int quality = 2;
+    exportHelper = [[qxFxExportHelper alloc] init];
+    
+    qxTimeline *timeline = [self.timeline clone:NO];
+    exportHelper.mpTimeline = timeline;
+    exportHelper.mpTimeline.timelineSize=self.timeline.timelineSize;
+//    qxTrack *videoTrack = [exportHelper.mpTimeline getTrackFromTimeline:0];
+//    CGSize size = CGSizeMake(1280, 720);
+//    for (qxMediaObject * px in videoTrack.mpMediaObjArray) {
+//        if (px.eType == eMT_Photo){
+//            [px makeUsable:size];
+//        } 
+//    }
+    //
+    [self exportRecordEvent];
+    //
+    exportHelper.strOutput = [NSTemporaryDirectory() stringByAppendingPathComponent:@"exportVideo.mp4"];
+    exportHelper.delegate = self;
+    
+    int type = self.videoMode == VideoModeSmart ? 1 : 2;
+    NSLog(@"params===>%f   %f  type=%d",self.timeline.timelineSize.width,self.timeline.timelineSize.height,type);
+//    [exportHelper doSave3:2 withType:type];
+    [exportHelper doSave];
+
+}
+
+/** 导出时事件探针 */
+- (void)exportRecordEvent
+{
+    //记录事件   判断是否有背景音乐
+    qxTrack * musicTrack=[exportHelper.mpTimeline getTrackFromTimeline:1];
+    qxTrack * recordTrack=[exportHelper.mpTimeline getTrackFromTimeline:2];
+    qxTrack * fontTrack=[exportHelper.mpTimeline getTrackFromTimeline:3];
+    if(musicTrack.mpMediaObjArray.count>0){
+        [MobClick event: OUTPUT_MUSIC_USED];
+    }
+    //判断是否有录音
+    if(recordTrack.mpMediaObjArray.count>0){
+        [MobClick event: OUTPUT_VOICE_USED];
+    }
+    //判断是否有字幕
+    if(fontTrack.mpMediaObjArray.count>0){
+        [MobClick event: OUTPUT_SUBTITLE_USED];
+    }
+    //判断是否仅有视频
+    if(musicTrack.mpMediaObjArray.count==0&&recordTrack.mpMediaObjArray.count==0&&fontTrack.mpMediaObjArray.count==0){
+        [MobClick event:OUTPUT_ONE_VIDEO_EDIT];
+    }
+    long long timeLen=duration.value%duration.timescale==0?duration.value/duration.timescale:duration.value/duration.timescale+1;
+    if (timeLen<10) {
+        [MobClick event:OUTPUT_DURATION_UNDER_10S];
+    }else if(timeLen<30){
+        [MobClick event: OUTPUT_DURATION_10S_30S];
+    }else if(timeLen<60){
+        [MobClick event: OUTPUT_DURATION_30S_60S];
+    }else if(timeLen<300){
+        [MobClick event: OUTPUT_DURATION_60S_5MIN];
+    }else{
+        [MobClick event: OUTPUT_DURATION_5MIN_BEYOND];
+    }
+
+}
+
+- (void)stopExportAction:(id)sender
+{
+    [exportHelper cancelSave];
+    [self exportStatus:2];
+}
+
+#pragma mark - qxExportDelegate
+- (void)exportProgress:(float)fPercent
+{
+    [exportControl setExportProgress:fPercent];
+}
+
+- (void)exportStatus:(int)exportStatus
+{
+    switch (exportStatus) {
+        case 0://failure
+            [self showExportErrorAlert];
+            break;
+        case 1://success
+        {
+            __weak PlayerViewController *weakSelf = self;
+            ALAssetsLibrary *library = [Util defaultAssetsLibrary];
+            __weak ALAssetsLibrary *weakLibrary = library;
+            [Util saveVideo:[NSURL URLWithString:exportHelper.strOutput] toAlbum:VideoShowAlbum completionBlock:^(NSURL *videoUrl){
+                [Util deleteFile:weakSelf.exportHelper.strOutput];
+                [weakSelf hideExportView];
+                [weakLibrary assetForURL:videoUrl resultBlock:^(ALAsset *asset){
+                    if(asset!=nil){
+                        [weakSelf.playbackHelper destroy];
+                        [MobClick event: EXPORT_VIDEO_SUCCESS];
+                        VideoShareViewController *shareViewController = [VideoShareViewController initFromStoryboard:[VideoShareViewController class]];
+                        shareViewController.asset = asset;
+                        shareViewController.aspectRatio = [weakSelf.timeline getTimelineSizeMaxAspectRatio];
+                        [weakSelf.navigationController pushViewController:shareViewController animated:YES];
+                    }
+                } failureBlock:^(NSError *error){
+                    [MobClick event: EXPORT_VIDEO_ERROR];
+                    [weakSelf showExportErrorAlert];
+                }];
+            } failureBlock:^(NSError *error){
+                [Util deleteFile:weakSelf.exportHelper.strOutput];
+                [weakSelf hideExportView];
+                [weakSelf showExportErrorAlert];
+            }];
+        }
+            break;
+        case 2://export break
+        {
+            [self hideExportView];
+        }
+            break;
+        default:
+            break;
+    }
+
+}
+
+- (void)showExportErrorAlert
+{
+    UIAlertView *alertView = [[UIAlertView alloc] initWithTitle:nil message:NSLocalizedString(@"Export Failed", nil) delegate:self cancelButtonTitle:NSLocalizedString(@"OK", nil) otherButtonTitles:nil];
+    [alertView show];
+}
+
+#pragma mark PlayerViewControllerDelegate
+-(void) videoEdit:(UIViewController *)control type:(EditType)editType editFlag:(BOOL)flag
+{
+    switch (editType) {
+        case EditTypeSubtitle:
+        {
+            if (flag) {
+                SubtitleViewController * tmpControl=(SubtitleViewController*)control;
+                self.timeline=tmpControl.timeline;
+                [self.timeline clearTrans];
+                [self prepareForPreview];
+            }
+        }
+            break;
+        case EditTypeSticker:
+        {
+            if (flag) {
+                StickerViewController * tmpControl=(StickerViewController*)control;
+                self.timeline=tmpControl.timeline;
+                [self.timeline clearTrans];
+                [self prepareForPreview];
+            }
+        }
+            break;
+        case EditTypeVideoClip:
+        {
+            if(flag){
+                EditClipViewController * tmpControl=(EditClipViewController*)control;
+//                qxMediaObject * tmpObj = tmpControl.mediaObj;
+                self.timeline=tmpControl.mtimeline;
+                [self.timeline clearTrans];
+                [[self.timeline getTrackFromTimeline:0] reloadPhoto:self.screenRect.size block:^{
+                    [self prepareForPreview];
+                }];
+                
+                [self resetMediaWithDurationChanged];
+                
+            }
+        }
+            break;
+        case EditTypeMusic:
+        {
+            if (flag) {
+                MusicViewController * tmpControl=(MusicViewController*)control;
+                self.timeline=tmpControl.timeline;
+                [self prepareForPreview];
+            }
+        }
+            break;
+        case EditTypeAudio:
+        {
+            if (flag) {
+                AudioViewController * tmpControl=(AudioViewController*)control;
+                self.timeline=tmpControl.timeline;
+                [self prepareForPreview];
+            }
+        }
+            break;
+        case EditTypeFilter:
+        {
+            if (flag) {
+                [self.timeline clearTrans];
+                FilterViewController *tmpVC = (FilterViewController *)control;
+                self.timeline=[tmpVC.timeline clone:NO];
+                [self prepareForPreview];
+            }
+        }
+            break;
+        case EditTypeTransition:
+        {
+            if (flag) {
+                [self.timeline clearTrans];
+                TransitionViewController *tmpVC = (TransitionViewController *)control;
+                self.timeline=[tmpVC.timeline clone:NO];
+                [self prepareForPreview];
+            }
+        }
+            break;
+
+        default:
+            break;
+    }
+    /*
+     1: 按照安卓的只要从上一个界面返回，不管是否保存过都要进行播放一下;
+     2: 效果就是： 从上一个界面返回，如果是保存返回：   就从0s开始播放;
+     如果是直接取消返回：就是从PlayerViewController上次播放的时间开始播放.
+     */
+    [self startPreview];
+
+}
+
+@end

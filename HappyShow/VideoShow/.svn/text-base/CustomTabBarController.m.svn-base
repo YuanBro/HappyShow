@@ -1,0 +1,156 @@
+//
+//  CustomTabBarController.m
+//  VideoShow
+//
+//  Created by lance on 15/5/8.
+//  Copyright (c) 2015年 energy. All rights reserved.
+//
+
+#import "CustomTabBarController.h"
+#import "StickerDownloadViewController.h"
+#import "MaterialStoreViewController.h"
+#import "SettingViewController.h"
+#import "MainViewController.h"
+#import "RotateNavigationController.h"
+#import "AppMacros.h"
+#import "UIColor+Util.h"
+#import "UITabBar+Badge.h"
+
+@interface CustomTabBarController ()<UITabBarDelegate>
+
+@end
+
+@implementation CustomTabBarController
+
+@synthesize centerImageView;
+
+- (instancetype)init
+{
+    self = [super init];
+    if (self) {//这里初始化所有的controller
+        [self initControllers];
+    }
+    return self;
+}
+
+-(void)initControllers
+{
+
+    MainViewController * mainControl=[[MainViewController alloc] init];
+    mainControl.title=@"";
+    SettingViewController * setControl = [[SettingViewController alloc] init];
+    setControl.title=NSLocalizedString(@"Setting", nil);
+    setControl.customeTabBar=self;
+//   StickerDownloadViewController * storeControl = [[StickerDownloadViewController alloc] init];
+    MaterialStoreViewController * storeControl = [[MaterialStoreViewController alloc] init];
+    storeControl.title = NSLocalizedString(@"Material Store", nil);
+//    storeControl.title = NSLocalizedString(@"Sticker", nil);
+//
+    storeControl=(MaterialStoreViewController*)[self viewWithController:storeControl image:[UIImage imageNamed:@"tab_sticker.png"] highlightedImage:[UIImage imageNamed:@"tab_sticker.png"]];
+//    storeControl=(StickerDownloadViewController*)[self viewWithController:storeControl image:[UIImage imageNamed:@"tab_sticker.png"] highlightedImage:[UIImage imageNamed:@"tab_sticker.png"]];
+//    storeControl.disableBack=YES;
+
+    setControl=(SettingViewController*)[self viewWithController:setControl image:[UIImage imageNamed:@"tab_setting.png"] highlightedImage:[UIImage imageNamed:@"tab_setting.png"]];
+    setControl.disableBack=YES;
+    
+    UIImage *homeImage = [UIImage imageNamed:@"tab_home.png"];
+    mainControl=(MainViewController*)[self viewWithController:mainControl image:nil highlightedImage:nil];
+    
+    [self addCenterImage:homeImage highlightedImage:homeImage];
+    
+    RotateNavigationController * item0 = [[RotateNavigationController alloc] initWithRootViewController:storeControl];
+    RotateNavigationController * item1 = [[RotateNavigationController alloc] initWithRootViewController:mainControl];
+    RotateNavigationController * item2 = [[RotateNavigationController alloc] initWithRootViewController:setControl];
+    
+    self.viewControllers=@[item0,item1,item2];
+    self.selectedViewController=item1;
+
+    //[self.tabBar showBadgeOnItemIndex:0 tabCount:self.viewControllers.count];
+    
+}
+
+-(UIViewController *) viewWithController:(UIViewController *)control image:(UIImage *)normalImage highlightedImage:(UIImage *)highlightedImage
+{
+    if (sysVersion>7.0)
+    {
+        control.tabBarItem = [[UITabBarItem alloc] initWithTitle:control.title image:normalImage selectedImage:highlightedImage];
+    }
+    else
+    {
+        control.tabBarItem = [[UITabBarItem alloc] initWithTitle:control.title image:normalImage tag:0];
+    }
+    
+    return control;
+}
+
+-(void) addCenterImage:(UIImage *)normalImage highlightedImage:(UIImage *)highlightedImage
+{
+    centerImageView = [[UIImageView alloc] init];
+    centerImageView.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleTopMargin;
+    int starty = (self.tabBar.frame.size.height - normalImage.size.height)/2+2;
+    centerImageView.frame = CGRectMake((self.tabBar.frame.size.width-normalImage.size.width)/2, starty, normalImage.size.width, normalImage.size.height);
+    centerImageView.image=normalImage;
+    centerImageView.highlightedImage=highlightedImage;
+    centerImageView.highlighted=YES;
+
+    [self.tabBar addSubview:centerImageView];
+    
+}
+
+- (void)tabBar:(UITabBar *)tabBar didSelectItem:(UITabBarItem *)item
+{
+    NSUInteger index=[self.tabBar.items indexOfObject:item];
+    if (centerImageView==nil || self.tabBar.items.count%2!=0) {
+        return;
+    }
+    if (index==self.tabBar.items.count/2) {
+        self.centerImageView.highlighted=YES;
+    }else{
+        self.centerImageView.highlighted=NO;
+    }
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.tabBar.backgroundColor = [UIColor colorWithHexString:navigationBarColor];
+    self.tabBar.tintColor=[UIColor whiteColor];
+    if (sysVersion>=7) {
+        self.tabBar.barTintColor=[UIColor blackColor];
+    }
+    //[self.tabBar setClipsToBounds:YES];
+    //[self.tabBar setShadowImage:[[UIImage alloc] init]];
+}
+
+-(void) viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+}
+
+-(void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    float screenHeight = [UIScreen mainScreen].bounds.size.height;
+    float starty = screenHeight-self.tabBar.frame.size.height;
+    float originy = self.tabBar.frame.origin.y;
+    __weak CustomTabBarController * weakSelf = self;
+    if (originy != starty) {
+        [UIView animateWithDuration:0.3 animations:^{
+            CGRect rect = CGRectMake(0, starty, weakSelf.tabBar.frame.size.width, weakSelf.tabBar.frame.size.height);
+            weakSelf.tabBar.frame=rect;
+        }];
+    }
+}
+/** 这里校正TabBar错位的情况 */
+-(void)viewWillAppear:(BOOL)animated
+{
+   [super viewWillAppear:animated];
+}
+
+-(void)viewDidDisappear:(BOOL)animated
+{
+    [super viewDidDisappear:animated];
+    
+}
+
+@end
+

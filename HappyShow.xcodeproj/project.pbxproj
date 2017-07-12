@@ -715,7 +715,7 @@
 					"$(PROJECT_DIR)/HappyShow/VideoShow/UMSocial_Sdk_Extra_Frameworks/TencentOpenAPI",
 					"$(PROJECT_DIR)/HappyShow/VideoShow/UMSocial_Sdk_Extra_Frameworks/Twitter",
 				);
-				GCC_PREFIX_HEADER = /Users/taiping002/Downloads/HappyShow/HappyShow/PrefixHeader.pch;
+				GCC_PREFIX_HEADER = /Users/taiping002/Desktop/HappyShow/HappyShow/PrefixHeader.pch;
 				INFOPLIST_FILE = HappyShow/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -757,7 +757,7 @@
 					"$(PROJECT_DIR)/HappyShow/VideoShow/UMSocial_Sdk_Extra_Frameworks/TencentOpenAPI",
 					"$(PROJECT_DIR)/HappyShow/VideoShow/UMSocial_Sdk_Extra_Frameworks/Twitter",
 				);
-				GCC_PREFIX_HEADER = /Users/taiping002/Downloads/HappyShow/HappyShow/PrefixHeader.pch;
+				GCC_PREFIX_HEADER = /Users/taiping002/Desktop/HappyShow/HappyShow/PrefixHeader.pch;
 				INFOPLIST_FILE = HappyShow/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
